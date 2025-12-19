@@ -82,20 +82,21 @@ export default function BusinessWebsite() {
         <div className="absolute inset-0 -z-10">
           <img
             src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2000&auto=format&fit=crop"
-            alt="Hero background"
-            className="h-full w-full object-cover"
+	    alt="Hero background"
+	    className="h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-black/50" />
+          <<div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/65 to-black/80" />
         </div>
+
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-28 sm:py-36 text-white">
-          <div className="max-w-3xl">
+          <div className="max-w-3xl rounded-3xl bg-black/35 backdrop-blur-sm p-6 sm:p-8">
             <p className="mb-4 inline-block rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">
               Locally owned • Est. 2025
             </p>
-            <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight">
+            <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight [text-shadow:0_6px_24px_rgba(0,0,0,0.55)]">
               We help <span className="underline decoration-white/50">e-commerce brands</span> achieve amazing results.
             </h1>
-            <p className="mt-5 text-lg text-white/90">
+            <p className="mt-5 text-lg text-white/90 [text-shadow:0_4px_16px_rgba(0,0,0,0.45)]">
               X Dragon provides leading AI consulting as well as Infrastructure Management for E-commerce operators.
               We help bridge the gaps between organizations who want to focus on marketing and business development
               and don’t want to carry the technical expertise to manage those parts of the business.
