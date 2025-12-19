@@ -6,9 +6,11 @@ export default function BusinessWebsite() {
   const navItems = [
     { label: "Home", href: "#home" },
     { label: "Services", href: "#services" },
+    { label: "How We Work", href: "#process" },
+    { label: "Case Study", href: "#case-study" },
     { label: "About", href: "#about" },
     { label: "Testimonials", href: "#testimonials" },
-    { label: "Contact", href: "#contact" }
+    { label: "Contact", href: "#contact" },
   ];
 
   return (
@@ -82,10 +84,10 @@ export default function BusinessWebsite() {
         <div className="absolute inset-0 -z-10">
           <img
             src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2000&auto=format&fit=crop"
-	    alt="Hero background"
-	    className="h-full w-full object-cover"
+            alt="Hero background"
+            className="h-full w-full object-cover"
           />
-          <<div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/65 to-black/80" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/65 to-black/80" />
         </div>
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-28 sm:py-36 text-white">
@@ -93,14 +95,16 @@ export default function BusinessWebsite() {
             <p className="mb-4 inline-block rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">
               Locally owned • Est. 2025
             </p>
+
             <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight [text-shadow:0_6px_24px_rgba(0,0,0,0.55)]">
               We help <span className="underline decoration-white/50">e-commerce brands</span> achieve amazing results.
             </h1>
+
             <p className="mt-5 text-lg text-white/90 [text-shadow:0_4px_16px_rgba(0,0,0,0.45)]">
-              X Dragon provides leading AI consulting as well as Infrastructure Management for E-commerce operators.
-              We help bridge the gaps between organizations who want to focus on marketing and business development
-              and don’t want to carry the technical expertise to manage those parts of the business.
+              X Dragon provides AI consulting and infrastructure management for e-commerce operators so you can focus
+              on marketing and growth instead of technical firefighting.
             </p>
+
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#contact" className="rounded-2xl bg-white text-black px-5 py-3 text-sm font-semibold">
                 Book a Consultation
@@ -109,6 +113,7 @@ export default function BusinessWebsite() {
                 See Services
               </a>
             </div>
+
             <div className="mt-8 flex items-center gap-6 text-sm text-white/80">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
@@ -116,11 +121,11 @@ export default function BusinessWebsite() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Transparent delivery
+                Transparent pricing
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Operator-first support
+                Top-rated service
               </div>
             </div>
           </div>
@@ -156,22 +161,30 @@ export default function BusinessWebsite() {
             {[
               {
                 title: "AI Strategy & Consulting",
-                desc: "Identify high-impact AI use cases, map your data, and build roadmaps that drive revenue and efficiency."
+                desc: "We help you identify high-impact AI use cases, map your data, and design practical roadmaps that drive revenue and operational efficiency.",
               },
               {
-                title: "Infrastructure Management",
-                desc: "Keep your stack fast, stable, and secure—monitoring, patching, and optimizing so your store stays online."
+                title: "Infra Management for E-commerce",
+                desc: "We keep your stack fast, stable, and secure—monitoring, patching, and optimizing so your store stays online and customers keep checking out.",
               },
               {
                 title: "Automation & Data Pipelines",
-                desc: "Replace manual work with reliable automations and data flows so your team can focus on growth."
-              }
+                desc: "For teams that are drowning in manual tasks and fragmented tools—we build data flows and automations that free your people to focus on growth.",
+              },
             ].map((svc, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">{i + 1}</div>
                 <h3 className="mt-4 text-xl font-semibold">{svc.title}</h3>
                 <p className="mt-2 text-neutral-600">{svc.desc}</p>
-                <a href="#contact" className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">
+                <ul className="mt-4 space-y-2 text-sm text-neutral-700">
+                  <li>• Feature/Benefit A</li>
+                  <li>• Feature/Benefit B</li>
+                  <li>• Feature/Benefit C</li>
+                </ul>
+                <a
+                  href="#contact"
+                  className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
+                >
                   Get Started
                 </a>
               </div>
@@ -192,7 +205,9 @@ export default function BusinessWebsite() {
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">{i + 1}</div>
                 <h3 className="mt-4 text-xl font-semibold">{phase}</h3>
-                <p className="mt-2 text-neutral-600">Placeholder text — refine later.</p>
+                <p className="mt-2 text-neutral-600">
+                  Refine this description later—short explanation of what happens during this step.
+                </p>
               </div>
             ))}
           </div>
@@ -204,7 +219,9 @@ export default function BusinessWebsite() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-10 items-center">
           <div>
             <h2 className="text-3xl sm:text-4xl font-bold">Case Study</h2>
-            <p className="mt-4 text-neutral-700">Placeholder — you’ll refine with real client results later.</p>
+            <p className="mt-4 text-neutral-700">
+              Placeholder case study text — you can refine this later with real client results and metrics.
+            </p>
             <ul className="mt-6 space-y-2 text-neutral-700 text-sm">
               <li>• Key challenge here</li>
               <li>• What X Dragon delivered</li>
@@ -241,6 +258,118 @@ export default function BusinessWebsite() {
         </div>
       </section>
 
+      {/* About */}
+      <section id="about" className="py-20 bg-white border-y border-neutral-200">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <h2 className="text-3xl sm:text-4xl font-bold">About Us</h2>
+            <p className="mt-4 text-neutral-700">
+              X Dragon sits at the intersection of AI, cloud infrastructure, and e-commerce. We partner with operators
+              who want enterprise-grade reliability and innovation—without hiring a full internal engineering team.
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
+              <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
+                <div className="text-3xl font-extrabold">10+</div>
+                <div className="text-neutral-600">AI & Infra Experts</div>
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
+                <div className="text-3xl font-extrabold">500+</div>
+                <div className="text-neutral-600">E-commerce Brands</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <img
+              src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=1600&auto=format&fit=crop"
+              alt="Team at work"
+              className="rounded-2xl shadow"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section id="testimonials" className="py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <h2 className="text-3xl sm:text-4xl font-bold">What Clients Say</h2>
+            <p className="mt-3 text-neutral-600">
+              Here’s what operators and founders say after handing us their AI and infrastructure headaches.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                quote: "They nailed it—on time and on budget. Our results improved within weeks.",
+                name: "Alex R.",
+                role: "Operations Director, Nimbus",
+              },
+              {
+                quote: "Professional, friendly, and genuinely invested in our success.",
+                name: "Jamie L.",
+                role: "Founder, Quartz Studio",
+              },
+              {
+                quote: "Clear communication and excellent execution at every step.",
+                name: "Priya S.",
+                role: "Marketing Lead, Evergreen Co.",
+              },
+            ].map((t, i) => (
+              <figure key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+                <blockquote className="text-neutral-800">“{t.quote}”</blockquote>
+                <figcaption className="mt-4 text-sm text-neutral-600">
+                  — {t.name}, {t.role}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Engagement Models */}
+      <section className="py-20 bg-white border-y border-neutral-200">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <h2 className="text-3xl sm:text-4xl font-bold">Engagement Models</h2>
+            <p className="mt-3 text-neutral-600">
+              Flexible ways to work with us—from focused advisory to ongoing, fully managed infrastructure and AI
+              support.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                name: "Advisory",
+                features: ["Monthly strategy sessions", "AI & infra roadmap", "Implementation guidance"],
+              },
+              {
+                name: "Managed",
+                features: ["Ongoing infra monitoring", "Incident response & tuning", "Automation & reporting"],
+              },
+              {
+                name: "Pro",
+                features: ["Custom SLAs & support", "Deep integration with your team", "Advanced AI, data, and infrastructure architecture"],
+              },
+            ].map((p, i) => (
+              <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+                <div className="text-sm font-semibold text-neutral-500">{p.name}</div>
+                <ul className="mt-4 space-y-2 text-sm text-neutral-700">
+                  {p.features.map((f, idx) => (
+                    <li key={idx}>• {f}</li>
+                  ))}
+                </ul>
+                <a
+                  href="#contact"
+                  className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
+                >
+                  Explore {p.name}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Banner */}
       <section className="py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -251,7 +380,10 @@ export default function BusinessWebsite() {
                 Bring us your gnarliest AI, infra, or automation issues and we’ll help you chart a clear path forward.
               </p>
             </div>
-            <a href="#contact" className="inline-flex items-center justify-center rounded-2xl bg-white text-black px-6 py-3 text-sm font-semibold">
+            <a
+              href="#contact"
+              className="inline-flex items-center justify-center rounded-2xl bg-white text-black px-6 py-3 text-sm font-semibold"
+            >
               Talk to X Dragon
             </a>
           </div>
@@ -264,7 +396,8 @@ export default function BusinessWebsite() {
           <div className="max-w-2xl">
             <h2 className="text-3xl sm:text-4xl font-bold">Contact Us</h2>
             <p className="mt-3 text-neutral-600">
-              Tell us how your e-commerce stack runs today and where it hurts. We’ll follow up with next steps within one business day.
+              Tell us how your e-commerce stack runs today and where it hurts. We’ll follow up with next steps and
+              options within one business day.
             </p>
           </div>
 
@@ -273,30 +406,78 @@ export default function BusinessWebsite() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium">Name</label>
-                  <input type="text" className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black" placeholder="Jane Doe" />
+                  <input
+                    type="text"
+                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="Jane Doe"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium">Email</label>
-                  <input type="email" className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black" placeholder="you@example.com" />
+                  <input
+                    type="email"
+                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="you@example.com"
+                  />
                 </div>
               </div>
-
+              <div className="mt-4">
+                <label className="text-sm font-medium">Phone (optional)</label>
+                <input
+                  type="tel"
+                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
               <div className="mt-4">
                 <label className="text-sm font-medium">Message</label>
-                <textarea className="mt-1 w-full rounded-xl border border-neutral-300 p-3 h-32 focus:outline-none focus:ring-2 focus:ring-black" placeholder="What would you like to achieve?" />
+                <textarea
+                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 h-32 focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="What would you like to achieve?"
+                />
               </div>
-
-              <button type="submit" className="mt-6 w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold">
+              <button
+                type="submit"
+                className="mt-6 w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold"
+              >
                 Send Message
               </button>
+              <p className="mt-3 text-xs text-neutral-500">By submitting, you agree to our friendly terms.</p>
             </form>
 
             <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold">Email us</h3>
-              <p className="mt-2 text-neutral-700"><strong>hello@xdragontech.com</strong></p>
-              <p className="mt-4 text-sm text-neutral-600">
-                Replace address/phone/social links any time — this is placeholder content.
+              <h3 className="text-lg font-semibold">Visit Us</h3>
+              <p className="mt-2 text-neutral-700">
+                123 Sample Street, Suite 100
+                <br />
+                Your City, Your Province
               </p>
+              <div className="mt-4 aspect-video w-full overflow-hidden rounded-xl border border-neutral-200">
+                <img
+                  src="https://images.unsplash.com/photo-1502920917128-1aa500764b8a?q=80&w=1600&auto=format&fit=crop"
+                  alt="Map placeholder"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="mt-4 text-sm">
+                <div>
+                  <strong>Email:</strong> hello@xdragontech.com
+                </div>
+                <div>
+                  <strong>Phone:</strong> (555) 987-6543
+                </div>
+                <div className="mt-2 flex gap-3">
+                  <a className="underline" href="#">
+                    Facebook
+                  </a>
+                  <a className="underline" href="#">
+                    Instagram
+                  </a>
+                  <a className="underline" href="#">
+                    LinkedIn
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -305,11 +486,19 @@ export default function BusinessWebsite() {
       {/* Footer */}
       <footer className="border-t border-neutral-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-neutral-600">© {new Date().getFullYear()} X Dragon Technologies. All rights reserved.</p>
+          <p className="text-sm text-neutral-600">
+            © {new Date().getFullYear()} X Dragon Technologies. All rights reserved.
+          </p>
           <div className="flex items-center gap-6 text-sm">
-            <a href="#" className="hover:underline">Privacy</a>
-            <a href="#" className="hover:underline">Terms</a>
-            <a href="#contact" className="rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">Get a Quote</a>
+            <a href="#" className="hover:underline">
+              Privacy
+            </a>
+            <a href="#" className="hover:underline">
+              Terms
+            </a>
+            <a href="#contact" className="rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">
+              Get a Quote
+            </a>
           </div>
         </div>
       </footer>
