@@ -235,7 +235,7 @@ export default function BusinessWebsite() {
 
                     return (
                       <li key={idx}>
-                        • <span className="font-semibold text-neutral-900">{head}</span> {rest}
+                        • <span className="font-semibold text-red-500 underline underline-offset-2 decoration-red-300/80">{head}</span> {rest}
                       </li>
                     );
                   })}
