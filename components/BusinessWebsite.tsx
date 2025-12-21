@@ -1,5 +1,11 @@
 import React, { useState } from "react";
 
+/**
+ * Orbitron font note:
+ * We load Orbitron via CSS @import so this component works in both Next.js and preview sandboxes
+ * where `next/font/google` may be unavailable.
+ */
+
 export default function BusinessWebsite() {
   const [open, setOpen] = useState(false);
 
@@ -10,18 +16,23 @@ export default function BusinessWebsite() {
     { label: "Case Study", href: "#case-study" },
     { label: "About", href: "#about" },
     { label: "Testimonials", href: "#testimonials" },
+    // Keep as an anchor label (CTA buttons use “Get Started”)
     { label: "Contact", href: "#contact" },
   ];
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      {/* Fonts + keyframes */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+      `}</style>
+
       {/* Header */}
       <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 border-b border-neutral-200">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <a href="#home" className="flex items-center gap-2 font-semibold text-lg">
-              <img src="/logo.png" alt="X Dragon Technologies logo" className="h-10 w-auto" />
-              <span>X Dragon Technologies</span>
+              <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
             </a>
 
             <nav className="hidden md:flex items-center gap-8">
@@ -34,21 +45,34 @@ export default function BusinessWebsite() {
                   {item.label}
                 </a>
               ))}
+
               <a
                 href="#contact"
                 className="rounded-2xl bg-black text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
               >
-                Get a Quote
+                Get Started
               </a>
             </nav>
 
+            {/* Mobile menu button (border + hamburger lines) */}
             <button
               onClick={() => setOpen(!open)}
               className="md:hidden inline-flex items-center justify-center rounded-xl border border-neutral-300 p-2"
+              aria-label="Toggle menu"
             >
-              <span className="sr-only">Toggle menu</span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-                <path d="M4 6h16M4 12h16M4 18h16" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-5 w-5 text-neutral-900"
+              >
+                <path d="M4 6h16" />
+                <path d="M4 12h16" />
+                <path d="M4 18h16" />
               </svg>
             </button>
           </div>
@@ -67,12 +91,13 @@ export default function BusinessWebsite() {
                   {item.label}
                 </a>
               ))}
+
               <a
                 href="#contact"
                 onClick={() => setOpen(false)}
                 className="block rounded-xl bg-black text-white px-3 py-2 text-center text-sm font-semibold"
               >
-                Get a Quote
+                Get Started
               </a>
             </div>
           </div>
@@ -80,7 +105,8 @@ export default function BusinessWebsite() {
       </header>
 
       {/* Hero */}
-      <section id="home" className="relative">
+      <section id="home" className="relative isolate min-h-[calc(100svh-4rem)] flex items-center">
+        {/* Background */}
         <div className="absolute inset-0 -z-10">
           <img
             src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2000&auto=format&fit=crop"
@@ -90,22 +116,30 @@ export default function BusinessWebsite() {
           <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/65 to-black/80" />
         </div>
 
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-28 sm:py-36 text-white">
-          <div className="max-w-3xl rounded-3xl bg-black/35 backdrop-blur-sm p-6 sm:p-8">
-            <p className="mb-4 inline-block rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">
-              Locally owned • Est. 2025
-            </p>
-
+        {/* Content */}
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-16 sm:py-24 text-white">
+          <div className="mx-auto w-full max-w-3xl rounded-3xl bg-black/35 backdrop-blur-sm p-6 sm:p-10 text-center sm:text-left">
             <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight [text-shadow:0_6px_24px_rgba(0,0,0,0.55)]">
-              We help <span className="underline decoration-white/50">e-commerce brands</span> achieve amazing results.
+              Stop firefighting.
+              <span className="block">Start scaling.</span>
+              <span className="block">
+                Unleash the{" "}
+                <span
+                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontWeight: 700 }}
+                  className="text-red-500 underline decoration-red-300/80 [text-shadow:0_6px_18px_rgba(120,120,120,0.75)]"
+                >
+                  Dragon
+                </span>
+                .
+              </span>
             </h1>
 
             <p className="mt-5 text-lg text-white/90 [text-shadow:0_4px_16px_rgba(0,0,0,0.45)]">
-              X Dragon provides AI consulting and infrastructure management for e-commerce operators so you can focus
-              on marketing and growth instead of technical firefighting.
+              We solve the AI and infrastructure bottlenecks that weigh down high-performing businesses — so you move
+              faster, deliver better, and grow with confidence.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap gap-3 justify-center sm:justify-start">
               <a href="#contact" className="rounded-2xl bg-white text-black px-5 py-3 text-sm font-semibold">
                 Book a Consultation
               </a>
@@ -114,18 +148,18 @@ export default function BusinessWebsite() {
               </a>
             </div>
 
-            <div className="mt-8 flex items-center gap-6 text-sm text-white/80">
+            <div className="mt-8 flex flex-wrap items-center gap-6 justify-center sm:justify-start text-sm text-white/80">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Fast turnaround
+                Amplify Your Resources
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Transparent pricing
+                Optimize Your Workflows
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Top-rated service
+                Measure Your Results
               </div>
             </div>
           </div>
@@ -162,14 +196,29 @@ export default function BusinessWebsite() {
               {
                 title: "AI Strategy & Consulting",
                 desc: "We help you identify high-impact AI use cases, map your data, and design practical roadmaps that drive revenue and operational efficiency.",
+                bullets: [
+                  "Maximize Returns: High-impact projects with clear payback deliver results in months.",
+                  "Tailored Problem-Solving: We dive into your challenges and craft solutions to improve performance and customer satisfaction.",
+                  "Quick Wins First: Early AI applications with high impact and low effort demonstrate fast ROI.",
+                ],
               },
               {
-                title: "Infra Management for E-commerce",
+                title: "Infrastructure Management",
                 desc: "We keep your stack fast, stable, and secure—monitoring, patching, and optimizing so your store stays online and customers keep checking out.",
+                bullets: [
+                  "Downtime Protection = Profit Protection: Proactive monitoring saves thousands in lost sales.",
+                  "Ready for Peak Demand: Auto-scaling ensures no crashes during high traffic.",
+                  "Focus on Business, Not Servers: We manage everything behind the scenes.",
+                ],
               },
               {
                 title: "Automation & Data Pipelines",
                 desc: "For teams that are drowning in manual tasks and fragmented tools—we build data flows and automations that free your people to focus on growth.",
+                bullets: [
+                  "Insight to Impact: Use real-time data to reduce waste and boost growth.",
+                  "End-to-End Visibility: Eliminate data silos for a full-picture dashboard.",
+                  "Scalable & Future-Proof: Add tools and sources as you grow with ease.",
+                ],
               },
             ].map((svc, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -177,9 +226,9 @@ export default function BusinessWebsite() {
                 <h3 className="mt-4 text-xl font-semibold">{svc.title}</h3>
                 <p className="mt-2 text-neutral-600">{svc.desc}</p>
                 <ul className="mt-4 space-y-2 text-sm text-neutral-700">
-                  <li>• Feature/Benefit A</li>
-                  <li>• Feature/Benefit B</li>
-                  <li>• Feature/Benefit C</li>
+                  {svc.bullets.map((b, idx) => (
+                    <li key={idx}>• {b}</li>
+                  ))}
                 </ul>
                 <a
                   href="#contact"
@@ -348,7 +397,11 @@ export default function BusinessWebsite() {
               },
               {
                 name: "Pro",
-                features: ["Custom SLAs & support", "Deep integration with your team", "Advanced AI, data, and infrastructure architecture"],
+                features: [
+                  "Custom SLAs & support",
+                  "Deep integration with your team",
+                  "Advanced AI, data, and infrastructure architecture",
+                ],
               },
             ].map((p, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -497,11 +550,18 @@ export default function BusinessWebsite() {
               Terms
             </a>
             <a href="#contact" className="rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">
-              Get a Quote
+              Get Started
             </a>
           </div>
         </div>
       </footer>
+
+      {/*
+        Test ideas (Jest + React Testing Library):
+        - Renders hero headline and the word “Dragon”.
+        - Nav renders expected anchors.
+        - Mobile menu toggles open/closed.
+      */}
     </div>
   );
 }
