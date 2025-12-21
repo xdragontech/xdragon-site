@@ -122,7 +122,16 @@ export default function BusinessWebsite() {
             <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight [text-shadow:0_6px_24px_rgba(0,0,0,0.55)]">
               Stop firefighting.
               <span className="block">Start scaling.</span>
-              <span className="block">Unleash the Dragon.</span>
+              <span className="block">
+                Unleash the{" "}
+                <span
+                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontWeight: 700 }}
+                  className="text-red-500 underline decoration-red-300/80 [text-shadow:0_6px_18px_rgba(120,120,120,0.75)]"
+                >
+                  Dragon
+                </span>
+                .
+              </span>
             </h1>
 
             <p className="mt-5 text-lg text-white/90 [text-shadow:0_4px_16px_rgba(0,0,0,0.45)]">
