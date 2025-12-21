@@ -226,9 +226,19 @@ export default function BusinessWebsite() {
                 <h3 className="mt-4 text-xl font-semibold">{svc.title}</h3>
                 <p className="mt-2 text-neutral-600">{svc.desc}</p>
                 <ul className="mt-4 space-y-2 text-sm text-neutral-700">
-                  {svc.bullets.map((b, idx) => (
-                    <li key={idx}>• {b}</li>
-                  ))}
+                  {svc.bullets.map((b, idx) => {
+                    const colon = b.indexOf(":");
+                    if (colon === -1) return <li key={idx}>• {b}</li>;
+
+                    const head = b.slice(0, colon + 1);
+                    const rest = b.slice(colon + 1).trim();
+
+                    return (
+                      <li key={idx}>
+                        • <span className="font-semibold text-neutral-900">{head}</span> {rest}
+                      </li>
+                    );
+                  })}
                 </ul>
                 <a
                   href="#contact"
