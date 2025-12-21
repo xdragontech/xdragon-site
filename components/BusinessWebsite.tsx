@@ -126,7 +126,7 @@ export default function BusinessWebsite() {
                 Unleash the{" "}
                 <span
                   style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontWeight: 700 }}
-                  className="text-red-500 underline decoration-red-300/80 [text-shadow:0_6px_18px_rgba(120,120,120,0.75)]"
+                  className="text-neutral-900 underline decoration-neutral-400 [text-shadow:0_6px_18px_rgba(120,120,120,0.75)]"
                 >
                   Dragon
                 </span>
@@ -235,7 +235,7 @@ export default function BusinessWebsite() {
 
                     return (
                       <li key={idx}>
-                        • <span className="font-semibold text-red-500 underline underline-offset-2 decoration-red-300/80">{head}</span> {rest}
+                        • <span className="font-semibold text-neutral-900 underline underline-offset-2 decoration-neutral-400">{head}</span> {rest}
                       </li>
                     );
                   })}
