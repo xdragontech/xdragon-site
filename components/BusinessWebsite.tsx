@@ -579,9 +579,11 @@ export default function BusinessWebsite() {
             <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <h3 className="text-lg font-semibold">Visit Us</h3>
               <p className="mt-2 text-neutral-700">
-                123 Sample Street, Suite 100
+                501-3292 Production Way
                 <br />
-                Your City, Your Province
+                Burnaby, BC
+                <br />
+                V5A 4R4
               </p>
               <div className="mt-4 aspect-video w-full overflow-hidden rounded-xl border border-neutral-200">
                 <img
