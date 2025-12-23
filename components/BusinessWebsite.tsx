@@ -64,6 +64,50 @@ const navItems = [
     { label: "Contact", href: "#contact" },
   ];
 
+  type FormStatus = "idle" | "sending" | "success" | "error";
+  const [formStatus, setFormStatus] = useState<FormStatus>("idle");
+  const [formError, setFormError] = useState("");
+
+  const handleContactSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormStatus("sending");
+    setFormError("");
+
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+
+    const payload = {
+      name: String(fd.get("name") ?? "").trim(),
+      email: String(fd.get("email") ?? "").trim(),
+      phone: String(fd.get("phone") ?? "").trim(),
+      message: String(fd.get("message") ?? "").trim(),
+      // Honeypot (should stay empty)
+      company_website: String(fd.get("company_website") ?? "").trim(),
+    };
+
+    try {
+      const r = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await r.json().catch(() => null);
+
+      if (r.ok && data?.ok) {
+        setFormStatus("success");
+        form.reset();
+      } else {
+        setFormStatus("error");
+        setFormError(data?.error || "Something went wrong. Please try again.");
+      }
+    } catch {
+      setFormStatus("error");
+      setFormError("Network error. Please try again.");
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       {/* Fonts + keyframes */}
@@ -535,12 +579,13 @@ const navItems = [
           </div>
 
           <div className="mt-8 grid lg:grid-cols-2 gap-8">
-            <form className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <form onSubmit={handleContactSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <input type="text" name="company_website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium">Name</label>
                   <input
-                    type="text"
+                    name="name" required type="text"
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                     placeholder="Jane Doe"
                   />
@@ -548,7 +593,7 @@ const navItems = [
                 <div>
                   <label className="text-sm font-medium">Email</label>
                   <input
-                    type="email"
+                    name="email" required type="email"
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                     placeholder="you@example.com"
                   />
@@ -557,7 +602,7 @@ const navItems = [
               <div className="mt-4">
                 <label className="text-sm font-medium">Phone (optional)</label>
                 <input
-                  type="tel"
+                  name="phone" type="tel"
                   className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   placeholder="(555) 123-4567"
                 />
@@ -565,15 +610,27 @@ const navItems = [
               <div className="mt-4">
                 <label className="text-sm font-medium">Message</label>
                 <textarea
-                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 h-32 focus:outline-none focus:ring-2 focus:ring-black"
+                  name="message" required className="mt-1 w-full rounded-xl border border-neutral-300 p-3 h-32 focus:outline-none focus:ring-2 focus:ring-black"
                   placeholder="What would you like to achieve?"
                 />
+              {formStatus === "success" && (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                  Thanks — we’ll get back to you within one business day.
+                </div>
+              )}
+              {formStatus === "error" && (
+                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+                  {formError || "Something went wrong. Please try again."}
+                </div>
+              )}
+
               </div>
               <button
                 type="submit"
-                className="mt-6 w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold"
+                disabled={formStatus === "sending"}
+                className="mt-6 w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
-                Send Message
+                {formStatus === "sending" ? "Sending..." : "Send Message"}
               </button>
               <p className="mt-3 text-xs text-neutral-500">By submitting, you agree to our friendly terms.</p>
             </form>
