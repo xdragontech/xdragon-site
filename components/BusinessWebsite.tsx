@@ -9,8 +9,10 @@ import React, { useState } from "react";
 export default function BusinessWebsite() {
   const [open, setOpen] = useState(false);
 
-  // Obfuscated email (reduces scraping via simple regex). Note: no method can fully prevent scraping.
+  
+  // Obfuscated email (reduces scraping via simple regex). Note: nothing can fully prevent scraping.
   const EMAIL_B64 = "aGVsbG9AeGRyYWdvbi50ZWNo"; // hello@xdragon.tech
+
   const decodeEmail = () => {
     if (typeof window === "undefined") return "";
     try {
@@ -29,29 +31,29 @@ export default function BusinessWebsite() {
   const copyEmail = async () => {
     const email = decodeEmail();
     if (!email) return;
-
     try {
       await navigator.clipboard.writeText(email);
-      return;
     } catch {
-      // fallback below
+      // Fallback copy
+      const ta = document.createElement("textarea");
+      ta.value = email;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(ta);
     }
-
-    const ta = document.createElement("textarea");
-    ta.value = email;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try {
-      document.execCommand("copy");
-    } catch {}
-    document.body.removeChild(ta);
   };
 
-
-  const navItems = [
+  const MAP_ADDRESS = "501-3292 Production Way, Burnaby, BC V5A 4R4";
+  const MAP_Q = encodeURIComponent(MAP_ADDRESS);
+const navItems = [
     { label: "Home", href: "#home" },
     { label: "Services", href: "#services" },
     { label: "How We Work", href: "#process" },
@@ -585,29 +587,39 @@ export default function BusinessWebsite() {
                 <br />
                 V5A 4R4
               </p>
-              <div className="mt-4 aspect-video w-full overflow-hidden rounded-xl border border-neutral-200">
-                <img
-                  src="https://images.unsplash.com/photo-1502920917128-1aa500764b8a?q=80&w=1600&auto=format&fit=crop"
-                  alt="Map placeholder"
-                  className="h-full w-full object-cover"
+              <div className="mt-4 aspect-video w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                <iframe
+                  title="X Dragon Technologies map"
+                  src={`https://www.google.com/maps?q=${MAP_Q}&output=embed`}
+                  className="h-full w-full"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
                 />
               </div>
+              <div className="mt-3">
+                <a
+                  className="text-sm underline underline-offset-2"
+                  href={`https://www.google.com/maps/search/?api=1&query=${MAP_Q}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in Google Maps
+                </a>
+              </div>
               <div className="mt-4 text-sm">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <strong>Email:</strong>
                   <button
                     type="button"
                     onClick={openEmail}
-                    className="underline hover:opacity-80"
-                    aria-label="Email X Dragon"
+                    className="underline underline-offset-2"
                   >
-                    hello [at] xdragon [dot] tech
+                    Send an email
                   </button>
                   <button
                     type="button"
                     onClick={copyEmail}
-                    className="text-neutral-600 hover:text-black"
-                    aria-label="Copy email address"
+                    className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs font-medium hover:bg-neutral-50"
                   >
                     Copy
                   </button>
