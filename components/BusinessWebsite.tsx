@@ -9,6 +9,48 @@ import React, { useState } from "react";
 export default function BusinessWebsite() {
   const [open, setOpen] = useState(false);
 
+  // Obfuscated email (reduces scraping via simple regex). Note: no method can fully prevent scraping.
+  const EMAIL_B64 = "aGVsbG9AeGRyYWdvbi50ZWNo"; // hello@xdragon.tech
+  const decodeEmail = () => {
+    if (typeof window === "undefined") return "";
+    try {
+      return window.atob(EMAIL_B64);
+    } catch {
+      return "";
+    }
+  };
+
+  const openEmail = () => {
+    const email = decodeEmail();
+    if (!email) return;
+    window.location.href = `mailto:${email}`;
+  };
+
+  const copyEmail = async () => {
+    const email = decodeEmail();
+    if (!email) return;
+
+    try {
+      await navigator.clipboard.writeText(email);
+      return;
+    } catch {
+      // fallback below
+    }
+
+    const ta = document.createElement("textarea");
+    ta.value = email;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand("copy");
+    } catch {}
+    document.body.removeChild(ta);
+  };
+
+
   const navItems = [
     { label: "Home", href: "#home" },
     { label: "Services", href: "#services" },
@@ -549,8 +591,24 @@ export default function BusinessWebsite() {
                 />
               </div>
               <div className="mt-4 text-sm">
-                <div>
-                  <strong>Email:</strong> hello@xdragontech.com
+                <div className="flex items-center gap-2">
+                  <strong>Email:</strong>
+                  <button
+                    type="button"
+                    onClick={openEmail}
+                    className="underline hover:opacity-80"
+                    aria-label="Email X Dragon"
+                  >
+                    hello [at] xdragon [dot] tech
+                  </button>
+                  <button
+                    type="button"
+                    onClick={copyEmail}
+                    className="text-neutral-600 hover:text-black"
+                    aria-label="Copy email address"
+                  >
+                    Copy
+                  </button>
                 </div>
                 <div>
                   <strong>Phone:</strong> (555) 987-6543
