@@ -260,16 +260,42 @@ export default function BusinessWebsite() {
             <p className="mt-3 text-neutral-600">A simple, transparent approach that keeps your business moving fast.</p>
           </div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {["Discovery", "Audit", "Implementation", "Ongoing Support"].map((phase, i) => (
+            {[
+              {
+                title: "Discovery",
+                headline: "Discovery & Requirements Capture",
+                desc:
+                  "We start with a structured consultation to understand your business outcomes, stakeholders, and service needs. We document requirements and assess your current environment to shape a plan aligned to your objectives.",
+              },
+              {
+                title: "Audit",
+                headline: "Baseline Assessment & Risk Evaluation",
+                desc:
+                  "We establish a current-state baseline across services, infrastructure, and security. We identify risks, constraints, and priority gaps that could impact stability, availability, or compliance.",
+              },
+              {
+                title: "Implement",
+                headline: "Build, Test & Go-Live",
+                desc:
+                  "We configure and implement the solution end-to-end, including testing and go-live readiness. We manage the transition carefully—aligning stakeholders, controlling risk, and confirming the new service performs as intended before handoff.",
+              },
+              {
+                title: "Support",
+                headline: "Continuous Maintenance & Improvement",
+                desc:
+                  "Support isn’t only reactive; it’s proactive. We review service performance and user feedback, track key indicators, and identify ongoing opportunities to improve reliability, security, and user experience. After go-live, we fine-tune configurations, apply updates, and deliver incremental improvements as your business evolves.",
+              },
+            ].map((step, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">{i + 1}</div>
-                <h3 className="mt-4 text-xl font-semibold">{phase}</h3>
+                <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">
+                  {i + 1}
+                </div>
+                <h3 className="mt-4 text-xl font-semibold">{step.title}</h3>
                 <p className="mt-2 text-neutral-600">
-                  Refine this description later—short explanation of what happens during this step.
+                  <span className="font-semibold text-neutral-900">{step.headline}</span> – {step.desc}
                 </p>
               </div>
-            ))}
-          </div>
+            ))}</div>
         </div>
       </section>
 
