@@ -1,387 +1,271 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
 
-/**
- * Chat API (Pages Router): POST /api/chat
- *
- * Required env:
- *   OPENAI_API_KEY
- *
- * Optional env (email lead summaries + confirmations via Resend):
- *   RESEND_API_KEY
- *   RESEND_FROM   e.g. "X Dragon <hello@xdragon.tech>" (must be verified in Resend)
- *   CONTACT_TO    e.g. "hello@xdragon.tech"   (site owner inbox)
- */
-
 type ChatRole = "user" | "assistant";
 
-type ChatMessage = {
+type IncomingMessage = {
   role: ChatRole;
   content: string;
 };
 
 type Lead = {
-  name?: string;
-  email?: string;
-  company?: string;
-  website?: string;
-  monthlyRevenueRange?: string;
-  timeline?: string;
-  problem?: string;
-  bestContactMethod?: string;
+  // Always present in structured output (may be empty strings)
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  intent: "ai_strategy" | "infrastructure" | "automation" | "other";
+  platform: string;
+  goal: string;
 };
 
-type ChatRequestBody = {
-  conversationId?: string;
-  messages: ChatMessage[];
-  lead?: Lead;
-  url?: string;
-};
-
-type ChatResponse = {
-  ok: boolean;
-  reply?: string;
-  lead?: Lead;
-  returnId?: string;
-  emailed?: boolean;          // whether we emailed the owner on this call
-  confirmed?: boolean;        // whether we emailed the visitor confirmation on this call
-  alreadyEmailed?: boolean;   // whether we skipped owner email due to dedupe
-  error?: string;
-};
-
-// OpenAI input messages can include a system role, but our UI only uses user/assistant.
-type OpenAIInputRole = "system" | "user" | "assistant";
-type OpenAIInputMessage = { role: OpenAIInputRole; content: string };
+type ApiResponse =
+  | { ok: true; reply: string; lead: Lead; returnId?: string; emailed: boolean }
+  | { ok: false; error: string };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-function clampMessages(msgs: ChatMessage[], max: number): ChatMessage[] {
-  if (msgs.length <= max) return msgs;
-  const head = msgs[0]?.role === "assistant" ? [msgs[0]] : [];
-  const tail = msgs.slice(-Math.max(0, max - head.length));
-  return [...head, ...tail];
+function asString(v: unknown) {
+  return typeof v === "string" ? v : "";
 }
 
-/**
- * NOTE on strict JSON Schema:
- * With `strict: true`, OpenAI requires every object with `properties` to also provide a `required`
- * array that includes *every* key in `properties`.
- *
- * To still represent "optional" fields, we mark them as nullable (string | null) and require them,
- * then we sanitize nulls back out before returning to the client.
- */
-const LEAD_KEYS = [
-  "name",
-  "email",
-  "company",
-  "website",
-  "monthlyRevenueRange",
-  "timeline",
-  "problem",
-  "bestContactMethod",
-] as const;
-
-const CHAT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["reply", "lead", "should_email_lead"],
-  properties: {
-    reply: { type: "string" },
-    lead: {
-      type: "object",
-      additionalProperties: false,
-      required: [...LEAD_KEYS],
-      properties: {
-        name: { type: ["string", "null"] },
-        email: { type: ["string", "null"] },
-        company: { type: ["string", "null"] },
-        website: { type: ["string", "null"] },
-        monthlyRevenueRange: { type: ["string", "null"] },
-        timeline: { type: ["string", "null"] },
-        problem: { type: ["string", "null"] },
-        bestContactMethod: { type: ["string", "null"] },
-      },
-    },
-    should_email_lead: { type: "boolean" },
-  },
-} as const;
-
-function stripNullLeadFields(input: any): Lead {
-  const out: Lead = {};
-  for (const k of LEAD_KEYS) {
-    const v = input?.[k];
-    if (typeof v === "string" && v.trim()) (out as any)[k] = v.trim();
+function normalizeMessages(raw: any): IncomingMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: IncomingMessage[] = [];
+  for (const m of raw) {
+    if (!m || typeof m !== "object") continue;
+    const role = (m as any).role;
+    const content = (m as any).content;
+    if ((role === "user" || role === "assistant") && typeof content === "string" && content.trim()) {
+      out.push({ role, content });
+    }
   }
   return out;
 }
 
-function parseCookies(cookieHeader?: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!cookieHeader) return out;
-  const parts = cookieHeader.split(";");
-  for (const p of parts) {
-    const [k, ...rest] = p.trim().split("=");
-    if (!k) continue;
-    out[k] = decodeURIComponent(rest.join("=") || "");
-  }
-  return out;
+function mergeLead(existing: any, incoming: any): Lead {
+  const fallback: Lead = {
+    name: "",
+    email: "",
+    phone: "",
+    company: "",
+    intent: "other",
+    platform: "",
+    goal: "",
+  };
+
+  const safeExisting = (existing && typeof existing === "object") ? existing : {};
+  const safeIncoming = (incoming && typeof incoming === "object") ? incoming : {};
+
+  const intent = (safeIncoming.intent || safeExisting.intent || fallback.intent) as Lead["intent"];
+  const normalizedIntent: Lead["intent"] =
+    intent === "ai_strategy" || intent === "infrastructure" || intent === "automation" || intent === "other"
+      ? intent
+      : "other";
+
+  return {
+    name: asString(safeIncoming.name || safeExisting.name || fallback.name),
+    email: asString(safeIncoming.email || safeExisting.email || fallback.email),
+    phone: asString(safeIncoming.phone || safeExisting.phone || fallback.phone),
+    company: asString(safeIncoming.company || safeExisting.company || fallback.company),
+    intent: normalizedIntent,
+    platform: asString(safeIncoming.platform || safeExisting.platform || fallback.platform),
+    goal: asString(safeIncoming.goal || safeExisting.goal || fallback.goal),
+  };
 }
 
-function makeCookie(name: string, value: string, maxAgeSeconds: number): string {
-  const secure = process.env.NODE_ENV === "production" ? " Secure;" : "";
-  return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax;${secure}`;
+function shouldTriggerFollowupEmail(messages: IncomingMessage[], lead: Lead) {
+  // Only trigger when we have a usable email AND the user asked for a follow-up / contact.
+  const hasEmail = !!lead.email && lead.email.includes("@");
+  if (!hasEmail) return false;
+
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content?.toLowerCase() || "";
+
+  const intentSignals = [
+    "contact",
+    "call me",
+    "email me",
+    "follow up",
+    "book",
+    "consult",
+    "consultation",
+    "get started",
+    "pricing",
+    "quote",
+    "talk to",
+    "speak to",
+  ];
+
+  return intentSignals.some((s) => lastUser.includes(s));
 }
 
-function appendSetCookie(res: NextApiResponse, cookie: string) {
-  const existing = res.getHeader("Set-Cookie");
-  if (!existing) {
-    res.setHeader("Set-Cookie", cookie);
-    return;
-  }
-  if (Array.isArray(existing)) {
-    res.setHeader("Set-Cookie", [...existing, cookie]);
-    return;
-  }
-  res.setHeader("Set-Cookie", [existing.toString(), cookie]);
-}
-
-function isLikelyEmail(email?: string): boolean {
-  if (!email) return false;
-  // intentionally simple (avoid rejecting valid but rare emails)
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
-
-/**
- * Stronger trigger:
- * - Email if model says should_email_lead = true
- * - OR if we have a visitor email AND their most recent message implies they want follow-up
- */
-function userWantsFollowUp(lastUserMessage: string): boolean {
-  const s = (lastUserMessage || "").toLowerCase();
-  return (
-    s.includes("contact") ||
-    s.includes("reach me") ||
-    s.includes("email me") ||
-    s.includes("call me") ||
-    s.includes("book") ||
-    s.includes("consult") ||
-    s.includes("talk to") ||
-    s.includes("get started") ||
-    s.includes("next steps") ||
-    s.includes("follow up")
-  );
-}
-
-async function sendResendEmail(payload: { subject: string; text: string; to: string[] }): Promise<boolean> {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const RESEND_FROM = process.env.RESEND_FROM;
-
-  if (!RESEND_API_KEY || !RESEND_FROM) return false;
+async function sendResendEmail(params: { to: string; from: string; subject: string; html: string }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("Missing RESEND_API_KEY");
 
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
-      from: RESEND_FROM,
-      to: payload.to,
-      subject: payload.subject,
-      text: payload.text,
+      to: params.to,
+      from: params.from,
+      subject: params.subject,
+      html: params.html,
     }),
   });
 
+  const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    console.error("Resend email failed:", resp.status, errText);
-    return false;
+    const msg = (json && (json.message || json.error)) ? (json.message || json.error) : "Resend send failed";
+    throw new Error(msg);
   }
-
-  return true;
+  return json as { id?: string };
 }
 
-async function maybeSendOwnerLeadEmail(params: {
-  lead: Lead;
-  conversationId: string;
-  url?: string;
-  transcript: ChatMessage[];
-}): Promise<boolean> {
-  const CONTACT_TO = process.env.CONTACT_TO;
-  if (!CONTACT_TO) return false;
-
-  const { lead, conversationId, url, transcript } = params;
-  const safe = (s?: string) => (s || "").toString().trim();
-
-  const subject = `New lead (chat) — ${safe(lead.name) || "Visitor"}${
-    safe(lead.company) ? " @ " + safe(lead.company) : ""
-  }`;
-
-  const text = [
-    "New website chat lead:",
-    "",
-    `Name: ${safe(lead.name) || "-"}`,
-    `Email: ${safe(lead.email) || "-"}`,
-    `Company: ${safe(lead.company) || "-"}`,
-    `Website: ${safe(lead.website) || "-"}`,
-    `Monthly revenue range: ${safe(lead.monthlyRevenueRange) || "-"}`,
-    `Timeline: ${safe(lead.timeline) || "-"}`,
-    `Best contact method: ${safe(lead.bestContactMethod) || "-"}`,
-    `Problem: ${safe(lead.problem) || "-"}`,
-    "",
-    url ? `Page: ${url}` : null,
-    `Conversation ID: ${conversationId}`,
-    "",
-    "Transcript (most recent):",
-    ...transcript.slice(-12).map((m) => `${m.role.toUpperCase()}: ${m.content}`),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return await sendResendEmail({ subject, text, to: [CONTACT_TO] });
+function escapeHtml(s: string) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-async function maybeSendVisitorConfirmationEmail(params: { lead: Lead; conversationId: string; url?: string }): Promise<boolean> {
-  const { lead, conversationId, url } = params;
-  if (!isLikelyEmail(lead.email)) return false;
-
-  const safe = (s?: string) => (s || "").toString().trim();
-
-  const subject = "We received your request — X Dragon Technologies";
-  const text = [
-    `Hi${safe(lead.name) ? " " + safe(lead.name) : ""},`,
-    "",
-    "Thanks for reaching out to X Dragon Technologies.",
-    "We received your request and someone from our team will follow up shortly.",
-    "",
-    "Summary we captured:",
-    `- Email: ${safe(lead.email) || "-"}`,
-    safe(lead.company) ? `- Company: ${safe(lead.company)}` : null,
-    safe(lead.website) ? `- Website: ${safe(lead.website)}` : null,
-    safe(lead.problem) ? `- What you’re solving: ${safe(lead.problem)}` : null,
-    safe(lead.timeline) ? `- Timeline: ${safe(lead.timeline)}` : null,
-    "",
-    url ? `Page: ${url}` : null,
-    `Reference: ${conversationId}`,
-    "",
-    "— X Dragon Technologies",
-    "AI consulting • Infrastructure management • Automation & data pipelines",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return await sendResendEmail({ subject, text, to: [safe(lead.email)] });
+function buildTranscriptHtml(conversationId: string, messages: IncomingMessage[]) {
+  const lines = messages
+    .slice(-12)
+    .map((m) => `<div style="margin:6px 0;"><strong>${m.role === "user" ? "User" : "Assistant"}:</strong> ${escapeHtml(m.content)}</div>`)
+    .join("");
+  return `
+    <div style="font-family: ui-sans-serif, system-ui; line-height:1.4;">
+      <h2 style="margin:0 0 8px;">New chat lead</h2>
+      <div style="color:#555; font-size:12px; margin-bottom:12px;">Conversation: ${escapeHtml(conversationId)}</div>
+      ${lines}
+    </div>
+  `;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<ChatResponse>) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ ok: false, error: "Server is missing OPENAI_API_KEY" });
-  }
+export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
   try {
-    const body = req.body as ChatRequestBody;
-    const conversationId = body.conversationId || `c_${Date.now()}`;
-    const msgs = clampMessages(body.messages || [], 14);
-    const leadIn: Lead = body.lead || {};
+    const conversationId = asString(req.body?.conversationId) || "unknown";
+    const messages = normalizeMessages(req.body?.messages);
+    const leadIn = req.body?.lead || {};
 
-    const instructions = [
-      "You are the website chat assistant for X Dragon Technologies.",
-      "",
-      "Business positioning:",
-      "- We provide AI consulting (strategy, roadmap, quick wins, implementation) and Infrastructure Management (reliability, scaling, monitoring) plus Automation & Data Pipelines.",
-      "- Primary audience: startups through medium-sized businesses.",
-      "- Style: professional, confident, solution-oriented, ROI-focused, and problem-solving.",
-      "",
-      "Goals:",
-      "1) Answer questions about X Dragon's services and how we help.",
-      "2) Qualify leads when appropriate (project type, timeline, constraints, desired outcome).",
-      "3) Encourage a consultation when there's fit. If user asks to be contacted, gather name + email at minimum.",
-      "",
-      "Rules:",
-      "- Keep replies concise (2–6 sentences) unless the user asks for detail.",
-      "- Don't mention competitors or benchmark against specific competitors.",
-      "- If asked about pricing: explain that we scope first, then propose a plan; offer a consultation.",
-      "- Only request contact details if the user wants follow-up or is clearly a strong lead.",
-      "- If the user provides an email or asks to be contacted, set should_email_lead=true and include lead fields you have.",
-      "",
-      "Return JSON that matches the provided schema. For lead fields you don't know, use null.",
-    ].join("\n");
+    if (!messages.length) return res.status(400).json({ ok: false, error: "No messages provided" });
 
-    const input: OpenAIInputMessage[] = msgs.map((m) => ({ role: m.role, content: m.content }));
+    // Detect first meaningful user turn (widget includes a greeting assistant message by default)
+    const userCount = messages.filter((m) => m.role === "user").length;
+    const isFirstUserTurn = userCount <= 1;
+
+    const systemInstructions = `
+You are the website chat assistant for X Dragon Technologies.
+
+Goal:
+- Help startups through medium-sized businesses with AI consulting, infrastructure management, and automation/data pipelines.
+- Be confident, practical, and ROI-focused.
+- DO NOT mention competitors or compare against specific firms.
+
+Critical conversation rules:
+1) Ask ONE question at a time (exactly one question mark in your reply).
+2) Keep replies concise: 2–6 sentences, then the single question.
+3) If the user requests a follow-up, ask for name + email ONLY if missing.
+4) If name+email are present, confirm you’ll follow up (no more questions unless necessary).
+
+Routing (first user turn):
+- Infer the user’s intent from their message: ai_strategy | infrastructure | automation | other.
+- Ask one targeted question to route the conversation:
+  - ai_strategy: ask about the business goal (e.g., growth, CX, cost reduction) or key process.
+  - infrastructure: ask about platform/hosting + current pain (uptime, speed, scale).
+  - automation: ask what workflow is manual + which tools they use.
+  - other: ask what outcome they want.
+
+Structured output:
+- Return JSON per the provided schema with:
+  - reply: your assistant reply
+  - lead: update fields if learned (use empty string if unknown)
+`;
+
+    // Build model input (use developer role to avoid SDK typing issues)
+    const input: any[] = messages.map((m) => ({ role: m.role, content: m.content }));
+
+    // Provide context to the model (lead + first-turn flag)
     input.unshift({
-      role: "system",
-      content: `Known lead details so far (may be empty): ${JSON.stringify(leadIn || {})}`,
+      role: "developer",
+      content: `${systemInstructions}\n\nFirst user turn: ${isFirstUserTurn ? "yes" : "no"}\nKnown lead details (may be empty): ${JSON.stringify(leadIn || {})}`,
     });
 
     const response = await openai.responses.create({
       model: "gpt-4o-2024-08-06",
-      instructions,
       input,
-      text: {
-        format: {
-          type: "json_schema",
+      response_format: {
+        type: "json_schema",
+        json_schema: {
           name: "xdragon_chat",
-          strict: true,
-          schema: CHAT_SCHEMA,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              reply: { type: "string" },
+              lead: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  name: { type: "string" },
+                  email: { type: "string" },
+                  phone: { type: "string" },
+                  company: { type: "string" },
+                  intent: { type: "string", enum: ["ai_strategy", "infrastructure", "automation", "other"] },
+                  platform: { type: "string" },
+                  goal: { type: "string" },
+                },
+                required: ["name", "email", "phone", "company", "intent", "platform", "goal"],
+              },
+            },
+            required: ["reply", "lead"],
+          },
         },
       },
-      temperature: 0.6,
     });
 
-    const raw = (response as any).output_text as string | undefined;
-    if (!raw) return res.status(500).json({ ok: false, error: "No model output text returned" });
+    const text = response.output_text || "";
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
 
-    const parsed = JSON.parse(raw) as { reply: string; lead: any; should_email_lead: boolean };
+    const reply = asString(parsed?.reply) || "Got it. What outcome are you aiming for right now?";
+    const lead = mergeLead(leadIn, parsed?.lead);
 
-    const leadFromModel = stripNullLeadFields(parsed.lead);
-    const mergedLead: Lead = { ...(leadIn || {}), ...(leadFromModel || {}) };
-
-    const lastUser = [...msgs].reverse().find((m) => m.role === "user")?.content || "";
-    const wantsFollowUp = parsed.should_email_lead || (Boolean(mergedLead.email) && userWantsFollowUp(lastUser));
-
-    // ---- Dedupe logic (cookie per conversation) ----
-    const cookies = parseCookies(req.headers.cookie);
-    const dedupeKey = `xd_chat_lead_${conversationId}`;
-    const alreadyEmailed = cookies[dedupeKey] === "1";
-
+    const emailedAlready = !!req.body?.emailed; // optional; client may send
     let emailed = false;
-    let confirmed = false;
+    let returnId: string | undefined = response.id;
 
-    if (wantsFollowUp && isLikelyEmail(mergedLead.email) && !alreadyEmailed) {
-      // Email site owner (lead summary)
-      emailed = await maybeSendOwnerLeadEmail({
-        lead: mergedLead,
-        conversationId,
-        url: body.url,
-        transcript: msgs,
-      });
+    // Trigger email only when asked and not already emailed
+    if (!emailedAlready && shouldTriggerFollowupEmail(messages, lead)) {
+      const to = process.env.RESEND_TO || "hello@xdragon.tech";
+      const from = process.env.RESEND_FROM || "X Dragon <hello@xdragon.tech>";
 
-      // If owner email succeeded, set cookie so we don't send duplicates for this conversation
-      if (emailed) {
-        appendSetCookie(res, makeCookie(dedupeKey, "1", 60 * 60 * 24 * 30)); // 30 days
+      const subject = `X Dragon chat lead: ${lead.name || "New lead"} (${lead.intent})`;
+      const html = buildTranscriptHtml(conversationId, messages);
 
-        // Send visitor confirmation (best-effort)
-        confirmed = await maybeSendVisitorConfirmationEmail({
-          lead: mergedLead,
-          conversationId,
-          url: body.url,
-        });
+      try {
+        await sendResendEmail({ to, from, subject, html });
+        emailed = true;
+      } catch (e) {
+        // If email fails, we still return chat reply; UI can handle emailed=false
+        emailed = false;
       }
     }
 
-    return res.status(200).json({
-      ok: true,
-      reply: parsed.reply,
-      lead: mergedLead,
-      returnId: (response as any).id,
-      emailed,
-      confirmed,
-      alreadyEmailed: alreadyEmailed && !emailed,
-    });
-  } catch (err: any) {
-    console.error(err);
-    return res.status(500).json({ ok: false, error: err?.message || "Server error" });
+    return res.status(200).json({ ok: true, reply, lead, returnId, emailed });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e?.message || "Server error" });
   }
 }
