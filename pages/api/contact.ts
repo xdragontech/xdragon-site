@@ -39,7 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `Message:\n${message}\n`;
 
   try {
-    const result = await resend.emails.send({
+    // Resend Node SDK returns: { data, error }
+    const { data, error } = await resend.emails.send({
       from: CONTACT_FROM_EMAIL.trim(),
       to: CONTACT_TO_EMAIL.trim(),
       replyTo: email.trim(),
@@ -47,8 +48,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       text,
     });
 
-    // Resend returns an id you can use to look up delivery details in the dashboard.
-    const id = (result as any)?.id;
+    if (error) {
+      throw new Error(error.message || "Failed to send email");
+    }
+
+    // Ensure the property is always present (null if missing) to aid debugging.
+    const id = data?.id ?? null;
 
     return res.status(200).json({ ok: true, id });
   } catch (err: any) {
