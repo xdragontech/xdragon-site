@@ -160,6 +160,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       "- If more info is needed, put the single best next question in next_question.",
       "- reply should be user-facing prose, and may include the question from next_question at the end.",
       "- If user wants follow-up AND email is missing, ask ONLY for email (one question). Set wants_follow_up true.",
+      "- If user wants follow-up AND email is present, confirm you will reach out and DO NOT ask any questions. Set next_question to null.",
     ].join("\n");
 
     const input = msgs.map((m) => ({ role: m.role, content: m.content }));
@@ -241,6 +242,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Ensure one-question behavior: if email missing but wants follow-up, force only the email question
     let reply = out.reply?.trim() || "";
     let wants_follow_up = out.wants_follow_up || userWantsFollowUp;
+
+    // If follow-up is requested and we already have an email, do NOT ask more questions.
+    if (wants_follow_up && mergedLead.email) {
+      const nm = (mergedLead.name && mergedLead.name.trim()) ? mergedLead.name.trim() : "there";
+      reply = `Thank you, ${nm}. We\'ll reach out to you soon at ${mergedLead.email}.`;
+      out.next_question = null;
+    }
 
     if (wants_follow_up && !mergedLead.email) {
       const emailQ = "What’s the best email to reach you at?";
