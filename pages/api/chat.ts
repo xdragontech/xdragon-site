@@ -222,9 +222,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const parsed = (response as any).output_parsed as ChatOutput | undefined;
 
+    // Some OpenAI SDK builds don't populate `output_parsed` yet. If so, fall back to parsing `output_text`.
+    const rawText: string = (response as any).output_text || "";
+    let parsedFromText: ChatOutput | undefined = undefined;
+    if (!parsed && rawText) {
+      try {
+        const candidate = JSON.parse(rawText);
+        if (candidate && typeof candidate === "object") parsedFromText = candidate as ChatOutput;
+      } catch {
+        // ignore
+      }
+    }
+
     let out: ChatOutput;
-    if (parsed && typeof parsed.reply === "string" && parsed.lead) {
-      out = parsed;
+    const effective = parsedFromText || parsed;
+
+    if (effective && typeof effective.reply === "string" && (effective as any).lead) {
+      out = effective as ChatOutput;
     } else {
       out = {
         reply: (response as any).output_text || "Thanks — how can we help?",
