@@ -1,68 +1,157 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 /**
- * Orbitron font note:
- * We load Orbitron via CSS @import so this component works in both Next.js and preview sandboxes
- * where `next/font/google` may be unavailable.
+ * BusinessWebsite.tsx (Pages Router component)
+ * - Restored full layout/styling
+ * - Services bullet "subheadings" are bold + underlined (no red)
+ * - Contact block uses correct address + phone
+ * - Email is displayed in a less-scrapable form (hello [at] xdragon [dot] tech)
+ * - Footer year wrapped with suppressHydrationWarning to prevent React hydration errors (#425/#423)
  */
+
+type Phase = {
+  title: string;
+  subtitle: string;
+  body: string;
+};
 
 export default function BusinessWebsite() {
   const [open, setOpen] = useState(false);
+  const [formStatus, setFormStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [formError, setFormError] = useState<string>("");
 
-  
-  // Obfuscated email (reduces scraping via simple regex). Note: nothing can fully prevent scraping.
-  const EMAIL_B64 = "aGVsbG9AeGRyYWdvbi50ZWNo"; // hello@xdragon.tech
-
-  const decodeEmail = () => {
-    if (typeof window === "undefined") return "";
-    try {
-      return window.atob(EMAIL_B64);
-    } catch {
-      return "";
-    }
-  };
-
-  const openEmail = () => {
-    const email = decodeEmail();
-    if (!email) return;
-    window.location.href = `mailto:${email}`;
-  };
-
-  const copyEmail = async () => {
-    const email = decodeEmail();
-    if (!email) return;
-    try {
-      await navigator.clipboard.writeText(email);
-    } catch {
-      // Fallback copy
-      const ta = document.createElement("textarea");
-      ta.value = email;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      try {
-        document.execCommand("copy");
-      } catch {
-        // ignore
-      }
-      document.body.removeChild(ta);
-    }
-  };
-
-  const MAP_ADDRESS = "501-3292 Production Way, Burnaby, BC V5A 4R4";
-  const MAP_Q = encodeURIComponent(MAP_ADDRESS);
-const navItems = [
+  const navItems = [
     { label: "Home", href: "#home" },
     { label: "Services", href: "#services" },
     { label: "How We Work", href: "#process" },
     { label: "Case Study", href: "#case-study" },
     { label: "About", href: "#about" },
     { label: "Testimonials", href: "#testimonials" },
-    // Keep as an anchor label (CTA buttons use “Get Started”)
     { label: "Contact", href: "#contact" },
   ];
+
+  const services = useMemo(
+    () => [
+      {
+        title: "AI Strategy & Consulting",
+        desc:
+          "High-impact AI roadmaps and implementations designed around business outcomes—so you get ROI, not experiments.",
+        bullets: [
+          "Maximize Returns: High-impact projects with clear payback deliver results in months.",
+          "Tailored Problem-Solving: We dive into your challenges and craft solutions to improve performance and customer satisfaction.",
+          "Quick Wins First: Early AI applications with high impact and low effort demonstrate fast ROI.",
+        ],
+      },
+      {
+        title: "Infrastructure Management",
+        desc:
+          "We keep your stack fast, stable, and secure—monitoring, patching, and optimizing so your business stays online and scales confidently.",
+        bullets: [
+          "Downtime Protection = Profit Protection: Proactive monitoring saves thousands in lost sales.",
+          "Ready for Peak Demand: Auto-scaling ensures no crashes during high traffic.",
+          "Focus on Business, Not Servers: We manage everything behind the scenes.",
+        ],
+      },
+      {
+        title: "Automation & Data Pipelines",
+        desc:
+          "We connect systems, automate repetitive work, and build clean data flows—so your team ships faster and makes better decisions.",
+        bullets: [
+          "Insight to Impact: Use real-time data to reduce waste and boost growth.",
+          "End-to-End Visibility: Eliminate data silos for a full-picture dashboard.",
+          "Scalable & Future-Proof: Add tools and sources as you grow with ease.",
+        ],
+      },
+    ],
+    []
+  );
+
+  const howWeWork: Phase[] = [
+    {
+      title: "Discovery",
+      subtitle: "Discovery & Requirements Capture",
+      body:
+        "We start with a structured consultation to understand your business outcomes, stakeholders, and service needs. We document requirements and assess your current environment to shape a plan aligned to your objectives.",
+    },
+    {
+      title: "Audit",
+      subtitle: "Baseline Assessment & Risk Evaluation",
+      body:
+        "We establish a current-state baseline across services, infrastructure, and security. We identify risks, constraints, and priority gaps that could impact stability, availability, or compliance.",
+    },
+    {
+      title: "Implement",
+      subtitle: "Build, Test & Go-Live",
+      body:
+        "We configure and implement the solution end-to-end, including testing and go-live readiness. We manage the transition carefully—aligning stakeholders, controlling risk, and confirming the new service performs as intended before handoff.",
+    },
+    {
+      title: "Support",
+      subtitle: "Continuous Maintenance & Improvement",
+      body:
+        "Support isn’t only reactive; it’s proactive. We review service performance and user feedback, track key indicators, and identify ongoing opportunities to improve reliability, security, and user experience. After go-live, we fine-tune configurations, apply updates, and deliver incremental improvements as your business evolves.",
+    },
+  ];
+
+  function renderBullet(bullet: string, idx: number) {
+    const parts = bullet.split(":");
+    if (parts.length < 2) return <li key={idx}>• {bullet}</li>;
+    const head = parts.shift()!.trim();
+    const rest = parts.join(":").trim();
+    return (
+      <li key={idx}>
+        • <span className="font-semibold underline underline-offset-2">{head}:</span> {rest}
+      </li>
+    );
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (formStatus === "sending") return;
+
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const payload = {
+      name: String(fd.get("name") || ""),
+      email: String(fd.get("email") || ""),
+      phone: String(fd.get("phone") || ""),
+      message: String(fd.get("message") || ""),
+    };
+
+    setFormStatus("sending");
+    setFormError("");
+
+    try {
+      const resp = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      let data: any = {};
+      const ct = resp.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        data = await resp.json().catch(() => ({}));
+      }
+      if (!resp.ok || !data?.ok) {
+        throw new Error(data?.error || `Contact request failed (${resp.status})`);
+      }
+
+      setFormStatus("sent");
+      form.reset();
+    } catch (err: any) {
+      console.error("Contact form submit failed", err);
+      setFormStatus("error");
+      setFormError(err?.message || "Something went wrong. Please try again.");
+    }
+  }
+
+  const emailText = "hello [at] xdragon [dot] tech";
+  const emailHref = useMemo(() => {
+    const user = "hello";
+    const domain = "xdragon.tech";
+    return `mailto:${user}@${domain}`;
+  }, []);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -98,25 +187,13 @@ const navItems = [
               </a>
             </nav>
 
-            {/* Mobile menu button (border + hamburger lines) */}
             <button
               onClick={() => setOpen(!open)}
               className="md:hidden inline-flex items-center justify-center rounded-xl border border-neutral-300 p-2"
               aria-label="Toggle menu"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-5 w-5 text-neutral-900"
-              >
-                <path d="M4 6h16" />
-                <path d="M4 12h16" />
-                <path d="M4 18h16" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
           </div>
@@ -230,64 +307,18 @@ const navItems = [
           <div className="max-w-2xl">
             <h2 className="text-3xl sm:text-4xl font-bold">Services</h2>
             <p className="mt-3 text-neutral-600">
-              Done-for-you AI, infrastructure, and automation services built specifically for e-commerce teams that
-              want reliability, speed, and scale.
+              AI, infrastructure, and automation services built for startups through medium-sized businesses that want reliability, speed, and scale.
             </p>
           </div>
 
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                title: "AI Strategy & Consulting",
-                desc: "We help you identify high-impact AI use cases, map your data, and design practical roadmaps that drive revenue and operational efficiency.",
-                bullets: [
-                  "Maximize Returns: High-impact projects with clear payback deliver results in months.",
-                  "Tailored Problem-Solving: We dive into your challenges and craft solutions to improve performance and customer satisfaction.",
-                  "Quick Wins First: Early AI applications with high impact and low effort demonstrate fast ROI.",
-                ],
-              },
-              {
-                title: "Infrastructure Management",
-                desc: "We keep your stack fast, stable, and secure—monitoring, patching, and optimizing so your store stays online and customers keep checking out.",
-                bullets: [
-                  "Downtime Protection = Profit Protection: Proactive monitoring saves thousands in lost sales.",
-                  "Ready for Peak Demand: Auto-scaling ensures no crashes during high traffic.",
-                  "Focus on Business, Not Servers: We manage everything behind the scenes.",
-                ],
-              },
-              {
-                title: "Automation & Data Pipelines",
-                desc: "For teams that are drowning in manual tasks and fragmented tools—we build data flows and automations that free your people to focus on growth.",
-                bullets: [
-                  "Insight to Impact: Use real-time data to reduce waste and boost growth.",
-                  "End-to-End Visibility: Eliminate data silos for a full-picture dashboard.",
-                  "Scalable & Future-Proof: Add tools and sources as you grow with ease.",
-                ],
-              },
-            ].map((svc, i) => (
+            {services.map((svc, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">{i + 1}</div>
                 <h3 className="mt-4 text-xl font-semibold">{svc.title}</h3>
                 <p className="mt-2 text-neutral-600">{svc.desc}</p>
-                <ul className="mt-4 space-y-2 text-sm text-neutral-700">
-                  {svc.bullets.map((b, idx) => {
-                    const colon = b.indexOf(":");
-                    if (colon === -1) return <li key={idx}>• {b}</li>;
-
-                    const head = b.slice(0, colon + 1);
-                    const rest = b.slice(colon + 1).trim();
-
-                    return (
-                      <li key={idx}>
-                        • <span className="font-semibold text-neutral-900 underline underline-offset-2 decoration-neutral-400">{head}</span> {rest}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <a
-                  href="#contact"
-                  className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
-                >
+                <ul className="mt-4 space-y-2 text-sm text-neutral-700">{svc.bullets.map(renderBullet)}</ul>
+                <a href="#contact" className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">
                   Get Started
                 </a>
               </div>
@@ -301,45 +332,18 @@ const navItems = [
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold">How We Work</h2>
-            <p className="mt-3 text-neutral-600">A simple, transparent approach that keeps your business moving fast.</p>
+            <p className="mt-3 text-neutral-600">A structured approach that keeps delivery fast, controlled, and outcome-driven.</p>
           </div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              {
-                title: "Discovery",
-                headline: "Discovery & Requirements Capture",
-                desc:
-                  "We start with a structured consultation to understand your business outcomes, stakeholders, and service needs. We document requirements and assess your current environment to shape a plan aligned to your objectives.",
-              },
-              {
-                title: "Audit",
-                headline: "Baseline Assessment & Risk Evaluation",
-                desc:
-                  "We establish a current-state baseline across services, infrastructure, and security. We identify risks, constraints, and priority gaps that could impact stability, availability, or compliance.",
-              },
-              {
-                title: "Implement",
-                headline: "Build, Test & Go-Live",
-                desc:
-                  "We configure and implement the solution end-to-end, including testing and go-live readiness. We manage the transition carefully—aligning stakeholders, controlling risk, and confirming the new service performs as intended before handoff.",
-              },
-              {
-                title: "Support",
-                headline: "Continuous Maintenance & Improvement",
-                desc:
-                  "Support isn’t only reactive; it’s proactive. We review service performance and user feedback, track key indicators, and identify ongoing opportunities to improve reliability, security, and user experience. After go-live, we fine-tune configurations, apply updates, and deliver incremental improvements as your business evolves.",
-              },
-            ].map((step, i) => (
+            {howWeWork.map((phase, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">
-                  {i + 1}
-                </div>
-                <h3 className="mt-4 text-xl font-semibold">{step.title}</h3>
-                <p className="mt-2 text-neutral-600">
-                  <span className="font-semibold text-neutral-900">{step.headline}</span> – {step.desc}
-                </p>
+                <div className="h-12 w-12 rounded-xl bg-black text-white grid place-items-center font-bold">{i + 1}</div>
+                <h3 className="mt-4 text-xl font-semibold">{phase.title}</h3>
+                <div className="mt-2 text-sm font-semibold text-neutral-900">{phase.subtitle}</div>
+                <p className="mt-2 text-neutral-600 text-sm">{phase.body}</p>
               </div>
-            ))}</div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -393,8 +397,7 @@ const navItems = [
           <div>
             <h2 className="text-3xl sm:text-4xl font-bold">About Us</h2>
             <p className="mt-4 text-neutral-700">
-              X Dragon sits at the intersection of AI, cloud infrastructure, and e-commerce. We partner with operators
-              who want enterprise-grade reliability and innovation—without hiring a full internal engineering team.
+              X Dragon sits at the intersection of AI, cloud infrastructure, and modern operations. We partner with teams who want enterprise-grade reliability and innovation—without hiring a full internal engineering team.
             </p>
             <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
               <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
@@ -403,7 +406,7 @@ const navItems = [
               </div>
               <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
                 <div className="text-3xl font-extrabold">500+</div>
-                <div className="text-neutral-600">E-commerce Brands</div>
+                <div className="text-neutral-600">Businesses Supported</div>
               </div>
             </div>
           </div>
@@ -422,33 +425,17 @@ const navItems = [
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h2 className="text-3xl sm:text-4xl font-bold">What Clients Say</h2>
-            <p className="mt-3 text-neutral-600">
-              Here’s what operators and founders say after handing us their AI and infrastructure headaches.
-            </p>
+            <p className="mt-3 text-neutral-600">Here’s what operators and founders say after handing us their AI and infrastructure headaches.</p>
           </div>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              {
-                quote: "They nailed it—on time and on budget. Our results improved within weeks.",
-                name: "Alex R.",
-                role: "Operations Director, Nimbus",
-              },
-              {
-                quote: "Professional, friendly, and genuinely invested in our success.",
-                name: "Jamie L.",
-                role: "Founder, Quartz Studio",
-              },
-              {
-                quote: "Clear communication and excellent execution at every step.",
-                name: "Priya S.",
-                role: "Marketing Lead, Evergreen Co.",
-              },
+              { quote: "They nailed it—on time and on budget. Our results improved within weeks.", name: "Alex R.", role: "Operations Director" },
+              { quote: "Professional, friendly, and genuinely invested in our success.", name: "Jamie L.", role: "Founder" },
+              { quote: "Clear communication and excellent execution at every step.", name: "Priya S.", role: "Marketing Lead" },
             ].map((t, i) => (
               <figure key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <blockquote className="text-neutral-800">“{t.quote}”</blockquote>
-                <figcaption className="mt-4 text-sm text-neutral-600">
-                  — {t.name}, {t.role}
-                </figcaption>
+                <figcaption className="mt-4 text-sm text-neutral-600">— {t.name}, {t.role}</figcaption>
               </figure>
             ))}
           </div>
@@ -460,29 +447,13 @@ const navItems = [
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h2 className="text-3xl sm:text-4xl font-bold">Engagement Models</h2>
-            <p className="mt-3 text-neutral-600">
-              Flexible ways to work with us—from focused advisory to ongoing, fully managed infrastructure and AI
-              support.
-            </p>
+            <p className="mt-3 text-neutral-600">Flexible ways to work with us—from focused advisory to ongoing, fully managed infrastructure and AI support.</p>
           </div>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              {
-                name: "Advisory",
-                features: ["Monthly strategy sessions", "AI & infra roadmap", "Implementation guidance"],
-              },
-              {
-                name: "Managed",
-                features: ["Ongoing infra monitoring", "Incident response & tuning", "Automation & reporting"],
-              },
-              {
-                name: "Pro",
-                features: [
-                  "Custom SLAs & support",
-                  "Deep integration with your team",
-                  "Advanced AI, data, and infrastructure architecture",
-                ],
-              },
+              { name: "Advisory", features: ["Monthly strategy sessions", "AI & infra roadmap", "Implementation guidance"] },
+              { name: "Managed", features: ["Ongoing infra monitoring", "Incident response & tuning", "Automation & reporting"] },
+              { name: "Pro", features: ["Custom SLAs & support", "Deep integration with your team", "Advanced AI, data, and infrastructure architecture"] },
             ].map((p, i) => (
               <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="text-sm font-semibold text-neutral-500">{p.name}</div>
@@ -491,10 +462,7 @@ const navItems = [
                     <li key={idx}>• {f}</li>
                   ))}
                 </ul>
-                <a
-                  href="#contact"
-                  className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
-                >
+                <a href="#contact" className="mt-6 inline-block rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">
                   Explore {p.name}
                 </a>
               </div>
@@ -513,10 +481,7 @@ const navItems = [
                 Bring us your gnarliest AI, infra, or automation issues and we’ll help you chart a clear path forward.
               </p>
             </div>
-            <a
-              href="#contact"
-              className="inline-flex items-center justify-center rounded-2xl bg-white text-black px-6 py-3 text-sm font-semibold"
-            >
+            <a href="#contact" className="inline-flex items-center justify-center rounded-2xl bg-white text-black px-6 py-3 text-sm font-semibold">
               Talk to X Dragon
             </a>
           </div>
@@ -529,17 +494,18 @@ const navItems = [
           <div className="max-w-2xl">
             <h2 className="text-3xl sm:text-4xl font-bold">Contact Us</h2>
             <p className="mt-3 text-neutral-600">
-              Tell us how your e-commerce stack runs today and where it hurts. We’ll follow up with next steps and
-              options within one business day.
+              Tell us where it hurts and what you want to improve. We’ll follow up with next steps and options within one business day.
             </p>
           </div>
 
           <div className="mt-8 grid lg:grid-cols-2 gap-8">
-            <form className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <form onSubmit={onSubmit} action="/api/contact" method="post" className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium">Name</label>
                   <input
+                    name="name"
+                    required
                     type="text"
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                     placeholder="Jane Doe"
@@ -548,6 +514,8 @@ const navItems = [
                 <div>
                   <label className="text-sm font-medium">Email</label>
                   <input
+                    name="email"
+                    required
                     type="email"
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                     placeholder="you@example.com"
@@ -557,24 +525,36 @@ const navItems = [
               <div className="mt-4">
                 <label className="text-sm font-medium">Phone (optional)</label>
                 <input
+                  name="phone"
                   type="tel"
                   className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  placeholder="(555) 123-4567"
+                  placeholder="+1-604-256-6563"
                 />
               </div>
               <div className="mt-4">
                 <label className="text-sm font-medium">Message</label>
                 <textarea
+                  name="message"
+                  required
                   className="mt-1 w-full rounded-xl border border-neutral-300 p-3 h-32 focus:outline-none focus:ring-2 focus:ring-black"
                   placeholder="What would you like to achieve?"
                 />
               </div>
+
               <button
                 type="submit"
-                className="mt-6 w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold"
+                disabled={formStatus === "sending"}
+                className="mt-6 w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold disabled:opacity-60"
               >
-                Send Message
+                {formStatus === "sending" ? "Sending..." : "Send Message"}
               </button>
+
+              <div aria-live="polite">
+                {formStatus === "sent" && (
+                  <p className="mt-3 text-sm text-emerald-700">Thanks — we received your message.</p>
+                )}
+              </div>
+              {formStatus === "error" && <p className="mt-3 text-sm text-red-700">Error: {formError}</p>}
               <p className="mt-3 text-xs text-neutral-500">By submitting, you agree to our friendly terms.</p>
             </form>
 
@@ -587,46 +567,37 @@ const navItems = [
                 <br />
                 V5A 4R4
               </p>
-              <div className="mt-4 aspect-video w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+
+              <div className="mt-4 aspect-video w-full overflow-hidden rounded-xl border border-neutral-200">
                 <iframe
-                  title="X Dragon Technologies map"
-                  src={`https://www.google.com/maps?q=${MAP_Q}&output=embed`}
+                  title="X Dragon Technologies location"
+                  src="https://www.google.com/maps?q=501-3292%20Production%20Way%2C%20Burnaby%2C%20BC%2C%20V5A%204R4&output=embed"
                   className="h-full w-full"
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                 />
               </div>
-              <div className="mt-3">
-                <a
-                  className="text-sm underline underline-offset-2"
-                  href={`https://www.google.com/maps/search/?api=1&query=${MAP_Q}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in Google Maps
-                </a>
-              </div>
-              <div className="mt-4 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <strong>Email:</strong>
-                  <button
-                    type="button"
-                    onClick={openEmail}
-                    className="underline underline-offset-2"
-                  >
-                    Send an email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copyEmail}
-                    className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs font-medium hover:bg-neutral-50"
-                  >
-                    Copy
-                  </button>
+
+              <div className="mt-4 text-sm space-y-2">
+                <div className="flex items-start gap-2">
+                  <strong className="shrink-0">Email:</strong>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== "undefined") window.location.href = emailHref;
+                      }}
+                      className="underline"
+                      aria-label="Email X Dragon"
+                    >
+                      {emailText}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <strong>Phone:</strong> +1-604-256-6563
                 </div>
+                {/* Social links intentionally removed for now */}
               </div>
             </div>
           </div>
@@ -637,28 +608,17 @@ const navItems = [
       <footer className="border-t border-neutral-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-neutral-600">
-            © {new Date().getFullYear()} X Dragon Technologies. All rights reserved.
+            © <span suppressHydrationWarning>{new Date().getUTCFullYear()}</span> X Dragon Technologies. All rights reserved.
           </p>
           <div className="flex items-center gap-6 text-sm">
-            <a href="#" className="hover:underline">
-              Privacy
-            </a>
-            <a href="#" className="hover:underline">
-              Terms
-            </a>
+            <a href="#" className="hover:underline">Privacy</a>
+            <a href="#" className="hover:underline">Terms</a>
             <a href="#contact" className="rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold">
               Get Started
             </a>
           </div>
         </div>
       </footer>
-
-      {/*
-        Test ideas (Jest + React Testing Library):
-        - Renders hero headline and the word “Dragon”.
-        - Nav renders expected anchors.
-        - Mobile menu toggles open/closed.
-      */}
     </div>
   );
 }
