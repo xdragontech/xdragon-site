@@ -149,8 +149,16 @@ async function maybeEmailLeadSummary(args: {
   returnId?: string;
 }): Promise<boolean> {
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const RESEND_TO_EMAIL = process.env.RESEND_TO_EMAIL || "hello@xdragon.tech";
-  const RESEND_FROM = process.env.RESEND_FROM_EMAIL; // must be verified sender, e.g. "X Dragon <noreply@xdragon.tech>"
+  const RESEND_TO_EMAIL =
+    process.env.RESEND_TO_EMAIL ||
+    process.env.CONTACT_TO_EMAIL ||
+    process.env.CONTACT_TO ||
+    "hello@xdragon.tech";
+  const RESEND_FROM =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_FROM ||
+    process.env.CONTACT_FROM_EMAIL ||
+    ""; // must be a verified sender, e.g. "X Dragon <noreply@xdragon.tech>"
 
   if (!RESEND_API_KEY || !RESEND_FROM) return false;
 
