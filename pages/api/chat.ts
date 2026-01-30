@@ -147,7 +147,7 @@ async function maybeEmailLeadSummary(args: {
   lastUserMessage: string;
   reply: string;
   returnId?: string;
-}): Promise<boolean> {
+}): Promise<{ emailed: boolean; reason: string }> {
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   const RESEND_TO_EMAIL =
     process.env.RESEND_TO_EMAIL ||
@@ -160,10 +160,10 @@ async function maybeEmailLeadSummary(args: {
     process.env.CONTACT_FROM_EMAIL ||
     ""; // must be a verified sender, e.g. "X Dragon <noreply@xdragon.tech>"
 
-  if (!RESEND_API_KEY || !RESEND_FROM) return false;
+  if (!RESEND_API_KEY || !RESEND_FROM) return { emailed: false, reason: "not_sent" };
 
   // Only email when we have SOME contact path
-  if (!args.lead.email && !args.lead.phone) return false;
+  if (!args.lead.email && !args.lead.phone) return { emailed: false, reason: "not_sent" };
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Resend } = require("resend") as typeof import("resend");
@@ -208,7 +208,7 @@ async function maybeEmailLeadSummary(args: {
 
   await resend.emails.send(payload);
 
-  return true;
+  return { emailed: true, reason: "sent" };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -408,6 +408,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Send lead email to business inbox once we have contact details; avoid duplicates if client says already emailed.
     let emailed = false;
+    let emailedReason: string = "";
     const alreadyEmailed = !!emailedIn;
     if (!alreadyEmailed && wants_follow_up) {
       // Only email when we have enough to reach user according to preferred method
@@ -418,13 +419,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (ready) {
         try {
-          emailed = await maybeEmailLeadSummary({
+          const emailResult = await maybeEmailLeadSummary({
             lead: mergedLead,
             conversationId,
             lastUserMessage: lastUser,
             reply,
             returnId,
           });
+        emailed = emailResult.emailed;
+        emailedReason = emailResult.reason;
         } catch (e) {
           // Surface errors in Vercel function logs for debugging.
           console.error("Resend send failed", e);
