@@ -1,112 +1,57 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { Resend } from "resend";
 
-type Ok = { ok: true };
-type Err = { ok: false; error: string };
-type Resp = Ok | Err;
+type ContactBody = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  message?: string;
+};
 
-const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-
-const escapeHtml = (s: string) =>
-  s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse<Resp>) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const CONTACT_TO_EMAIL = process.env.CONTACT_TO_EMAIL; // set to hello@xdragon.tech in Vercel env vars
-  const CONTACT_FROM_EMAIL =
-    process.env.CONTACT_FROM_EMAIL || "X Dragon Website <onboarding@resend.dev>";
+  const { name, email, phone, message } = (req.body || {}) as ContactBody;
 
-  if (!RESEND_API_KEY) {
-    return res
-      .status(500)
-      .json({ ok: false, error: "Email service not configured (missing RESEND_API_KEY)." });
-  }
-  if (!CONTACT_TO_EMAIL) {
-    return res
-      .status(500)
-      .json({ ok: false, error: "Email target not configured (missing CONTACT_TO_EMAIL)." });
+  if (!name?.trim() || !email?.trim() || !message?.trim()) {
+    return res.status(400).json({ ok: false, error: "Missing required fields" });
   }
 
-  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { RESEND_API_KEY, CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL } = process.env;
 
-  const name = String(body.name ?? "").trim();
-  const email = String(body.email ?? "").trim();
-  const phone = String(body.phone ?? "").trim();
-  const message = String(body.message ?? "").trim();
-  const companyWebsite = String(body.company_website ?? "").trim(); // honeypot
+  if (!RESEND_API_KEY || !CONTACT_TO_EMAIL || !CONTACT_FROM_EMAIL) {
+    return res.status(500).json({
+      ok: false,
+      error: "Server email is not configured. Missing RESEND_API_KEY or CONTACT_* env vars.",
+    });
+  }
 
-  // Honeypot triggered: pretend success to avoid tipping off bots
-  if (companyWebsite) return res.status(200).json({ ok: true });
+  const resend = new Resend(RESEND_API_KEY);
 
-  if (!name || name.length < 2) return res.status(400).json({ ok: false, error: "Please enter your name." });
-  if (!email || !isEmail(email)) return res.status(400).json({ ok: false, error: "Please enter a valid email." });
-  if (!message || message.length < 10)
-    return res.status(400).json({ ok: false, error: "Please enter a message (at least 10 characters)." });
-
-  // Basic length caps
-  const safeName = name.slice(0, 120);
-  const safeEmail = email.slice(0, 200);
-  const safePhone = phone.slice(0, 80);
-  const safeMessage = message.slice(0, 6000);
-
-  const subject = `New contact request — ${safeName}`;
-
-  const text = [
-    `Name: ${safeName}`,
-    `Email: ${safeEmail}`,
-    safePhone ? `Phone: ${safePhone}` : "",
-    "",
-    "Message:",
-    safeMessage,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const html = `
-    <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">
-      <h2>New contact request</h2>
-      <p><strong>Name:</strong> ${escapeHtml(safeName)}</p>
-      <p><strong>Email:</strong> ${escapeHtml(safeEmail)}</p>
-      ${safePhone ? `<p><strong>Phone:</strong> ${escapeHtml(safePhone)}</p>` : ""}
-      <p><strong>Message:</strong></p>
-      <pre style="white-space: pre-wrap; padding: 12px; background: #f5f5f5; border-radius: 12px;">${escapeHtml(
-        safeMessage
-      )}</pre>
-    </div>
-  `;
+  const subject = `New website inquiry — ${name}`;
+  const text =
+    `Name: ${name}\n` +
+    `Email: ${email}\n` +
+    `Phone: ${phone || ""}\n\n` +
+    `Message:\n${message}\n`;
 
   try {
-    const r = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: CONTACT_FROM_EMAIL,
-        to: [CONTACT_TO_EMAIL],
-        subject,
-        text,
-        html,
-      }),
+    const result = await resend.emails.send({
+      from: CONTACT_FROM_EMAIL.trim(),
+      to: CONTACT_TO_EMAIL.trim(),
+      replyTo: email.trim(),
+      subject,
+      text,
     });
 
-    if (!r.ok) {
-      const details = await r.text().catch(() => "");
-      return res.status(502).json({ ok: false, error: "Email delivery failed.", ...(details ? { } : {}) });
-    }
+    // Resend returns an id you can use to look up delivery details in the dashboard.
+    const id = (result as any)?.id;
 
-    return res.status(200).json({ ok: true });
-  } catch {
-    return res.status(502).json({ ok: false, error: "Email delivery failed." });
+    return res.status(200).json({ ok: true, id });
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err?.message || "Failed to send email" });
   }
 }
