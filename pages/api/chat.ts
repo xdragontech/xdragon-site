@@ -60,6 +60,25 @@ function clampMessages(msgs: ChatMessage[], max: number): ChatMessage[] {
   return [...head, ...tail];
 }
 
+/**
+ * NOTE on strict JSON Schema:
+ * With `strict: true`, OpenAI requires every object with `properties` to also provide a `required`
+ * array that includes *every* key in `properties`.
+ *
+ * To still represent "optional" fields, we mark them as nullable (string | null) and require them,
+ * then we sanitize nulls back out in our API response before returning to the client.
+ */
+const LEAD_KEYS = [
+  "name",
+  "email",
+  "company",
+  "website",
+  "monthlyRevenueRange",
+  "timeline",
+  "problem",
+  "bestContactMethod",
+] as const;
+
 const CHAT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -69,20 +88,32 @@ const CHAT_SCHEMA = {
     lead: {
       type: "object",
       additionalProperties: false,
+      required: [...LEAD_KEYS],
       properties: {
-        name: { type: "string" },
-        email: { type: "string" },
-        company: { type: "string" },
-        website: { type: "string" },
-        monthlyRevenueRange: { type: "string" },
-        timeline: { type: "string" },
-        problem: { type: "string" },
-        bestContactMethod: { type: "string" },
+        name: { type: ["string", "null"] },
+        email: { type: ["string", "null"] },
+        company: { type: ["string", "null"] },
+        website: { type: ["string", "null"] },
+        monthlyRevenueRange: { type: ["string", "null"] },
+        timeline: { type: ["string", "null"] },
+        problem: { type: ["string", "null"] },
+        bestContactMethod: { type: ["string", "null"] },
       },
     },
     should_email_lead: { type: "boolean" },
   },
 } as const;
+
+function stripNullLeadFields(input: any): Lead {
+  const out: Lead = {};
+  for (const k of LEAD_KEYS) {
+    const v = input?.[k];
+    if (typeof v === "string" && v.trim()) {
+      (out as any)[k] = v.trim();
+    }
+  }
+  return out;
+}
 
 async function maybeSendLeadEmail(params: {
   lead: Lead;
@@ -175,7 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       "- Only request contact details if the user wants follow-up or is clearly a strong lead.",
       "- If the user provides an email or asks to be contacted, set should_email_lead=true and include lead fields you have.",
       "",
-      "Return JSON that matches the provided schema.",
+      "Return JSON that matches the provided schema. For lead fields you don't know, use null.",
     ].join("\n");
 
     const input: OpenAIInputMessage[] = msgs.map((m) => ({ role: m.role, content: m.content }));
@@ -204,8 +235,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(500).json({ ok: false, error: "No model output text returned" });
     }
 
-    const parsed = JSON.parse(raw) as { reply: string; lead: Lead; should_email_lead: boolean };
-    const mergedLead: Lead = { ...(leadIn || {}), ...(parsed.lead || {}) };
+    const parsed = JSON.parse(raw) as { reply: string; lead: any; should_email_lead: boolean };
+
+    // Strip nulls and merge with existing lead
+    const leadFromModel = stripNullLeadFields(parsed.lead);
+    const mergedLead: Lead = { ...(leadIn || {}), ...(leadFromModel || {}) };
 
     let emailed = false;
     if (parsed.should_email_lead && mergedLead.email) {
