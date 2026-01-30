@@ -1,213 +1,179 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
 
-type ChatRole = "user" | "assistant";
+/**
+ * Chat API (Pages Router): POST /api/chat
+ *
+ * Uses OpenAI Responses API + Structured Outputs via `text.format` (json_schema).
+ * See: https://platform.openai.com/docs/guides/structured-outputs
+ *
+ * Expected request body:
+ * {
+ *   conversationId?: string,
+ *   messages: Array<{ role: "user" | "assistant"; content: string }>,
+ *   lead?: { name?: string|null; email?: string|null; phone?: string|null; company?: string|null; website?: string|null; },
+ * }
+ *
+ * Response:
+ * { ok: true, reply: string, lead: {...}, returnId?: string, emailed: boolean }
+ */
 
-type IncomingMessage = {
-  role: ChatRole;
-  content: string;
-};
+type ChatRole = "user" | "assistant";
+type ChatMessage = { role: ChatRole; content: string };
 
 type Lead = {
-  // Always present in structured output (may be empty strings)
-  name: string;
-  email: string;
-  phone: string;
-  company: string;
-  intent: "ai_strategy" | "infrastructure" | "automation" | "other";
-  platform: string;
-  goal: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  website: string | null;
 };
 
-type ApiResponse =
-  | { ok: true; reply: string; lead: Lead; returnId?: string; emailed: boolean }
-  | { ok: false; error: string };
+type ChatOutput = {
+  reply: string;
+  // Always include all keys (Structured Outputs requires required[] include every key in properties)
+  lead: Lead;
+  // Ask only ONE question at a time when more info is needed
+  next_question: string | null;
+  // Only request email when user explicitly wants follow-up
+  wants_follow_up: boolean;
+};
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-function asString(v: unknown) {
-  return typeof v === "string" ? v : "";
-}
-
-function normalizeMessages(raw: any): IncomingMessage[] {
-  if (!Array.isArray(raw)) return [];
-  const out: IncomingMessage[] = [];
-  for (const m of raw) {
-    if (!m || typeof m !== "object") continue;
-    const role = (m as any).role;
-    const content = (m as any).content;
-    if ((role === "user" || role === "assistant") && typeof content === "string" && content.trim()) {
-      out.push({ role, content });
-    }
-  }
-  return out;
-}
-
-function mergeLead(existing: any, incoming: any): Lead {
-  const fallback: Lead = {
-    name: "",
-    email: "",
-    phone: "",
-    company: "",
-    intent: "other",
-    platform: "",
-    goal: "",
-  };
-
-  const safeExisting = (existing && typeof existing === "object") ? existing : {};
-  const safeIncoming = (incoming && typeof incoming === "object") ? incoming : {};
-
-  const intent = (safeIncoming.intent || safeExisting.intent || fallback.intent) as Lead["intent"];
-  const normalizedIntent: Lead["intent"] =
-    intent === "ai_strategy" || intent === "infrastructure" || intent === "automation" || intent === "other"
-      ? intent
-      : "other";
-
+function normalizeLead(input?: Partial<Lead> | null): Lead {
   return {
-    name: asString(safeIncoming.name || safeExisting.name || fallback.name),
-    email: asString(safeIncoming.email || safeExisting.email || fallback.email),
-    phone: asString(safeIncoming.phone || safeExisting.phone || fallback.phone),
-    company: asString(safeIncoming.company || safeExisting.company || fallback.company),
-    intent: normalizedIntent,
-    platform: asString(safeIncoming.platform || safeExisting.platform || fallback.platform),
-    goal: asString(safeIncoming.goal || safeExisting.goal || fallback.goal),
+    name: input?.name ?? null,
+    email: input?.email ?? null,
+    phone: input?.phone ?? null,
+    company: input?.company ?? null,
+    website: input?.website ?? null,
   };
 }
 
-function shouldTriggerFollowupEmail(messages: IncomingMessage[], lead: Lead) {
-  // Only trigger when we have a usable email AND the user asked for a follow-up / contact.
-  const hasEmail = !!lead.email && lead.email.includes("@");
-  if (!hasEmail) return false;
+function looksLikeFollowUpIntent(text: string): boolean {
+  const t = text.toLowerCase();
+  return /(contact me|call me|email me|reach out|book|schedule|consultation|talk to|get started|quote|proposal|follow up)/.test(
+    t
+  );
+}
 
-  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content?.toLowerCase() || "";
+async function maybeEmailLeadSummary(args: {
+  lead: Lead;
+  conversationId?: string;
+  lastUserMessage: string;
+  reply: string;
+  returnId?: string;
+}): Promise<boolean> {
+  // This function is intentionally optional: if Resend isn't configured, it simply won't email.
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  const RESEND_TO_EMAIL = process.env.RESEND_TO_EMAIL || "hello@xdragon.tech";
+  const RESEND_FROM = process.env.RESEND_FROM_EMAIL; // must be a verified sender in Resend, e.g. "X Dragon <noreply@xdragon.tech>"
 
-  const intentSignals = [
-    "contact",
-    "call me",
-    "email me",
-    "follow up",
-    "book",
-    "consult",
-    "consultation",
-    "get started",
-    "pricing",
-    "quote",
-    "talk to",
-    "speak to",
+  if (!RESEND_API_KEY || !RESEND_FROM) return false;
+  if (!args.lead.email) return false;
+
+  // Lazy import to keep dependency optional if you ever swap providers
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { Resend } = require("resend") as typeof import("resend");
+  const resend = new Resend(RESEND_API_KEY);
+
+  const subject = `New chat lead: ${args.lead.name || "Unknown"} (${args.lead.email})`;
+
+  const lines = [
+    `Conversation: ${args.conversationId || "n/a"}`,
+    `ReturnId: ${args.returnId || "n/a"}`,
+    "",
+    "Lead",
+    `- Name: ${args.lead.name || "n/a"}`,
+    `- Email: ${args.lead.email || "n/a"}`,
+    `- Phone: ${args.lead.phone || "n/a"}`,
+    `- Company: ${args.lead.company || "n/a"}`,
+    `- Website: ${args.lead.website || "n/a"}`,
+    "",
+    "Last user message",
+    args.lastUserMessage,
+    "",
+    "Assistant reply",
+    args.reply,
   ];
 
-  return intentSignals.some((s) => lastUser.includes(s));
-}
-
-async function sendResendEmail(params: { to: string; from: string; subject: string; html: string }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("Missing RESEND_API_KEY");
-
-  const resp = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      to: params.to,
-      from: params.from,
-      subject: params.subject,
-      html: params.html,
-    }),
+  await resend.emails.send({
+    from: RESEND_FROM,
+    to: RESEND_TO_EMAIL,
+    replyTo: args.lead.email,
+    subject,
+    text: lines.join("\n"),
   });
 
-  const json = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    const msg = (json && (json.message || json.error)) ? (json.message || json.error) : "Resend send failed";
-    throw new Error(msg);
+  return true;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
-  return json as { id?: string };
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function buildTranscriptHtml(conversationId: string, messages: IncomingMessage[]) {
-  const lines = messages
-    .slice(-12)
-    .map((m) => `<div style="margin:6px 0;"><strong>${m.role === "user" ? "User" : "Assistant"}:</strong> ${escapeHtml(m.content)}</div>`)
-    .join("");
-  return `
-    <div style="font-family: ui-sans-serif, system-ui; line-height:1.4;">
-      <h2 style="margin:0 0 8px;">New chat lead</h2>
-      <div style="color:#555; font-size:12px; margin-bottom:12px;">Conversation: ${escapeHtml(conversationId)}</div>
-      ${lines}
-    </div>
-  `;
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
   try {
-    const conversationId = asString(req.body?.conversationId) || "unknown";
-    const messages = normalizeMessages(req.body?.messages);
-    const leadIn = req.body?.lead || {};
+    const { conversationId, messages, lead } = (req.body || {}) as {
+      conversationId?: string;
+      messages?: ChatMessage[];
+      lead?: Partial<Lead> | null;
+    };
 
-    if (!messages.length) return res.status(400).json({ ok: false, error: "No messages provided" });
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ ok: false, error: "Missing messages[]" });
+    }
 
-    // Detect first meaningful user turn (widget includes a greeting assistant message by default)
-    const userCount = messages.filter((m) => m.role === "user").length;
-    const isFirstUserTurn = userCount <= 1;
+    // Ensure roles are constrained to "user" | "assistant"
+    const msgs: ChatMessage[] = messages
+      .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+      .map((m) => ({ role: m.role, content: m.content }));
 
-    const systemInstructions = `
-You are the website chat assistant for X Dragon Technologies.
+    if (msgs.length === 0) {
+      return res.status(400).json({ ok: false, error: "No valid messages" });
+    }
 
-Goal:
-- Help startups through medium-sized businesses with AI consulting, infrastructure management, and automation/data pipelines.
-- Be confident, practical, and ROI-focused.
-- DO NOT mention competitors or compare against specific firms.
+    const leadIn = normalizeLead(lead || null);
 
-Critical conversation rules:
-1) Ask ONE question at a time (exactly one question mark in your reply).
-2) Keep replies concise: 2–6 sentences, then the single question.
-3) If the user requests a follow-up, ask for name + email ONLY if missing.
-4) If name+email are present, confirm you’ll follow up (no more questions unless necessary).
+    // One-question-at-a-time behavior: we bias the model to ask at most one question.
+    // Also: only ask for email after user expresses follow-up intent.
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user")?.content || "";
+    const userWantsFollowUp = looksLikeFollowUpIntent(lastUser);
 
-Routing (first user turn):
-- Infer the user’s intent from their message: ai_strategy | infrastructure | automation | other.
-- Ask one targeted question to route the conversation:
-  - ai_strategy: ask about the business goal (e.g., growth, CX, cost reduction) or key process.
-  - infrastructure: ask about platform/hosting + current pain (uptime, speed, scale).
-  - automation: ask what workflow is manual + which tools they use.
-  - other: ask what outcome they want.
+    const instructions = [
+      "You are X Dragon Technologies' website chat assistant.",
+      "Audience: startups to medium-sized businesses.",
+      "Tone: professional, confident, solution-oriented, ROI-focused.",
+      "",
+      "Goals:",
+      "1) Answer FAQs about X Dragon (AI consulting, infrastructure management, automation & data pipelines).",
+      "2) Qualify leads by asking ONE question at a time.",
+      "3) Only request email if the user explicitly wants follow-up (e.g., booking, contact, proposal).",
+      "",
+      `Known lead details so far (may be empty): ${JSON.stringify(leadIn)}`,
+      `User follow-up intent detected: ${userWantsFollowUp ? "true" : "false"}`,
+      "",
+      "Output rules:",
+      "- Return JSON matching the provided schema (no extra keys).",
+      "- If more info is needed, put the single best next question in next_question.",
+      "- reply should be user-facing prose, and may include the question from next_question at the end.",
+      "- If user wants follow-up AND email is missing, ask ONLY for email (one question). Set wants_follow_up true.",
+    ].join("\n");
 
-Structured output:
-- Return JSON per the provided schema with:
-  - reply: your assistant reply
-  - lead: update fields if learned (use empty string if unknown)
-`;
+    const input = msgs.map((m) => ({ role: m.role, content: m.content }));
 
-    // Build model input (use developer role to avoid SDK typing issues)
-    const input: any[] = messages.map((m) => ({ role: m.role, content: m.content }));
-
-    // Provide context to the model (lead + first-turn flag)
-    input.unshift({
-      role: "developer",
-      content: `${systemInstructions}\n\nFirst user turn: ${isFirstUserTurn ? "yes" : "no"}\nKnown lead details (may be empty): ${JSON.stringify(leadIn || {})}`,
-    });
-
-    // The installed OpenAI SDK types may lag the Responses API fields (e.g., response_format).
-    // Cast to any to avoid build-time type errors while keeping runtime behavior.
+    // Structured Outputs via Responses API uses `text.format`, not `response_format`.
     const response = await openai.responses.create({
       model: "gpt-4o-2024-08-06",
+      instructions,
       input,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
+      text: {
+        format: {
+          type: "json_schema",
           name: "xdragon_chat",
+          strict: true,
           schema: {
             type: "object",
             additionalProperties: false,
@@ -217,57 +183,100 @@ Structured output:
                 type: "object",
                 additionalProperties: false,
                 properties: {
-                  name: { type: "string" },
-                  email: { type: "string" },
-                  phone: { type: "string" },
-                  company: { type: "string" },
-                  intent: { type: "string", enum: ["ai_strategy", "infrastructure", "automation", "other"] },
-                  platform: { type: "string" },
-                  goal: { type: "string" },
+                  name: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  email: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  phone: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  company: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  website: { anyOf: [{ type: "string" }, { type: "null" }] },
                 },
-                required: ["name", "email", "phone", "company", "intent", "platform", "goal"],
+                required: ["name", "email", "phone", "company", "website"],
               },
+              next_question: { anyOf: [{ type: "string" }, { type: "null" }] },
+              wants_follow_up: { type: "boolean" },
             },
-            required: ["reply", "lead"],
+            required: ["reply", "lead", "next_question", "wants_follow_up"],
           },
         },
       },
     } as any);
 
-    const text = response.output_text || "";
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
-    }
+    const rawText =
+      (response as any).output_text ??
+      (() => {
+        const msg = (response as any).output?.find((o: any) => o.type === "message");
+        const t = msg?.content?.find((c: any) => c.type === "output_text")?.text;
+        return typeof t === "string" ? t : "";
+      })();
 
-    const reply = asString(parsed?.reply) || "Got it. What outcome are you aiming for right now?";
-    const lead = mergeLead(leadIn, parsed?.lead);
+    const fallback: ChatOutput = {
+      reply: rawText || "Thanks — how can we help?",
+      lead: leadIn,
+      next_question: null,
+      wants_follow_up: false,
+    };
 
-    const emailedAlready = !!req.body?.emailed; // optional; client may send
-    let emailed = false;
-    let returnId: string | undefined = response.id;
+    let out: ChatOutput = fallback;
 
-    // Trigger email only when asked and not already emailed
-    if (!emailedAlready && shouldTriggerFollowupEmail(messages, lead)) {
-      const to = process.env.RESEND_TO || "hello@xdragon.tech";
-      const from = process.env.RESEND_FROM || "X Dragon <hello@xdragon.tech>";
-
-      const subject = `X Dragon chat lead: ${lead.name || "New lead"} (${lead.intent})`;
-      const html = buildTranscriptHtml(conversationId, messages);
-
+    // Prefer parsed output if present (some SDK helpers populate output_parsed)
+    const parsed = (response as any).output_parsed as ChatOutput | undefined;
+    if (parsed && typeof parsed.reply === "string" && parsed.lead) {
+      out = parsed;
+    } else {
       try {
-        await sendResendEmail({ to, from, subject, html });
-        emailed = true;
-      } catch (e) {
-        // If email fails, we still return chat reply; UI can handle emailed=false
-        emailed = false;
+        const maybe = JSON.parse(rawText) as ChatOutput;
+        if (maybe && typeof maybe.reply === "string" && maybe.lead) out = maybe;
+      } catch {
+        // keep fallback
       }
     }
+    // Merge lead (model may fill some fields; preserve existing if model returns null)
+    const mergedLead: Lead = {
+      name: out.lead.name ?? leadIn.name,
+      email: out.lead.email ?? leadIn.email,
+      phone: out.lead.phone ?? leadIn.phone,
+      company: out.lead.company ?? leadIn.company,
+      website: out.lead.website ?? leadIn.website,
+    };
 
-    return res.status(200).json({ ok: true, reply, lead, returnId, emailed });
-  } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "Server error" });
+    // Ensure one-question behavior: if email missing but wants follow-up, force only the email question
+    let reply = out.reply?.trim() || "";
+    let wants_follow_up = out.wants_follow_up || userWantsFollowUp;
+
+    if (wants_follow_up && !mergedLead.email) {
+      const emailQ = "What’s the best email to reach you at?";
+      // If the model asked something else, override to email-only.
+      reply = reply ? `${reply}\n\n${emailQ}` : emailQ;
+      out.next_question = emailQ;
+    } else if (out.next_question) {
+      // Encourage only one question by ensuring it's included at end (but don't duplicate)
+      const q = out.next_question.trim();
+      if (q && !reply.includes(q)) reply = reply ? `${reply}\n\n${q}` : q;
+    }
+
+    const returnId = (response as any).id as string | undefined;
+
+    // If follow-up wanted and we have an email, send a lead summary email to the business
+    let emailed = false;
+    if (wants_follow_up && mergedLead.email) {
+      emailed = await maybeEmailLeadSummary({
+        lead: mergedLead,
+        conversationId,
+        lastUserMessage: lastUser,
+        reply,
+        returnId,
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      reply,
+      lead: mergedLead,
+      returnId,
+      emailed,
+    });
+  } catch (err: any) {
+    const message = err?.message || "Unknown error";
+    const status = err?.status || 500;
+    return res.status(status).json({ ok: false, error: message });
   }
 }
