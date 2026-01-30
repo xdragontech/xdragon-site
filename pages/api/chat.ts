@@ -7,10 +7,10 @@ import OpenAI from "openai";
  * Required env:
  *   OPENAI_API_KEY
  *
- * Optional env (lead summaries emailed via Resend):
+ * Optional env (email lead summaries + confirmations via Resend):
  *   RESEND_API_KEY
  *   RESEND_FROM   e.g. "X Dragon <hello@xdragon.tech>" (must be verified in Resend)
- *   CONTACT_TO    e.g. "hello@xdragon.tech"
+ *   CONTACT_TO    e.g. "hello@xdragon.tech"   (site owner inbox)
  */
 
 type ChatRole = "user" | "assistant";
@@ -43,7 +43,9 @@ type ChatResponse = {
   reply?: string;
   lead?: Lead;
   returnId?: string;
-  emailed?: boolean;
+  emailed?: boolean;          // whether we emailed the owner on this call
+  confirmed?: boolean;        // whether we emailed the visitor confirmation on this call
+  alreadyEmailed?: boolean;   // whether we skipped owner email due to dedupe
   error?: string;
 };
 
@@ -66,7 +68,7 @@ function clampMessages(msgs: ChatMessage[], max: number): ChatMessage[] {
  * array that includes *every* key in `properties`.
  *
  * To still represent "optional" fields, we mark them as nullable (string | null) and require them,
- * then we sanitize nulls back out in our API response before returning to the client.
+ * then we sanitize nulls back out before returning to the client.
  */
 const LEAD_KEYS = [
   "name",
@@ -113,17 +115,97 @@ function stripNullLeadFields(input: any): Lead {
   return out;
 }
 
-async function maybeSendLeadEmail(params: {
+function parseCookies(cookieHeader?: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!cookieHeader) return out;
+  const parts = cookieHeader.split(";");
+  for (const p of parts) {
+    const [k, ...rest] = p.trim().split("=");
+    if (!k) continue;
+    out[k] = decodeURIComponent(rest.join("=") || "");
+  }
+  return out;
+}
+
+function makeCookie(name: string, value: string, maxAgeSeconds: number): string {
+  const secure = process.env.NODE_ENV === "production" ? " Secure;" : "";
+  return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax;${secure}`;
+}
+
+function appendSetCookie(res: NextApiResponse, cookie: string) {
+  const existing = res.getHeader("Set-Cookie");
+  if (!existing) {
+    res.setHeader("Set-Cookie", cookie);
+    return;
+  }
+  if (Array.isArray(existing)) {
+    res.setHeader("Set-Cookie", [...existing, cookie]);
+    return;
+  }
+  res.setHeader("Set-Cookie", [existing.toString(), cookie]);
+}
+
+function isLikelyEmail(email?: string): boolean {
+  if (!email) return false;
+  // intentionally simple (avoid rejecting valid but rare emails)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+/**
+ * Stronger trigger:
+ * - Email if model says should_email_lead = true
+ * - OR if we have a visitor email AND their most recent message implies they want follow-up
+ */
+function userWantsFollowUp(lastUserMessage: string): boolean {
+  const s = (lastUserMessage || "").toLowerCase();
+  return (
+    s.includes("contact") ||
+    s.includes("reach me") ||
+    s.includes("email me") ||
+    s.includes("call me") ||
+    s.includes("book") ||
+    s.includes("consult") ||
+    s.includes("talk to") ||
+    s.includes("get started") ||
+    s.includes("next steps") ||
+    s.includes("follow up")
+  );
+}
+
+async function sendResendEmail(payload: { subject: string; text: string; to: string[] }): Promise<boolean> {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  const RESEND_FROM = process.env.RESEND_FROM;
+
+  if (!RESEND_API_KEY || !RESEND_FROM) return false;
+
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: RESEND_FROM,
+      to: payload.to,
+      subject: payload.subject,
+      text: payload.text,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    console.error("Resend email failed:", resp.status, errText);
+    return false;
+  }
+
+  return true;
+}
+
+async function maybeSendOwnerLeadEmail(params: {
   lead: Lead;
   conversationId: string;
   url?: string;
   transcript: ChatMessage[];
 }): Promise<boolean> {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const RESEND_FROM = process.env.RESEND_FROM;
   const CONTACT_TO = process.env.CONTACT_TO;
-
-  if (!RESEND_API_KEY || !RESEND_FROM || !CONTACT_TO) return false;
+  if (!CONTACT_TO) return false;
 
   const { lead, conversationId, url, transcript } = params;
   const safe = (s?: string) => (s || "").toString().trim();
@@ -153,42 +235,39 @@ async function maybeSendLeadEmail(params: {
     .filter(Boolean)
     .join("\n");
 
-  const resp = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: RESEND_FROM, to: [CONTACT_TO], subject, text }),
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    console.error("Resend email failed:", resp.status, errText);
-    return false;
-  }
-
-  return true;
+  return await sendResendEmail({ subject, text, to: [CONTACT_TO] });
 }
 
-/**
- * Stronger trigger:
- * - If the model says should_email_lead = true, we email.
- * - ALSO email if we have a visitor email AND their most recent message implies they want follow-up.
- *
- * This prevents "no email sent" when the model forgets to flip should_email_lead.
- */
-function userWantsFollowUp(lastUserMessage: string): boolean {
-  const s = (lastUserMessage || "").toLowerCase();
-  return (
-    s.includes("contact") ||
-    s.includes("reach me") ||
-    s.includes("email me") ||
-    s.includes("call me") ||
-    s.includes("book") ||
-    s.includes("consult") ||
-    s.includes("talk to") ||
-    s.includes("get started") ||
-    s.includes("next steps") ||
-    s.includes("follow up")
-  );
+async function maybeSendVisitorConfirmationEmail(params: { lead: Lead; conversationId: string; url?: string }): Promise<boolean> {
+  const { lead, conversationId, url } = params;
+  if (!isLikelyEmail(lead.email)) return false;
+
+  const safe = (s?: string) => (s || "").toString().trim();
+
+  const subject = "We received your request — X Dragon Technologies";
+  const text = [
+    `Hi${safe(lead.name) ? " " + safe(lead.name) : ""},`,
+    "",
+    "Thanks for reaching out to X Dragon Technologies.",
+    "We received your request and someone from our team will follow up shortly.",
+    "",
+    "Summary we captured:",
+    `- Email: ${safe(lead.email) || "-"}`,
+    safe(lead.company) ? `- Company: ${safe(lead.company)}` : null,
+    safe(lead.website) ? `- Website: ${safe(lead.website)}` : null,
+    safe(lead.problem) ? `- What you’re solving: ${safe(lead.problem)}` : null,
+    safe(lead.timeline) ? `- Timeline: ${safe(lead.timeline)}` : null,
+    "",
+    url ? `Page: ${url}` : null,
+    `Reference: ${conversationId}`,
+    "",
+    "— X Dragon Technologies",
+    "AI consulting • Infrastructure management • Automation & data pipelines",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return await sendResendEmail({ subject, text, to: [safe(lead.email)] });
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<ChatResponse>) {
@@ -262,9 +341,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const lastUser = [...msgs].reverse().find((m) => m.role === "user")?.content || "";
     const wantsFollowUp = parsed.should_email_lead || (Boolean(mergedLead.email) && userWantsFollowUp(lastUser));
 
+    // ---- Dedupe logic (cookie per conversation) ----
+    const cookies = parseCookies(req.headers.cookie);
+    const dedupeKey = `xd_chat_lead_${conversationId}`;
+    const alreadyEmailed = cookies[dedupeKey] === "1";
+
     let emailed = false;
-    if (wantsFollowUp && mergedLead.email) {
-      emailed = await maybeSendLeadEmail({ lead: mergedLead, conversationId, url: body.url, transcript: msgs });
+    let confirmed = false;
+
+    if (wantsFollowUp && isLikelyEmail(mergedLead.email) && !alreadyEmailed) {
+      // Email site owner (lead summary)
+      emailed = await maybeSendOwnerLeadEmail({
+        lead: mergedLead,
+        conversationId,
+        url: body.url,
+        transcript: msgs,
+      });
+
+      // If owner email succeeded, set cookie so we don't send duplicates for this conversation
+      if (emailed) {
+        appendSetCookie(res, makeCookie(dedupeKey, "1", 60 * 60 * 24 * 30)); // 30 days
+
+        // Send visitor confirmation (best-effort)
+        confirmed = await maybeSendVisitorConfirmationEmail({
+          lead: mergedLead,
+          conversationId,
+          url: body.url,
+        });
+      }
     }
 
     return res.status(200).json({
@@ -273,6 +377,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       lead: mergedLead,
       returnId: (response as any).id,
       emailed,
+      confirmed,
+      alreadyEmailed: alreadyEmailed && !emailed,
     });
   } catch (err: any) {
     console.error(err);
