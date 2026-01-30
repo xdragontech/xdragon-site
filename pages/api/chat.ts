@@ -199,6 +199,8 @@ Structured output:
       content: `${systemInstructions}\n\nFirst user turn: ${isFirstUserTurn ? "yes" : "no"}\nKnown lead details (may be empty): ${JSON.stringify(leadIn || {})}`,
     });
 
+    // The installed OpenAI SDK types may lag the Responses API fields (e.g., response_format).
+    // Cast to any to avoid build-time type errors while keeping runtime behavior.
     const response = await openai.responses.create({
       model: "gpt-4o-2024-08-06",
       input,
@@ -230,7 +232,7 @@ Structured output:
           },
         },
       },
-    });
+    } as any);
 
     const text = response.output_text || "";
     let parsed: any = null;
