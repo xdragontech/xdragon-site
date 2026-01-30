@@ -108,9 +108,7 @@ function stripNullLeadFields(input: any): Lead {
   const out: Lead = {};
   for (const k of LEAD_KEYS) {
     const v = input?.[k];
-    if (typeof v === "string" && v.trim()) {
-      (out as any)[k] = v.trim();
-    }
+    if (typeof v === "string" && v.trim()) (out as any)[k] = v.trim();
   }
   return out;
 }
@@ -168,6 +166,29 @@ async function maybeSendLeadEmail(params: {
   }
 
   return true;
+}
+
+/**
+ * Stronger trigger:
+ * - If the model says should_email_lead = true, we email.
+ * - ALSO email if we have a visitor email AND their most recent message implies they want follow-up.
+ *
+ * This prevents "no email sent" when the model forgets to flip should_email_lead.
+ */
+function userWantsFollowUp(lastUserMessage: string): boolean {
+  const s = (lastUserMessage || "").toLowerCase();
+  return (
+    s.includes("contact") ||
+    s.includes("reach me") ||
+    s.includes("email me") ||
+    s.includes("call me") ||
+    s.includes("book") ||
+    s.includes("consult") ||
+    s.includes("talk to") ||
+    s.includes("get started") ||
+    s.includes("next steps") ||
+    s.includes("follow up")
+  );
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<ChatResponse>) {
@@ -231,24 +252,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
 
     const raw = (response as any).output_text as string | undefined;
-    if (!raw) {
-      return res.status(500).json({ ok: false, error: "No model output text returned" });
-    }
+    if (!raw) return res.status(500).json({ ok: false, error: "No model output text returned" });
 
     const parsed = JSON.parse(raw) as { reply: string; lead: any; should_email_lead: boolean };
 
-    // Strip nulls and merge with existing lead
     const leadFromModel = stripNullLeadFields(parsed.lead);
     const mergedLead: Lead = { ...(leadIn || {}), ...(leadFromModel || {}) };
 
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user")?.content || "";
+    const wantsFollowUp = parsed.should_email_lead || (Boolean(mergedLead.email) && userWantsFollowUp(lastUser));
+
     let emailed = false;
-    if (parsed.should_email_lead && mergedLead.email) {
-      emailed = await maybeSendLeadEmail({
-        lead: mergedLead,
-        conversationId,
-        url: body.url,
-        transcript: msgs,
-      });
+    if (wantsFollowUp && mergedLead.email) {
+      emailed = await maybeSendLeadEmail({ lead: mergedLead, conversationId, url: body.url, transcript: msgs });
     }
 
     return res.status(200).json({
