@@ -10,14 +10,14 @@ function getEnv() {
 
   // Prefer explicit names, but support legacy ones you already use in Vercel.
   const FROM =
-    process.env.CONTACT_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
     process.env.RESEND_FROM ||
+    process.env.CONTACT_FROM_EMAIL ||
     "";
 
   const TO =
-    process.env.CONTACT_TO_EMAIL ||
     process.env.RESEND_TO_EMAIL ||
+    process.env.CONTACT_TO_EMAIL ||
     process.env.CONTACT_TO ||
     "";
 
@@ -45,10 +45,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(500).json({ ok: false, error: "Missing RESEND_API_KEY" });
   }
   if (!FROM) {
-    return res.status(500).json({ ok: false, error: "Missing sender env var (CONTACT_FROM_EMAIL / RESEND_FROM...)" });
+    return res.status(500).json({ ok: false, error: "Missing sender env var (set RESEND_FROM or RESEND_FROM_EMAIL)" });
   }
   if (!TO) {
-    return res.status(500).json({ ok: false, error: "Missing recipient env var (CONTACT_TO_EMAIL / RESEND_TO_EMAIL / CONTACT_TO)" });
+    return res.status(500).json({ ok: false, error: "Missing recipient env var (set RESEND_TO_EMAIL)" });
   }
 
   const name = cleanStr(req.body?.name, 200);
