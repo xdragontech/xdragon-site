@@ -33,10 +33,33 @@ function safeJsonParse<T>(value: string | null): T | null {
   }
 }
 
+function isChatRole(v: any): v is ChatRole {
+  return v === "user" || v === "assistant";
+}
+
+function coerceMessages(v: any): ChatMessage[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: ChatMessage[] = [];
+  for (const item of v) {
+    if (!item || typeof item !== "object") continue;
+    if (!isChatRole((item as any).role)) continue;
+    if (typeof (item as any).content !== "string") continue;
+    out.push({ role: (item as any).role, content: (item as any).content });
+  }
+  return out.length ? out : null;
+}
+
 function makeConversationId() {
-  // Stable-ish random id for correlating server logs; stored in localStorage
   return "conv_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
+
+const INITIAL_MESSAGES: ChatMessage[] = [
+  {
+    role: "assistant",
+    content:
+      "Hi — I’m the X Dragon assistant. Tell me what you’re trying to improve (revenue, reliability, speed, automation), and I’ll point you in the right direction.",
+  },
+];
 
 export default function ChatWidget() {
   const [mounted, setMounted] = useState(false);
@@ -47,13 +70,7 @@ export default function ChatWidget() {
 
   // Chat state
   const [conversationId, setConversationId] = useState<string>("");
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content:
-        "Hi — I’m the X Dragon assistant. Tell me what you’re trying to improve (revenue, reliability, speed, automation), and I’ll point you in the right direction.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [lead, setLead] = useState<Lead>({});
   const [emailed, setEmailed] = useState<boolean>(false);
 
@@ -61,7 +78,7 @@ export default function ChatWidget() {
   const [status, setStatus] = useState<"idle" | "thinking" | "error">("idle");
   const [errorText, setErrorText] = useState<string>("");
 
-  // Lead capture modal-ish inline flow
+  // Lead capture prompt state
   const [showLeadPrompt, setShowLeadPrompt] = useState(false);
   const [leadName, setLeadName] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
@@ -73,20 +90,22 @@ export default function ChatWidget() {
     setMounted(true);
 
     const saved = safeJsonParse<{
-      conversationId: string;
-      messages: ChatMessage[];
-      lead: Lead;
-      emailed: boolean;
-      isOpen: boolean;
-      isMinimized: boolean;
+      conversationId?: string;
+      messages?: any;
+      lead?: Lead;
+      emailed?: boolean;
+      isOpen?: boolean;
+      isMinimized?: boolean;
     }>(localStorage.getItem(LS_KEY));
 
     const savedEmailed = localStorage.getItem(LS_EMAIL_SENT_KEY) === "1";
 
-    if (saved?.conversationId) setConversationId(saved.conversationId);
-    else setConversationId(makeConversationId());
+    const cid = saved?.conversationId ? saved.conversationId : makeConversationId();
+    setConversationId(cid);
 
-    if (saved?.messages?.length) setMessages(saved.messages);
+    const coerced = coerceMessages(saved?.messages);
+    if (coerced) setMessages(coerced);
+
     if (saved?.lead) setLead(saved.lead);
     if (typeof saved?.emailed === "boolean") setEmailed(saved.emailed || savedEmailed);
     else setEmailed(savedEmailed);
@@ -153,7 +172,8 @@ export default function ChatWidget() {
     if (!trimmed || status === "thinking") return;
 
     setInput("");
-    const nextMessages = [...messages, { role: "user", content: trimmed }];
+
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
     setMessages(nextMessages);
 
     await sendToApi(nextMessages, lead);
@@ -167,7 +187,7 @@ export default function ChatWidget() {
   }
 
   function openLeadCapture() {
-    if (emailed) return; // already captured & emailed
+    if (emailed) return;
     setLeadName(lead.name || "");
     setLeadEmail(lead.email || "");
     setShowLeadPrompt(true);
@@ -178,14 +198,12 @@ export default function ChatWidget() {
   async function submitLeadCapture() {
     const name = leadName.trim();
     const email = leadEmail.trim();
-
     if (!name || !email) return;
 
     const nextLead: Lead = { ...lead, name, email };
     setLead(nextLead);
     setShowLeadPrompt(false);
 
-    // Ask for follow-up in a single user message so server can trigger email.
     const followUpMsg =
       "I'd like a follow-up. My name is " +
       name +
@@ -193,7 +211,7 @@ export default function ChatWidget() {
       email +
       ". Please have someone contact me.";
 
-    const nextMessages = [...messages, { role: "user", content: followUpMsg }];
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: followUpMsg }];
     setMessages(nextMessages);
 
     await sendToApi(nextMessages, nextLead);
@@ -205,13 +223,7 @@ export default function ChatWidget() {
     setLead({});
     setEmailed(false);
     localStorage.removeItem(LS_EMAIL_SENT_KEY);
-    setMessages([
-      {
-        role: "assistant",
-        content:
-          "Hi — I’m the X Dragon assistant. Tell me what you’re trying to improve (revenue, reliability, speed, automation), and I’ll point you in the right direction.",
-      },
-    ]);
+    setMessages(INITIAL_MESSAGES);
     setInput("");
     setStatus("idle");
     setErrorText("");
@@ -233,7 +245,6 @@ export default function ChatWidget() {
           aria-label="Open chat"
         >
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">
-            {/* chat bubble icon */}
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
               <path d="M4 4h16v12H7l-3 3V4zm4 5h8v2H8V9zm0-4h12v2H8V5zm0 8h6v2H8v-2z" />
             </svg>
@@ -317,7 +328,6 @@ export default function ChatWidget() {
                   </div>
                 )}
 
-                {/* Lead capture inline block */}
                 {showLeadPrompt && !emailed && (
                   <div className="rounded-2xl border border-neutral-200 bg-white p-3">
                     <div className="text-sm font-semibold">Request a follow-up</div>
