@@ -1,62 +1,98 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
 
-type ContactBody = {
-  name?: string;
-  email?: string;
-  phone?: string;
-  message?: string;
-};
+type Data =
+  | { ok: true; id?: string }
+  | { ok: false; error: string; details?: unknown };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+function getEnv() {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+
+  // Prefer explicit names, but support legacy ones you already use in Vercel.
+  const FROM =
+    process.env.CONTACT_FROM_EMAIL ||
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_FROM ||
+    "";
+
+  const TO =
+    process.env.CONTACT_TO_EMAIL ||
+    process.env.RESEND_TO_EMAIL ||
+    process.env.CONTACT_TO ||
+    "";
+
+  return { RESEND_API_KEY, FROM, TO };
+}
+
+function isEmail(s: unknown): s is string {
+  return typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+}
+
+function cleanStr(v: unknown, max = 2000) {
+  if (typeof v !== "string") return "";
+  return v.trim().slice(0, max);
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const { name, email, phone, message } = (req.body || {}) as ContactBody;
+  const { RESEND_API_KEY, FROM, TO } = getEnv();
 
-  if (!name?.trim() || !email?.trim() || !message?.trim()) {
-    return res.status(400).json({ ok: false, error: "Missing required fields" });
+  if (!RESEND_API_KEY) {
+    return res.status(500).json({ ok: false, error: "Missing RESEND_API_KEY" });
+  }
+  if (!FROM) {
+    return res.status(500).json({ ok: false, error: "Missing sender env var (CONTACT_FROM_EMAIL / RESEND_FROM...)" });
+  }
+  if (!TO) {
+    return res.status(500).json({ ok: false, error: "Missing recipient env var (CONTACT_TO_EMAIL / RESEND_TO_EMAIL / CONTACT_TO)" });
   }
 
-  const { RESEND_API_KEY, CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL } = process.env;
+  const name = cleanStr(req.body?.name, 200);
+  const email = cleanStr(req.body?.email, 320);
+  const phone = cleanStr(req.body?.phone, 80);
+  const message = cleanStr(req.body?.message, 4000);
 
-  if (!RESEND_API_KEY || !CONTACT_TO_EMAIL || !CONTACT_FROM_EMAIL) {
-    return res.status(500).json({
-      ok: false,
-      error: "Server email is not configured. Missing RESEND_API_KEY or CONTACT_* env vars.",
-    });
-  }
-
-  const resend = new Resend(RESEND_API_KEY);
-
-  const subject = `New website inquiry — ${name}`;
-  const text =
-    `Name: ${name}\n` +
-    `Email: ${email}\n` +
-    `Phone: ${phone || ""}\n\n` +
-    `Message:\n${message}\n`;
+  if (!name) return res.status(400).json({ ok: false, error: "Name is required" });
+  if (!isEmail(email)) return res.status(400).json({ ok: false, error: "Valid email is required" });
+  if (!message) return res.status(400).json({ ok: false, error: "Message is required" });
 
   try {
-    // Resend Node SDK returns: { data, error }
-    const { data, error } = await resend.emails.send({
-      from: CONTACT_FROM_EMAIL.trim(),
-      to: CONTACT_TO_EMAIL.trim(),
-      replyTo: email.trim(),
+    const resend = new Resend(RESEND_API_KEY);
+
+    const subject = `New contact request — ${name}`;
+    const text = [
+      "New website contact request:",
+      "",
+      `Name: ${name}`,
+      `Email: ${email}`,
+      phone ? `Phone: ${phone}` : "Phone: (not provided)",
+      "",
+      "Message:",
+      message,
+      "",
+      `Sent from: ${req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown IP"}`,
+    ].join("\n");
+
+    const result = await resend.emails.send({
+      from: FROM, // must be verified in Resend
+      to: [TO],
+      replyTo: email,
       subject,
       text,
     });
 
-    if (error) {
-      throw new Error(error.message || "Failed to send email");
-    }
-
-    // Ensure the property is always present (null if missing) to aid debugging.
-    const id = data?.id ?? null;
+    const id =
+      (result as any)?.data?.id ||
+      (result as any)?.id ||
+      undefined;
 
     return res.status(200).json({ ok: true, id });
-  } catch (err: any) {
-    return res.status(500).json({ ok: false, error: err?.message || "Failed to send email" });
+  } catch (e) {
+    console.error("Contact email send failed", e);
+    return res.status(500).json({ ok: false, error: "Failed to send message", details: e });
   }
 }
