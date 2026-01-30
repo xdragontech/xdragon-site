@@ -52,10 +52,89 @@ function looksLikeFollowUpIntent(text: string): boolean {
   );
 }
 
+
+function hasInternationalHint(allText: string): boolean {
+  const t = (allText || "").toLowerCase();
+
+  // Signals that +1 default may be wrong.
+  // Keep this conservative: only trigger when user clearly indicates a non-NA region.
+  const nonNA = [
+    // Most common for a Canada/US-based consulting firm with occasional international leads
+    "uk", "united kingdom", "england", "scotland", "wales", "ireland", "london", "dublin",
+    "australia", "sydney", "melbourne",
+    "new zealand", "auckland",
+    "europe", "eu", "european", "germany", "berlin", "france", "paris", "netherlands", "amsterdam",
+    "sweden", "stockholm", "norway", "oslo", "denmark", "copenhagen", "finland", "helsinki",
+    "india",
+    "singapore", "hong kong",
+    // Generic signals
+    "international", "overseas", "outside canada", "outside the us", "outside the u.s.", "outside the united states",
+    "gmt", "bst", "cet", "aest", "nzst"
+  ];
+
+  // If they explicitly say Canada/US, do not treat as international.
+  if (/(canada|british columbia|bc|vancouver|burnaby|usa|u\.s\.a|united states|america)\b/.test(t)) return false;
+
+  return nonNA.some((k) => t.includes(k));
+}
+
+function phoneNeedsCountryCode(phoneRaw: string | null, internationalHint: boolean): boolean {
+  if (!internationalHint || !phoneRaw) return false;
+  const trimmed = String(phoneRaw).trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("+")) return false;
+  const digits = trimmed.replace(/[^\d]/g, "");
+  // A 10-digit local number is ambiguous outside NANP.
+  return digits.length === 10;
+}
+
 function methodLabel(m: PreferredContact) {
   if (m === "email") return "email";
   if (m === "phone") return "phone call";
   return "text";
+}
+
+
+function normalizePhone(raw: string | null, internationalHint: boolean): string | null {
+  if (!raw) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/[^\d]/g, "");
+  if (!digits) return null;
+
+  // North America default:
+  // If the conversation suggests the user may be outside Canada/US, avoid assuming +1 for a 10-digit number.
+  // - 10 digits => assume +1
+  // - 11 digits starting with 1 => +1 + last 10
+  // If user provided an international number (with +), keep digits as E.164-ish (+ + digits).
+  if (digits.length === 10) {
+    if (internationalHint && !hasPlus) return trimmed; // ask for country code later
+    return `+1${digits}`;
+  }
+  if (digits.length === 11 && digits.startsWith("1")) return `+1${digits.slice(1)}`;
+  if (hasPlus && digits.length >= 11 && digits.length <= 15) return `+${digits}`;
+
+  // Fallback: if 12–15 digits, assume it already includes country code.
+  if (digits.length >= 12 && digits.length <= 15) return `+${digits}`;
+
+  // Unknown format; return original trimmed (better than dropping it)
+  return trimmed;
+}
+
+function formatPhoneDisplay(e164: string | null): string | null {
+  if (!e164) return null;
+  const digits = e164.replace(/[^\d]/g, "");
+  // Handle +1NXXNXXXXXX nicely
+  if (digits.length === 11 && digits.startsWith("1")) {
+    const a = digits.slice(1, 4);
+    const b = digits.slice(4, 7);
+    const c = digits.slice(7);
+    return `+1-${a}-${b}-${c}`;
+  }
+  if (e164.startsWith("+")) return e164;
+  return `+${digits}`;
 }
 
 /**
@@ -86,7 +165,7 @@ async function maybeEmailLeadSummary(args: {
   const where =
     args.lead.preferred_contact
       ? `${methodLabel(args.lead.preferred_contact)}: ${
-          args.lead.preferred_contact === "email" ? args.lead.email || "n/a" : args.lead.phone || "n/a"
+          args.lead.preferred_contact === "email" ? args.lead.email || "n/a" : (formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a")
         }`
       : `email: ${args.lead.email || "n/a"} / phone: ${args.lead.phone || "n/a"}`;
 
@@ -100,7 +179,7 @@ async function maybeEmailLeadSummary(args: {
     `- Name: ${args.lead.name || "n/a"}`,
     `- Preferred contact: ${args.lead.preferred_contact || "n/a"}`,
     `- Email: ${args.lead.email || "n/a"}`,
-    `- Phone: ${args.lead.phone || "n/a"}`,
+    `- Phone: ${formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a"}`,
     `- Company: ${args.lead.company || "n/a"}`,
     `- Website: ${args.lead.website || "n/a"}`,
     "",
@@ -151,6 +230,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const leadIn = normalizeLead(lead || null);
+    const internationalHint = hasInternationalHint(msgs.map((m) => m.content).join(" \n"));
     const lastUser = [...msgs].reverse().find((m) => m.role === "user")?.content || "";
     const followUpDetected = looksLikeFollowUpIntent(lastUser);
 
@@ -258,6 +338,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       preferred_contact: out.lead.preferred_contact ?? leadIn.preferred_contact,
     };
 
+    // Normalize phone numbers to E.164-ish format for storage + emailing.
+    mergedLead.phone = normalizePhone(mergedLead.phone, internationalHint);
+
+
     const wants_follow_up = out.wants_follow_up || followUpDetected;
 
     // === Server-side enforcement: one-step follow-up collection ===
@@ -284,11 +368,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         reply = `Perfect — what phone number should we use for ${methodLabel(mergedLead.preferred_contact)}?`;
         next_question = "What phone number should we use?";
       } else {
-        // Confirmation (NO QUESTION)
+        // If we have a phone number but it may be international without a country code, ask for country code (one question).
+        if (phoneNeedsCountryCode(mergedLead.phone, internationalHint)) {
+          reply = `Thanks, ${mergedLead.name}. What country code should we use for that number? (e.g., +44, +61)`;
+          next_question = "What country code should we use? (e.g., +44, +61)";
+        } else {
+          // Confirmation (NO QUESTION)
+
         const method = mergedLead.preferred_contact;
-        const dest = method === "email" ? mergedLead.email : mergedLead.phone;
+        const dest = method === "email" ? mergedLead.email : (formatPhoneDisplay(mergedLead.phone) || mergedLead.phone);
         reply = `Thank you, ${mergedLead.name}. We’ll reach out soon via ${methodLabel(method)} at ${dest}.`;
-        next_question = null;
+          next_question = null;
+        }
       }
     } else {
       // Non-follow-up flow: keep model's one-question behavior (if next_question exists, ensure it's appended once)
