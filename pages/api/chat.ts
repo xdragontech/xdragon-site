@@ -234,6 +234,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const lastUser = [...msgs].reverse().find((m) => m.role === "user")?.content || "";
     const followUpDetected = looksLikeFollowUpIntent(lastUser);
 
+    // If the conversation is already in the follow-up intake flow (e.g., user previously chose a contact method),
+    // we should keep treating it as follow-up even if the most recent message is just the requested detail.
+    const followUpModeFromLead =
+      !!leadIn.preferred_contact ||
+      (!!leadIn.name && (!!leadIn.email || !!leadIn.phone));
+
+
     const instructions = [
       "You are X Dragon Technologies' website chat assistant.",
       "Audience: startups to medium-sized businesses.",
@@ -342,7 +349,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     mergedLead.phone = normalizePhone(mergedLead.phone, internationalHint);
 
 
-    const wants_follow_up = out.wants_follow_up || followUpDetected;
+    const wants_follow_up = out.wants_follow_up || followUpDetected || followUpModeFromLead;
 
     // === Server-side enforcement: one-step follow-up collection ===
     // If follow-up is requested, we *override* the model with a strict sequence and never add extra questions.
@@ -410,7 +417,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             reply,
             returnId,
           });
-        } catch {
+        } catch (e) {
+          // Surface errors in Vercel function logs for debugging.
+          console.error("Resend send failed", e);
           emailed = false;
         }
       }
