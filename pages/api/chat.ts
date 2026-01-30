@@ -47,6 +47,10 @@ type ChatResponse = {
   error?: string;
 };
 
+// OpenAI input messages can include a system role, but our UI only uses user/assistant.
+type OpenAIInputRole = "system" | "user" | "assistant";
+type OpenAIInputMessage = { role: OpenAIInputRole; content: string };
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 function clampMessages(msgs: ChatMessage[], max: number): ChatMessage[] {
@@ -95,7 +99,9 @@ async function maybeSendLeadEmail(params: {
   const { lead, conversationId, url, transcript } = params;
   const safe = (s?: string) => (s || "").toString().trim();
 
-  const subject = `New lead (chat) — ${safe(lead.name) || "Visitor"}${safe(lead.company) ? " @ " + safe(lead.company) : ""}`;
+  const subject = `New lead (chat) — ${safe(lead.name) || "Visitor"}${
+    safe(lead.company) ? " @ " + safe(lead.company) : ""
+  }`;
 
   const text = [
     "New website chat lead:",
@@ -172,8 +178,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       "Return JSON that matches the provided schema.",
     ].join("\n");
 
-    const input = msgs.map((m) => ({ role: m.role, content: m.content }));
-    input.unshift({ role: "system", content: `Known lead details so far (may be empty): ${JSON.stringify(leadIn || {})}` });
+    const input: OpenAIInputMessage[] = msgs.map((m) => ({ role: m.role, content: m.content }));
+    input.unshift({
+      role: "system",
+      content: `Known lead details so far (may be empty): ${JSON.stringify(leadIn || {})}`,
+    });
 
     const response = await openai.responses.create({
       model: "gpt-4o-2024-08-06",
@@ -191,7 +200,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
 
     const raw = (response as any).output_text as string | undefined;
-
     if (!raw) {
       return res.status(500).json({ ok: false, error: "No model output text returned" });
     }
@@ -201,7 +209,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     let emailed = false;
     if (parsed.should_email_lead && mergedLead.email) {
-      emailed = await maybeSendLeadEmail({ lead: mergedLead, conversationId, url: body.url, transcript: msgs });
+      emailed = await maybeSendLeadEmail({
+        lead: mergedLead,
+        conversationId,
+        url: body.url,
+        transcript: msgs,
+      });
     }
 
     return res.status(200).json({
