@@ -290,9 +290,10 @@ export default function BusinessWebsite() {
       {/* Logos / Social proof */}
       <section className="bg-white py-10 border-y border-neutral-200">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-sm font-medium text-neutral-600">Trusted by teams like</p>
+          <p className="text-center text-sm font-medium text-neutral-600">Outcomes we optimize for</p>
+          <p className="mt-2 text-center text-xs text-neutral-500">Practical improvements you can measure in weeks—not theory.</p>
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-6 opacity-70">
-            {["Acme", "Nimbus", "NorthPeak", "Evergreen", "Quartz", "Bluebird"].map((brand) => (
+            {["Faster site performance","Higher checkout reliability","Lower ops workload","Cleaner data visibility","Safer deployments","Better ROI from automation"].map((brand) => (
               <div key={brand} className="h-10 rounded-xl bg-neutral-100 grid place-items-center text-xs font-semibold">
                 {brand}
               </div>
