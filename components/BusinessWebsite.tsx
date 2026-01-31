@@ -256,7 +256,7 @@ export default function BusinessWebsite() {
             </h1>
 
             <p className="mt-5 text-lg text-white/90 [text-shadow:0_4px_16px_rgba(0,0,0,0.45)]">
-              We solve the AI and infrastructure bottlenecks that weigh down high-performing businesses — so you move
+              We solve the AI and infrastructure bottlenecks that weigh down businesses — so you move
               faster, deliver better, and grow with confidence.
             </p>
 
