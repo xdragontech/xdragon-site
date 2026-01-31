@@ -53,7 +53,7 @@ export default function BusinessWebsite() {
         ],
       },
       {
-        title: "Automation & Data Pipelines",
+        title: "Automation & Insight",
         desc:
           "We connect systems, automate repetitive work, and build clean data flows—so your team ships faster and makes better decisions.",
         bullets: [
