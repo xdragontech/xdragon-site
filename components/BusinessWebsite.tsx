@@ -347,30 +347,65 @@ export default function BusinessWebsite() {
           </div>
         </div>
       </section>
-
-      {/* Case Study */}
+      {/* Case Studies */}
       <section id="case-study" className="py-20 bg-white border-b border-neutral-200">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-10 items-center">
-          <div>
-            <h2 className="text-3xl sm:text-4xl font-bold">Case Study</h2>
-            <p className="mt-4 text-neutral-700">
-              Placeholder case study text — you can refine this later with real client results and metrics.
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <h2 className="text-3xl sm:text-4xl font-bold">Case Studies</h2>
+            <p className="mt-3 text-neutral-600">
+              A few examples of how we deliver real outcomes—without adding headcount.
             </p>
-            <ul className="mt-6 space-y-2 text-neutral-700 text-sm">
-              <li>• Key challenge here</li>
-              <li>• What X Dragon delivered</li>
-              <li>• The before → after impact</li>
-            </ul>
           </div>
-          <div>
-            <img
-              src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=1600&auto=format&fit=crop"
-              alt="Case study placeholder"
-              className="rounded-2xl shadow"
-            />
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            {[
+              {
+                title: "AI Strategy & Consulting",
+                challenge: "A growing operator had scattered data and lots of AI ideas, but no clear ROI path.",
+                delivered: "A prioritized roadmap, data readiness plan, and two quick-win prototypes to validate impact.",
+                impact:
+                  "A clear 90-day execution plan, faster decisions on what to build, and early automation wins that reduced manual effort.",
+              },
+              {
+                title: "Infrastructure Management",
+                challenge: "Campaign traffic caused slowdowns and intermittent checkout issues—risking revenue and trust.",
+                delivered: "Performance tuning, uptime monitoring, incident playbooks, and peak-demand scaling guardrails.",
+                impact: "Fewer production incidents, faster load times under spikes, and a more stable checkout experience.",
+              },
+              {
+                title: "Automation & Insight",
+                challenge: "Operations were stuck in repetitive work with fragmented reporting and delayed visibility.",
+                delivered: "Automations plus an end-to-end pipeline that centralizes data and produces near-real-time reporting.",
+                impact: "Less time spent on manual updates, cleaner reporting, and faster decisions backed by consistent metrics.",
+              },
+            ].map((cs) => (
+              <div key={cs.title} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+                <div className="text-sm font-semibold text-neutral-500">{cs.title}</div>
+
+                <div className="mt-4 space-y-3 text-sm text-neutral-700">
+                  <p>
+                    <span className="font-semibold">Challenge:</span> {cs.challenge}
+                  </p>
+                  <p>
+                    <span className="font-semibold">What we delivered:</span> {cs.delivered}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Impact:</span> {cs.impact}
+                  </p>
+                </div>
+
+                <a
+                  href="#contact"
+                  className="mt-6 inline-flex items-center justify-center rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
+                >
+                  Get Started
+                </a>
+              </div>
+            ))}
           </div>
         </div>
       </section>
+
 
       {/* Metrics Strip */}
       <section className="bg-black text-white py-12">
