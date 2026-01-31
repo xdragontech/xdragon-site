@@ -26,7 +26,7 @@ export default function BusinessWebsite() {
     { label: "How We Work", href: "#process" },
     { label: "Case Study", href: "#case-study" },
     { label: "About", href: "#about" },
-    { label: "Testimonials", href: "#testimonials" },
+    { label: "What to Expect", href: "#expectations" },
     { label: "Contact", href: "#contact" },
   ];
 
@@ -455,28 +455,52 @@ export default function BusinessWebsite() {
           </div>
         </div>
       </section>
-
-      {/* Testimonials */}
-      <section id="testimonials" className="py-20">
+      {/* What You Can Expect */}
+      <section id="expectations" className="py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
-            <h2 className="text-3xl sm:text-4xl font-bold">What Clients Say</h2>
-            <p className="mt-3 text-neutral-600">Here’s what operators and founders say after handing us their AI and infrastructure headaches.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold">What You Can Expect</h2>
+            <p className="mt-3 text-neutral-600">
+              Clear communication, measurable delivery, and operational discipline—without the chaos.
+            </p>
           </div>
+
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { quote: "They nailed it—on time and on budget. Our results improved within weeks.", name: "Alex R.", role: "Operations Director" },
-              { quote: "Professional, friendly, and genuinely invested in our success.", name: "Jamie L.", role: "Founder" },
-              { quote: "Clear communication and excellent execution at every step.", name: "Priya S.", role: "Marketing Lead" },
-            ].map((t, i) => (
-              <figure key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <blockquote className="text-neutral-800">“{t.quote}”</blockquote>
-                <figcaption className="mt-4 text-sm text-neutral-600">— {t.name}, {t.role}</figcaption>
-              </figure>
+              {
+                title: "Clear scope + quick wins",
+                body: "We prioritize impact first—prove value early, then scale what works.",
+              },
+              {
+                title: "Weekly updates",
+                body: "You get a tight loop on progress, blockers, and next steps—no guessing.",
+              },
+              {
+                title: "Production-ready delivery",
+                body: "Tested changes, documented handoff, and clean implementation you can trust.",
+              },
+              {
+                title: "Security-first by default",
+                body: "Least-privilege access, safe changes, and sane operational controls.",
+              },
+              {
+                title: "Reliable operations",
+                body: "Monitoring, runbooks, and incident response options that keep systems stable.",
+              },
+              {
+                title: "ROI-driven decisions",
+                body: "We focus on what moves the business—avoid vanity AI and unnecessary complexity.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm text-neutral-700">{item.body}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
+
 
       {/* Engagement Models */}
       <section className="py-20 bg-white border-y border-neutral-200">
