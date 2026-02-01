@@ -21,3 +21,10 @@ pnpm-debug.log*
 
 
 .DS_Store
+
+# Local backups
+*.zip
+
+# Prisma local cache (should not be committed)
+.prisma/
+
