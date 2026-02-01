@@ -10,7 +10,7 @@ import { prisma } from "../../../lib/prisma";
 /**
  * Requirements covered:
  * - Email magic link default (SMTP)
- * - Google + GitHub sign-in
+ * - Google + GitHub sign-in (only enabled when env vars exist)
  * - New signups notify ADMIN_EMAILS (comma-separated) by email (via Resend API if RESEND_API_KEY set)
  * - Admin allowlist via ADMIN_EMAILS + ability to deactivate/block users in DB
  */
@@ -60,8 +60,13 @@ async function notifyAdminsNewSignup(params: { email?: string | null; name?: str
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+
+  // Explicitly set secret to avoid prod NO_SECRET ambiguity.
+  secret: process.env.NEXTAUTH_SECRET,
+
   session: { strategy: "database" },
   pages: { signIn: "/auth/signin" },
+
   providers: [
     // Email magic link (SMTP). Works well with Resend SMTP.
     EmailProvider({
@@ -76,15 +81,27 @@ export const authOptions: NextAuthOptions = {
       from: process.env.EMAIL_FROM || "hello@xdragon.tech",
       maxAge: 24 * 60 * 60,
     }),
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-    GitHubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID || "",
-      clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-    }),
+
+    // Only register OAuth providers when configured.
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          GoogleProvider({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          }),
+        ]
+      : []),
+
+    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+      ? [
+          GitHubProvider({
+            clientId: process.env.GITHUB_CLIENT_ID,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+          }),
+        ]
+      : []),
   ],
+
   callbacks: {
     async signIn({ user }) {
       const email = user.email?.toLowerCase();
@@ -106,6 +123,7 @@ export const authOptions: NextAuthOptions = {
 
       return true;
     },
+
     async session({ session, user }) {
       if (session.user) {
         session.user.email = user.email;
@@ -114,6 +132,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+
   events: {
     async createUser(message) {
       const email = message.user.email?.toLowerCase();
@@ -130,6 +149,7 @@ export const authOptions: NextAuthOptions = {
       });
     },
   },
+
   logger: {
     error(code, metadata) {
       console.error("NextAuth error", code, metadata);
