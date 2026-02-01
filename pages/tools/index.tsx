@@ -1,0 +1,123 @@
+// pages/tools/index.tsx
+import type { GetServerSideProps } from "next";
+import { signOut } from "next-auth/react";
+import { requireUser } from "../../lib/auth";
+import { PROMPTS, type PromptItem } from "../../content/prompts";
+import { useMemo, useState } from "react";
+
+type Props = {
+  email: string;
+  prompts: PromptItem[];
+};
+
+export default function ToolsPage({ email, prompts }: Props) {
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState<PromptItem["category"] | "All">("All");
+
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return prompts.filter((p) => {
+      const matchCat = cat === "All" || p.category === cat;
+      const matchQ =
+        !query ||
+        p.title.toLowerCase().includes(query) ||
+        p.prompt.toLowerCase().includes(query) ||
+        p.category.toLowerCase().includes(query);
+      return matchCat && matchQ;
+    });
+  }, [q, cat, prompts]);
+
+  return (
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <header className="border-b border-neutral-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-neutral-500">Signed in as</div>
+            <div className="text-sm font-semibold">{email}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <a href="/" className="text-sm font-medium hover:underline">Back to site</a>
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="rounded-2xl bg-black text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+        <div className="max-w-2xl">
+          <h1 className="text-3xl sm:text-4xl font-bold">Prompt Library</h1>
+          <p className="mt-3 text-neutral-600">
+            Copy-and-run prompts designed for startups to mid-market teams. Tweak to match your exact context.
+          </p>
+        </div>
+
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:items-center">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-full sm:max-w-md rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            placeholder="Search prompts…"
+          />
+          <select
+            value={cat}
+            onChange={(e) => setCat(e.target.value as any)}
+            className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm"
+          >
+            <option value="All">All categories</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Operations">Operations</option>
+            <option value="Customer Support">Customer Support</option>
+            <option value="Analytics">Analytics</option>
+          </select>
+        </div>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          {filtered.map((p) => (
+            <div key={p.id} className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <div className="text-xs font-semibold text-neutral-500">{p.category}</div>
+              <h2 className="mt-2 text-lg font-semibold">{p.title}</h2>
+              <pre className="mt-4 whitespace-pre-wrap rounded-2xl bg-neutral-50 border border-neutral-200 p-4 text-sm text-neutral-800">
+                {p.prompt}
+              </pre>
+              <button
+                className="mt-4 rounded-2xl bg-black text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(p.prompt);
+                }}
+              >
+                Copy prompt
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="mt-10 text-sm text-neutral-600">
+            No prompts match your search. Try a different keyword or category.
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const { session, user } = await requireUser(ctx);
+  if (!session?.user?.email || !user) {
+    return { redirect: { destination: "/auth/signin", permanent: false } };
+  }
+  if (user.status === "BLOCKED") {
+    return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };
+  }
+
+  return {
+    props: {
+      email: session.user.email,
+      prompts: PROMPTS,
+    },
+  };
+};
