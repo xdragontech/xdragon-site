@@ -29,3 +29,4 @@ pnpm-debug.log*
 .prisma/
 
 .DS_Store
+.DS_Store
