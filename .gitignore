@@ -28,3 +28,4 @@ pnpm-debug.log*
 # Prisma local cache (should not be committed)
 .prisma/
 
+.DS_Store
