@@ -13,79 +13,86 @@ type UserRow = {
   lastLoginAt?: string | null;
 };
 
+type SessionShape = {
+  user?: { id?: string; email?: string | null; name?: string | null };
+  role?: string;
+  status?: string;
+};
+
 export default function AdminUsersPage() {
   const router = useRouter();
-  const [rows, setRows] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [meId, setMeId] = useState<string | null>(null);
+  const [meEmail, setMeEmail] = useState<string | null>(null);
+
+  async function loadSession() {
+    try {
+      const r = await fetch("/api/auth/session");
+      const j = (await r.json()) as SessionShape;
+      const id = j?.user?.id ?? null;
+      const email = (j?.user?.email ?? null)?.toLowerCase?.() ?? null;
+      setMeId(id);
+      setMeEmail(email);
+    } catch {
+      // ignore
+    }
+  }
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/users");
-      if (res.status === 401 || res.status === 403) {
-        router.push("/auth/signin");
-        return;
-      }
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed to load users");
-      setRows(json.users || []);
+      const r = await fetch("/api/admin/users");
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || "Failed to load users");
+      setUsers(j.users || []);
     } catch (e: any) {
-      setError(e?.message || "Failed to load users");
+      setError(e?.message || "Failed to load");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    loadSession();
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function deleteUser(id: string, email?: string | null) {
-    const label = email ? ` (${email})` : "";
-    const ok = confirm(
-      `Delete this user${label}?\n\nThis permanently removes the account and related sessions/accounts.`
-    );
-    if (!ok) return;
+  const activeAdminCount = useMemo(
+    () => users.filter((u) => u.role === "ADMIN" && u.status === "ACTIVE").length,
+    [users]
+  );
 
-    setBusyId(id);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Delete failed");
-
-      // Optimistic remove
-      setRows((prev) => prev.filter((u) => u.id !== id));
-    } catch (e: any) {
-      setError(e?.message || "Delete failed");
-    } finally {
-      setBusyId(null);
-    }
+  function isSelf(u: UserRow) {
+    if (meId && u.id === meId) return true;
+    const e = (u.email || "").toLowerCase();
+    return !!meEmail && e === meEmail;
   }
 
-  async function toggleBlock(user: UserRow) {
-    const nextStatus = user.status === "BLOCKED" ? "ACTIVE" : "BLOCKED";
-    const label = user.email ? ` (${user.email})` : "";
-    const ok = confirm(`${nextStatus === "BLOCKED" ? "Block" : "Unblock"} this user${label}?`);
-    if (!ok) return;
+  function isLastActiveAdmin(u: UserRow) {
+    return u.role === "ADMIN" && u.status === "ACTIVE" && activeAdminCount <= 1;
+  }
 
-    setBusyId(user.id);
+  async function toggleBlock(u: UserRow) {
     setError(null);
+    setBusyId(u.id);
+
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: u.status === "BLOCKED" ? "ACTIVE" : "BLOCKED" }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Update failed");
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || "Update failed");
 
-      // Optimistic update
-      setRows((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));
+      // Update locally
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, status: j.user.status } : x)));
     } catch (e: any) {
       setError(e?.message || "Update failed");
     } finally {
@@ -93,111 +100,133 @@ export default function AdminUsersPage() {
     }
   }
 
-  const sorted = useMemo(() => {
-    return [...rows].sort((a, b) => (a.email || "").localeCompare(b.email || ""));
-  }, [rows]);
+  async function deleteUser(u: UserRow) {
+    setError(null);
+    const label = u.email || u.name || "this user";
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+    setBusyId(u.id);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || "Delete failed");
+      setUsers((prev) => prev.filter((x) => x.id !== u.id));
+    } catch (e: any) {
+      setError(e?.message || "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 px-4 py-10">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold">Admin — Users</h1>
-            <p className="mt-1 text-sm text-neutral-600">Manage access, block, and delete accounts.</p>
-          </div>
-          <Link className="underline text-sm" href="/">
-            Back to site
-          </Link>
-        </div>
-
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
-        )}
-
-        <div className="mt-8 rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between">
-            <div className="text-sm font-semibold">
-              {loading ? "Loading…" : `${sorted.length} user${sorted.length === 1 ? "" : "s"}`}
-            </div>
-            <button
-              onClick={load}
-              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
-            >
-              Refresh
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  <th className="text-left px-5 py-3 font-semibold">User</th>
-                  <th className="text-left px-5 py-3 font-semibold">Role</th>
-                  <th className="text-left px-5 py-3 font-semibold">Status</th>
-                  <th className="text-right px-5 py-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {!loading && sorted.length === 0 && (
-                  <tr>
-                    <td className="px-5 py-6 text-neutral-600" colSpan={4}>
-                      No users found.
-                    </td>
-                  </tr>
-                )}
-
-                {sorted.map((u) => (
-                  <tr key={u.id} className="border-b border-neutral-100">
-                    <td className="px-5 py-4">
-                      <div className="font-semibold">{u.email || "(no email)"}</div>
-                      <div className="text-neutral-600">{u.name || ""}</div>
-                    </td>
-                    <td className="px-5 py-4">{u.role}</td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={
-                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold " +
-                          (u.status === "ACTIVE"
-                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            : "bg-red-50 text-red-800 border border-red-200")
-                        }
-                      >
-                        {u.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => toggleBlock(u)}
-                        disabled={busyId === u.id}
-                        className={
-                          "mr-2 rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60 " +
-                          (u.status === "BLOCKED"
-                            ? "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
-                            : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100")
-                        }
-                        title={u.status === "BLOCKED" ? "Unblock user" : "Block user"}
-                      >
-                        {u.status === "BLOCKED" ? "Unblock" : "Block"}
-                      </button>
-                      <button
-                        onClick={() => deleteUser(u.id, u.email)}
-                        disabled={busyId === u.id}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50 disabled:opacity-60"
-                      >
-                        {busyId === u.id ? "Deleting…" : "Delete"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="px-5 py-4 text-xs text-neutral-500">
-            Deleting a user removes their account and associated sessions/accounts. Use carefully.
-          </div>
+    <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+        <h1 style={{ margin: 0 }}>Admin • Users</h1>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Link href="/tools">Back to Tools</Link>
+          <button onClick={load} disabled={loading} style={{ padding: "6px 10px" }}>
+            Refresh
+          </button>
         </div>
       </div>
+
+      <p style={{ color: "#666", marginTop: 8 }}>
+        Manage tool access. You can block/unblock or delete users. Guardrails prevent you from locking yourself out or removing the last active admin.
+      </p>
+
+      {error && (
+        <div style={{ background: "#ffe9e9", border: "1px solid #ffbdbd", padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <strong>Action failed:</strong> {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div>Loading…</div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Email</th>
+                <th style={th}>Name</th>
+                <th style={th}>Role</th>
+                <th style={th}>Status</th>
+                <th style={th}>Last login</th>
+                <th style={th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => {
+                const self = isSelf(u);
+                const lastAdmin = isLastActiveAdmin(u);
+                const disabledReason = self
+                  ? "You can't change your own role/status here."
+                  : lastAdmin
+                  ? "You can't block/delete the last active admin."
+                  : "";
+
+                const disableBlock = busyId === u.id || self || lastAdmin;
+                const disableDelete = busyId === u.id || self || lastAdmin;
+
+                return (
+                  <tr key={u.id}>
+                    <td style={td}>
+                      {u.email || <span style={{ color: "#999" }}>—</span>}
+                      {self && <span style={{ marginLeft: 8, fontSize: 12, color: "#888" }}>(you)</span>}
+                    </td>
+                    <td style={td}>{u.name || <span style={{ color: "#999" }}>—</span>}</td>
+                    <td style={td}>{u.role}</td>
+                    <td style={td}>{u.status}</td>
+                    <td style={td}>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : <span style={{ color: "#999" }}>—</span>}</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          title={disabledReason || (u.status === "BLOCKED" ? "Unblock this user" : "Block this user")}
+                          disabled={disableBlock}
+                          onClick={() => toggleBlock(u)}
+                          style={{ padding: "6px 10px" }}
+                        >
+                          {u.status === "BLOCKED" ? "Unblock" : "Block"}
+                        </button>
+
+                        <button
+                          title={disabledReason || "Delete this user"}
+                          disabled={disableDelete}
+                          onClick={() => deleteUser(u)}
+                          style={{ padding: "6px 10px" }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!users.length && (
+                <tr>
+                  <td style={td} colSpan={6}>
+                    No users found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
+
+const th: React.CSSProperties = {
+  textAlign: "left",
+  borderBottom: "1px solid #eee",
+  padding: "10px 8px",
+  fontSize: 13,
+  color: "#555",
+};
+
+const td: React.CSSProperties = {
+  borderBottom: "1px solid #f2f2f2",
+  padding: "10px 8px",
+  fontSize: 14,
+};
