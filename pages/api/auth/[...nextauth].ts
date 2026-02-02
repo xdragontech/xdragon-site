@@ -5,29 +5,22 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
-import bcrypt from "bcryptjs";
 import { prisma } from "../../../lib/prisma";
+import bcrypt from "bcryptjs";
 
 /**
- * X Dragon Tools Auth (Pages Router)
+ * FIX: Credentials provider requires JWT session strategy in NextAuth.
+ * We still use PrismaAdapter for Users/Accounts, but sessions are JWT-based.
  *
- * Fixes:
- * - Password-based sign-in (Credentials)
- * - Optional Google/GitHub OAuth (only enabled when env vars are present)
- * - DB sessions (PrismaAdapter)
- * - User status/role checks (BLOCKED users denied, ADMIN allowlist)
- * - Canonical domain + cookie settings to avoid "signed in but session not established"
- *
- * Required env:
- * - NEXTAUTH_SECRET
- * - NEXTAUTH_URL = https://www.xdragon.tech
- * - DATABASE_URL
- *
- * Optional env:
- * - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
- * - GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
- * - ADMIN_EMAILS (comma-separated)
+ * Also:
+ * - Only enable Google/GitHub when env vars exist
+ * - Block BLOCKED users
+ * - Require email verification for password users (emailVerified must be set)
  */
+
+function envBool(v: string | undefined) {
+  return !!v && v.trim().length > 0;
+}
 
 function parseAdminEmails(): string[] {
   return (process.env.ADMIN_EMAILS || "")
@@ -36,66 +29,20 @@ function parseAdminEmails(): string[] {
     .filter(Boolean);
 }
 
-function isProd(): boolean {
-  return process.env.NODE_ENV === "production";
-}
-
-function canonicalBaseUrl(fallback: string): string {
-  return (process.env.NEXTAUTH_URL || fallback || "").replace(/\/+$/, "");
-}
+const hasGoogle = envBool(process.env.GOOGLE_CLIENT_ID) && envBool(process.env.GOOGLE_CLIENT_SECRET);
+const hasGitHub = envBool(process.env.GITHUB_CLIENT_ID) && envBool(process.env.GITHUB_CLIENT_SECRET);
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" },
+  // IMPORTANT: Credentials provider requires JWT sessions (database sessions are not supported).
+  session: { strategy: "jwt" },
+  jwt: {
+    // Keep default; NEXTAUTH_SECRET must be set in production.
+  },
   pages: { signIn: "/auth/signin" },
-  secret: process.env.NEXTAUTH_SECRET,
-
-  /**
-   * IMPORTANT:
-   * We set the session cookie Domain to ".xdragon.tech" so that if the user
-   * ever lands on xdragon.tech and gets redirected to www.xdragon.tech, the
-   * session still sticks. This avoids the "signed in but no session" loop.
-   *
-   * If you truly want host-only cookies, remove `domain` below AND ensure
-   * every entrypoint forces a single hostname.
-   */
-  cookies: isProd()
-    ? {
-        sessionToken: {
-          name: "__Secure-next-auth.session-token",
-          options: {
-            httpOnly: true,
-            sameSite: "lax",
-            path: "/",
-            secure: true,
-            domain: ".xdragon.tech",
-          },
-        },
-        callbackUrl: {
-          name: "__Secure-next-auth.callback-url",
-          options: {
-            sameSite: "lax",
-            path: "/",
-            secure: true,
-            domain: ".xdragon.tech",
-          },
-        },
-        // __Host cookies MUST NOT set Domain
-        csrfToken: {
-          name: "__Host-next-auth.csrf-token",
-          options: {
-            httpOnly: true,
-            sameSite: "lax",
-            path: "/",
-            secure: true,
-          },
-        },
-      }
-    : undefined,
-
   providers: [
     CredentialsProvider({
-      name: "Password",
+      name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -109,48 +56,54 @@ export const authOptions: NextAuthOptions = {
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) return null;
 
-        // Custom fields from your Prisma schema:
+        // If you have status/role enums in schema
+        // @ts-ignore - Prisma types may not include these fields depending on generation
         if (user.status === "BLOCKED") return null;
-        if (!user.emailVerified) return null;
-        if (!user.passwordHash) return null;
 
-        const ok = await bcrypt.compare(password, user.passwordHash);
+        // Password users must be verified before login
+        if (!user.emailVerified) return null;
+
+        const hash = (user as any).passwordHash as string | null | undefined;
+        if (!hash) return null;
+
+        const ok = await bcrypt.compare(password, hash);
         if (!ok) return null;
 
-        // Keep last-login up-to-date
-        await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } });
+        // Update last login best-effort
+        try {
+          await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } });
+        } catch {}
 
-        // Return minimum user object NextAuth expects
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          image: user.image,
         };
       },
     }),
 
-    // Enable OAuth providers only when configured (avoids broken buttons in prod)
-    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+    ...(hasGoogle
       ? [
           GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
           }),
         ]
       : []),
 
-    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+    ...(hasGitHub
       ? [
           GitHubProvider({
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
           }),
         ]
       : []),
   ],
-
   callbacks: {
+    /**
+     * Enforce BLOCKED user check for OAuth sign-ins too
+     */
     async signIn({ user }) {
       const email = user.email?.toLowerCase();
       if (!email) return false;
@@ -158,47 +111,54 @@ export const authOptions: NextAuthOptions = {
       const existing = await prisma.user.findUnique({ where: { email } });
       if (!existing) return true;
 
+      // @ts-ignore
       if (existing.status === "BLOCKED") return false;
 
-      // Promote to ADMIN if in allowlist
+      // Promote to ADMIN if allowlisted
       const admins = parseAdminEmails();
+      // @ts-ignore
       if (admins.includes(email) && existing.role !== "ADMIN") {
-        await prisma.user.update({ where: { email }, data: { role: "ADMIN" } });
+        await prisma.user.update({ where: { email }, data: { role: "ADMIN" as any } });
       }
 
-      // For OAuth sign-ins, if emailVerified is empty, set it now
-      if (!existing.emailVerified) {
-        await prisma.user.update({ where: { email }, data: { emailVerified: new Date() } });
-      }
+      // Track last login
+      try {
+        await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } });
+      } catch {}
 
       return true;
     },
 
-    async session({ session, user }) {
-      // Expose minimal info needed by client pages
+    /**
+     * Put role/status/id into the JWT so SSR pages can authorize without DB sessions.
+     */
+    async jwt({ token, user }) {
+      // On initial sign-in, user is defined
+      if (user?.email) {
+        token.email = user.email;
+        token.name = user.name;
+        token.sub = (user as any).id ?? token.sub;
+
+        const dbUser = await prisma.user.findUnique({ where: { email: user.email.toLowerCase() } });
+        if (dbUser) {
+          (token as any).role = (dbUser as any).role;
+          (token as any).status = (dbUser as any).status;
+        }
+      }
+      return token;
+    },
+
+    async session({ session, token }) {
       if (session.user) {
-        session.user.email = user.email;
-        session.user.name = user.name;
+        session.user.email = (token.email as string) || session.user.email;
+        session.user.name = (token.name as string) || session.user.name;
+        (session.user as any).id = token.sub;
+        (session as any).role = (token as any).role;
+        (session as any).status = (token as any).status;
       }
       return session;
     },
-
-    async redirect({ url, baseUrl }) {
-      const base = canonicalBaseUrl(baseUrl);
-
-      // Always keep redirects on our canonical host
-      if (url.startsWith("/")) return `${base}${url}`;
-      try {
-        const target = new URL(url);
-        const canonical = new URL(base);
-        if (target.host === canonical.host) return url;
-      } catch {
-        // ignore
-      }
-      return base;
-    },
   },
-
   logger: {
     error(code, metadata) {
       console.error("NextAuth error", code, metadata);
