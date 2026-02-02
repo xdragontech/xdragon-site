@@ -17,7 +17,9 @@ type UserRow = {
 };
 
 
-type MetricsPeriod = "today" | "last7" | "month";
+type MetricsPeriod = "today" | "7d" | "month";
+
+type LoginIpGroup = { ip: string; country: string; count: number };
 
 type MetricsPoint = {
   label: string;
@@ -32,6 +34,7 @@ type MetricsOk = {
   signups: number[];
   logins: number[];
   totals: { signups: number; logins: number };
+  ipGroups: LoginIpGroup[];
 };
 
 type MetricsErr = {
@@ -43,7 +46,7 @@ type MetricsErr = {
 type MetricsResponse = MetricsOk | MetricsErr;
 
 function emptyMetrics(period: MetricsPeriod): MetricsOk {
-  return { ok: true, period, labels: [], signups: [], logins: [], totals: { signups: 0, logins: 0 } };
+  return { ok: true, period, labels: [], signups: [], logins: [], totals: { signups: 0, logins: 0 }, ipGroups: [] };
 }
 
 function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: number, h: number, pad = 12) {
@@ -147,6 +150,57 @@ export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) 
   return { props: { ok: true } };
 };
 
+
+function LoginIpsTable({
+  loading,
+  error,
+  groups,
+}: {
+  loading: boolean;
+  error: string | null;
+  groups: LoginIpGroup[];
+}) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="text-sm font-semibold text-neutral-900">Logins by IP</div>
+      <div className="mt-1 text-xs text-neutral-500">Top IPs for the selected period.</div>
+
+      <div className="mt-3">
+        {loading ? (
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
+        ) : error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        ) : !groups.length ? (
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">No login events yet.</div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-neutral-200">
+            <div className="max-h-[260px] overflow-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-neutral-50 text-xs text-neutral-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">IP</th>
+                    <th className="px-3 py-2 font-medium">Country</th>
+                    <th className="px-3 py-2 text-right font-medium">Logins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g) => (
+                    <tr key={g.ip} className="border-t border-neutral-200">
+                      <td className="px-3 py-2 font-mono text-xs text-neutral-900">{g.ip}</td>
+                      <td className="px-3 py-2 text-neutral-700">{g.country || "Unknown"}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-neutral-900">{g.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,7 +209,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const [period, setPeriod] = useState<MetricsPeriod>("last7");
+  const [period, setPeriod] = useState<MetricsPeriod>("7d");
   const [metrics, setMetrics] = useState<MetricsOk>(() => emptyMetrics("today"));
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
@@ -312,58 +366,71 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       <main className="mx-auto max-w-6xl px-4 py-6">
 
         {/* Activity chart (signups + logins) */}
-        <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
-              <div className="mt-1 text-xs text-neutral-500">
-                Signups in <span className="font-medium text-red-600">red</span>, logins in <span className="font-medium text-neutral-700">white</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {([
-                { key: "today" as const, label: "Today" },
-                { key: "last7" as const, label: "Last 7 days" },
-                { key: "month" as const, label: "This month" },
-              ] as const).map((p) => {
-                const active = period === p.key;
-                return (
-                  <button
-                    key={p.key}
-                    onClick={() => setPeriod(p.key)}
-                    className={
-                      active
-                        ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
-                        : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                    }
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
+        <div className="mb-4 grid gap-4 lg:grid-cols-10">
+          <div className="lg:col-span-7">
+            <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
+                          <div className="mt-1 text-xs text-neutral-500">
+                            Signups in <span className="font-medium text-red-600">red</span>, logins in <span className="font-medium text-neutral-700">white</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {([
+                            { key: "today" as const, label: "Today" },
+                            { key: "7d" as const, label: "Last 7 days" },
+                            { key: "month" as const, label: "This month" },
+                          ] as const).map((p) => {
+                            const active = period === p.key;
+                            return (
+                              <button
+                                key={p.key}
+                                onClick={() => setPeriod(p.key)}
+                                className={
+                                  active
+                                    ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
+                                    : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                                }
+                              >
+                                {p.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+            
+                      <div className="mt-3">
+                        {metricsLoading ? (
+                          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
+                        ) : metricsError ? (
+                          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
+                        ) : (
+                          <>
+                            <MiniLineChart points={metrics ? metrics.labels.map((label, i) => ({ label, signups: metrics.signups[i] ?? 0, logins: metrics.logins[i] ?? 0 })) : []} />
+                            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                              <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                                <span className="text-neutral-500">Signups:</span> <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
+                              </div>
+                              <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                                <span className="text-neutral-500">Logins:</span> <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
           </div>
-
-          <div className="mt-3">
-            {metricsLoading ? (
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
-            ) : metricsError ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
-            ) : (
-              <>
-                <MiniLineChart points={metrics ? metrics.labels.map((label, i) => ({ label, signups: metrics.signups[i] ?? 0, logins: metrics.logins[i] ?? 0 })) : []} />
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                  <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-                    <span className="text-neutral-500">Signups:</span> <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
-                  </div>
-                  <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-                    <span className="text-neutral-500">Logins:</span> <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
-                  </div>
-                </div>
-              </>
-            )}
+          <div className="lg:col-span-3">
+            <LoginIpsTable
+              loading={metricsLoading}
+              error={metricsError}
+              groups={metrics?.ok ? metrics.ipGroups : []}
+            />
           </div>
         </div>
+
+
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
