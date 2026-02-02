@@ -81,10 +81,10 @@ export default function SignIn({ providers, csrfToken, oauthEnabled }: Props) {
     e.preventDefault();
     setError(null);
 
-    const email = passwordEmail.trim().toLowerCase();
+    const emailNorm = email.trim().toLowerCase();
     const pass = password.trim();
 
-    if (!email || !pass) {
+    if (!emailNorm || !pass) {
       setError("Please enter both email and password.");
       return;
     }
