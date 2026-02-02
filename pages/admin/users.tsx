@@ -254,7 +254,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       const data = (await res.json()) as MetricsResponse;
 
       if (data && (data as any).ok === true) {
-        const ok = data as any as { ok: true; period: MetricsPeriod; labels?: unknown; signups?: unknown; logins?: unknown };
+        const ok = data as any as { ok: true; period: MetricsPeriod; labels?: unknown; signups?: unknown; logins?: unknown; ipGroups?: unknown };
         const labels = Array.isArray(ok.labels) ? (ok.labels as string[]) : [];
         const signups = Array.isArray(ok.signups) ? (ok.signups as number[]) : [];
         const logins = Array.isArray(ok.logins) ? (ok.logins as number[]) : [];
@@ -263,7 +263,19 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
           logins: logins.reduce((a, b) => a + (Number(b) || 0), 0),
         };
 
-        setMetrics({ ok: true, period: nextPeriod, labels, signups, logins, totals });
+        const ipGroups: IpGroup[] = Array.isArray(ok.ipGroups)
+          ? (ok.ipGroups as any[])
+              .map((g) => {
+                const ip = typeof (g as any)?.ip === "string" ? (g as any).ip : "";
+                if (!ip) return null;
+                const country = typeof (g as any)?.country === "string" ? (g as any).country : "—";
+                const count = typeof (g as any)?.count === "number" ? (g as any).count : Number((g as any)?.count || 0);
+                return { ip, country, count };
+              })
+              .filter(Boolean) as IpGroup[]
+          : [];
+
+        setMetrics({ ok: true, period: nextPeriod, labels, signups, logins, totals, ipGroups });
         setMetricsError(null);
       } else {
         setMetrics(emptyMetrics(nextPeriod));
