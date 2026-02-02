@@ -81,34 +81,54 @@ export default function SignIn({ providers, csrfToken, oauthEnabled }: Props) {
     e.preventDefault();
     setError(null);
 
-    const emailTrim = email.trim();
-    if (!emailTrim || !password) {
-      setError("Please enter your email and password.");
+    const email = passwordEmail.trim().toLowerCase();
+    const pass = password.trim();
+
+    if (!email || !pass) {
+      setError("Please enter both email and password.");
       return;
     }
 
     setLoginStatus("signing");
 
-    try {
-      const res = await signIn("credentials", {
-        email: emailTrim,
-        password,
-        callbackUrl,
-        redirect: false,
-      });
+    // Prevent “stuck on Signing in…” if the network request hangs.
+    const TIMEOUT_MS = 15000;
 
-      if (res?.error) {
-        // next-auth returns "CredentialsSignin" for bad login
-        setError(res.error === "CredentialsSignin" ? "Invalid email or password." : res.error);
-        setLoginStatus("idle");
+    try {
+      const res = await Promise.race([
+        signIn("credentials", {
+          redirect: false,
+          email,
+          password: pass,
+          callbackUrl,
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Sign-in timed out. Please try again.")), TIMEOUT_MS)),
+      ]);
+
+      // NextAuth can return undefined in edge cases (treat as failure)
+      if (!res) {
+        setError("Sign-in failed. Please try again.");
         return;
       }
 
-      // If next-auth gave us a URL, go there; otherwise fallback.
-      await router.push(res?.url || callbackUrl);
-    } catch (err) {
-      console.error("Password sign-in error", err);
-      setError("Something went wrong signing you in.");
+      if (res.error) {
+        // Map common error codes to friendlier messages.
+        const msg =
+          res.error === "EMAIL_NOT_VERIFIED"
+            ? "Please verify your email first. Check your inbox for the verification link."
+            : res.error === "CredentialsSignin"
+              ? "Incorrect email or password."
+              : res.error;
+
+        setError(msg);
+        return;
+      }
+
+      // Success: navigate. We also clear the loading state in case navigation is blocked or instant.
+      await router.push(res.url || callbackUrl);
+    } catch (err: any) {
+      setError(err?.message || "Sign-in failed. Please try again.");
+    } finally {
       setLoginStatus("idle");
     }
   }
