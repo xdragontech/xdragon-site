@@ -513,9 +513,8 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
                   const isAdmin = u.role === "ADMIN";
                   const isBlocked = u.status === "BLOCKED";
                   const busy = busyId === u.id;
-                  const isSelf = (myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower);
-
-                  return (
+                  const isSelf = Boolean((myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower));
+return (
                     <tr key={u.id} className="hover:bg-neutral-50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-neutral-900">{u.name || "—"}</div>
