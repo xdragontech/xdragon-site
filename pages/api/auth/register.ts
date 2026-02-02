@@ -1,150 +1,154 @@
 // pages/api/auth/register.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import crypto from "crypto";
-import bcrypt from "bcryptjs";
 import { prisma } from "../../../lib/prisma";
+import bcrypt from "bcryptjs";
 
-function getBaseUrl(req: NextApiRequest) {
-  // Prefer explicit NEXTAUTH_URL / SITE_URL, else infer from request
-  const explicit = process.env.NEXTAUTH_URL || process.env.SITE_URL;
-  if (explicit) return explicit.replace(/\/$/, "");
+/**
+ * Password signup + email verification
+ *
+ * Flow:
+ * 1) POST { email, password, name? }
+ * 2) Create user with passwordHash + status
+ * 3) Create verification token
+ * 4) Email verification link
+ * 5) Return { ok: true }
+ *
+ * Notes:
+ * - This route is intentionally "best-effort" on email sending: we still create the user
+ *   and return ok=true even if the notification email fails (we log it).
+ * - Ensure you have these env vars set in Vercel + locally:
+ *   - NEXTAUTH_URL (prod)
+ *   - NEXTAUTH_SECRET
+ *   - RESEND_API_KEY
+ *   - RESEND_FROM (e.g. "X Dragon <hello@xdragon.tech>")
+ *   - ADMIN_EMAILS (comma-separated) (optional, for admin notifications elsewhere)
+ */
+
+type Data =
+  | { ok: true }
+  | { ok: false; error: string };
+
+function cleanEmail(v: unknown) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function isValidEmail(email: string) {
+  // simple sanity check (avoid over-rejecting)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function baseUrl(req: NextApiRequest) {
+  // Prefer NEXTAUTH_URL/NEXT_PUBLIC_SITE_URL if set; otherwise infer from request.
+  const env =
+    process.env.NEXTAUTH_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "";
+  if (env) return env.replace(/\/$/, "");
+
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
-  const host = req.headers.host;
+  const host = req.headers.host || "localhost:3000";
   return `${proto}://${host}`;
 }
 
-function parseAdminEmails(): string[] {
-  return (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-async function notifyAdminsNewSignup(email: string, name?: string | null) {
-  const to = parseAdminEmails();
-  if (!to.length) return;
-
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return;
-
-  const from = process.env.RESEND_FROM || process.env.EMAIL_FROM || "hello@xdragon.tech";
-
-  const subject = `New Tools Signup — ${email}`;
-  const text = [
-    "A new user signed up for X Dragon Tools (password signup).",
-    "",
-    `Email: ${email}`,
-    `Name: ${name || ""}`,
-    `Time: ${new Date().toISOString()}`,
-  ].join("\n");
-
-  try {
-    const resp = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, subject, text }),
-    });
-    if (!resp.ok) {
-      const body = await resp.text();
-      console.warn("Resend admin notify failed:", resp.status, body);
-    }
-  } catch (e) {
-    console.warn("Resend admin notify error:", e);
-  }
-}
-
-async function sendVerificationEmail(params: { toEmail: string; verifyUrl: string }) {
+async function sendVerifyEmail(params: { to: string; url: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("RESEND_API_KEY missing; cannot send verification email.");
-    return false;
+    console.warn("RESEND_API_KEY not set; skipping verification email");
+    return;
   }
 
-  const from = process.env.RESEND_FROM || process.env.EMAIL_FROM || "hello@xdragon.tech";
-  const subject = "Verify your email to access X Dragon Tools";
+  // Resend requires "Name <email@domain>" or "email@domain"
+  const from =
+    process.env.RESEND_FROM ||
+    process.env.EMAIL_FROM ||
+    "X Dragon <hello@xdragon.tech>";
 
+  const subject = "Verify your email to access X Dragon Tools";
   const text = [
-    "Welcome to X Dragon Tools.",
+    "Thanks for signing up for X Dragon Tools.",
     "",
-    "Please verify your email to activate your account:",
-    params.verifyUrl,
+    "Verify your email to activate your account:",
+    params.url,
     "",
-    "If you did not request this, you can ignore this email.",
+    "If you didn't request this, you can ignore this email.",
   ].join("\n");
 
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: [params.toEmail], subject, text }),
+    body: JSON.stringify({
+      from,
+      to: params.to,
+      subject,
+      text,
+    }),
   });
 
   if (!resp.ok) {
     const body = await resp.text();
-    console.warn("Resend verification failed:", resp.status, body);
-    return false;
+    console.warn("Resend verify email failed:", resp.status, body);
   }
-
-  return true;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
-
-  const email = String(req.body?.email || "").toLowerCase().trim();
-  const password = String(req.body?.password || "");
-  const name = String(req.body?.name || "").trim() || null;
-
-  // Basic validation (keep it strict but friendly)
-  if (!email || !email.includes("@")) return res.status(400).json({ ok: false, error: "Please enter a valid email." });
-  if (password.length < 10) return res.status(400).json({ ok: false, error: "Password must be at least 10 characters." });
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const email = cleanEmail(req.body?.email);
+    const password = String(req.body?.password || "");
+    const name = String(req.body?.name || "").trim() || null;
 
-    // Do not leak whether user exists: always return ok:true
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: "Valid email is required" });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({ ok: false, error: "Password must be at least 8 characters" });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
+      // Avoid leaking whether account exists; respond ok.
       return res.status(200).json({ ok: true });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Assumes your Prisma User model includes passwordHash + status + role + emailVerified
-    await prisma.user.create({
+    // Create user (fields assumed to exist in your Prisma schema)
+    const user = await prisma.user.create({
       data: {
         email,
         name,
-        // @ts-expect-error custom field in your Prisma schema
         passwordHash,
-        // @ts-expect-error custom field
         status: "ACTIVE",
-        // emailVerified stays null until verified
-      } as any,
-    });
-
-    // Create verification token (custom model EmailVerificationToken)
-    const token = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await prisma.emailVerificationToken.create({
-      data: {
-        identifier: email,
-        token,
-        expires,
+        role: "USER",
+        // emailVerified is kept null until verified
+        emailVerified: null,
       },
     });
 
-    const baseUrl = getBaseUrl(req);
-    const verifyUrl = `${baseUrl}/auth/verify?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+    // Create verification token (schema assumed to include EmailVerificationToken model)
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await Promise.all([
-      sendVerificationEmail({ toEmail: email, verifyUrl }),
-      notifyAdminsNewSignup(email, name),
-    ]);
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt,
+      },
+    });
+
+    const verifyUrl = `${baseUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
+
+    // Best-effort email
+    await sendVerifyEmail({ to: email, url: verifyUrl });
 
     return res.status(200).json({ ok: true });
-  } catch (err) {
-    console.error("register error:", err);
-    // Still avoid leaking existence details
-    return res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error("register error:", err?.message || err);
+    return res.status(500).json({ ok: false, error: "Server error" });
   }
 }
