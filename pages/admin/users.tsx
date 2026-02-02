@@ -34,19 +34,157 @@ function parseProtectedAdmins(): string[] {
     .filter(Boolean);
 }
 
-export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) => {
-  const host = String(ctx.req.headers.host || "").toLowerCase();
-  // If someone hits admin pages on the main domain, bounce to the admin subdomain.
-  if (host === "www.xdragon.tech" || host === "xdragon.tech") {
-    return {
-      redirect: { destination: `https://admin.xdragon.tech${ctx.resolvedUrl}`, permanent: false },
-    };
+type Period = "today" | "7d" | "month";
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function fmtMonthDay(d: Date) {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function buildSignupSeries(users: UserRow[], period: Period) {
+  const now = new Date();
+  const dates = users
+    .map((u) => (u.createdAt ? new Date(u.createdAt) : null))
+    .filter((d): d is Date => !!d && !Number.isNaN(d.getTime()));
+
+  if (period === "today") {
+    const start = startOfDay(now);
+    const counts = Array.from({ length: 24 }, () => 0);
+    for (const d of dates) {
+      if (d >= start && d < new Date(start.getTime() + 24 * 60 * 60 * 1000)) {
+        counts[clamp(d.getHours(), 0, 23)] += 1;
+      }
+    }
+    const labels = Array.from({ length: 24 }, (_, i) => `${i}`);
+    return { labels, counts, total: counts.reduce((a, b) => a + b, 0) };
   }
+
+  if (period === "7d") {
+    const start = startOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
+    const counts = Array.from({ length: 7 }, () => 0);
+    for (const d of dates) {
+      const idx = Math.floor((startOfDay(d).getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+      if (idx >= 0 && idx < 7) counts[idx] += 1;
+    }
+    const labels = Array.from({ length: 7 }, (_, i) => fmtMonthDay(new Date(start.getTime() + i * 24 * 60 * 60 * 1000)));
+    return { labels, counts, total: counts.reduce((a, b) => a + b, 0) };
+  }
+
+  // month
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const days = now.getDate();
+  const counts = Array.from({ length: days }, () => 0);
+  for (const d of dates) {
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+      const idx = d.getDate() - 1;
+      if (idx >= 0 && idx < days) counts[idx] += 1;
+    }
+  }
+  const labels = Array.from({ length: days }, (_, i) => `${i + 1}`);
+  return { labels, counts, total: counts.reduce((a, b) => a + b, 0) };
+}
+
+function SignupLineChart({ labels, counts }: { labels: string[]; counts: number[] }) {
+  const w = 720;
+  const h = 180;
+  const pad = 28;
+  const max = Math.max(1, ...counts);
+  const n = Math.max(1, counts.length);
+  const xStep = (w - pad * 2) / Math.max(1, n - 1);
+  const yScale = (h - pad * 2) / max;
+
+  const pts = counts
+    .map((c, i) => {
+      const x = pad + i * xStep;
+      const y = h - pad - c * yScale;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+
+  const last = counts[counts.length - 1] ?? 0;
+
+  return (
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-sm text-neutral-400">New signups</div>
+          <div className="text-2xl font-semibold text-white">{last}</div>
+        </div>
+        <div className="text-xs text-neutral-400">Max in range: {max}</div>
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <svg viewBox={`0 0 ${w} ${h}`} className="h-[180px] w-full min-w-[560px]">
+          {/* axes */}
+          <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="currentColor" className="text-neutral-700" />
+          <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="currentColor" className="text-neutral-700" />
+
+          {/* grid */}
+          {[0.25, 0.5, 0.75].map((t) => {
+            const y = h - pad - max * yScale * t;
+            return (
+              <line
+                key={t}
+                x1={pad}
+                y1={y}
+                x2={w - pad}
+                y2={y}
+                stroke="currentColor"
+                className="text-neutral-900"
+              />
+            );
+          })}
+
+          {/* line */}
+          <polyline fill="none" strokeWidth="3" points={pts} stroke="currentColor" className="text-red-500" />
+
+          {/* dots */}
+          {counts.map((c, i) => {
+            const x = pad + i * xStep;
+            const y = h - pad - c * yScale;
+            return <circle key={i} cx={x} cy={y} r={3} fill="currentColor" className="text-red-500" />;
+          })}
+
+          {/* x labels (sparse) */}
+          {labels.map((lab, i) => {
+            const show = labels.length <= 8 || i === 0 || i === labels.length - 1 || i % Math.ceil(labels.length / 6) === 0;
+            if (!show) return null;
+            const x = pad + i * xStep;
+            return (
+              <text
+                key={i}
+                x={x}
+                y={h - 8}
+                textAnchor="middle"
+                fontSize="10"
+                fill="currentColor"
+                className="text-neutral-400"
+              >
+                {lab}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions as any);
   const role = (session as any)?.role || (session as any)?.user?.role;
   if (!session || role !== "ADMIN") {
     return {
-      redirect: { destination: `/admin/signin?callbackUrl=${encodeURIComponent(ctx.resolvedUrl || "/admin/users")}`, permanent: false },
+      redirect: { destination: "/admin/signin?callbackUrl=/admin/users", permanent: false },
     };
   }
   return { props: { ok: true } };
@@ -57,6 +195,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [period, setPeriod] = useState<Period>("7d");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -94,6 +233,8 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       return hay.includes(s);
     });
   }, [q, users]);
+
+  const signupSeries = useMemo(() => buildSignupSeries(users, period), [users, period]);
 
   async function act(userId: string, action: "block" | "unblock" | "delete") {
     setErr(null);
@@ -152,7 +293,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
             </div>
           </div>
 
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => signOut({ callbackUrl: "/admin/signin" })}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
@@ -164,6 +305,65 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
+        {/* New signups chart */}
+        <section className="mb-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-neutral-900">New signups</div>
+              <div className="mt-1 text-xs text-neutral-600">
+                Total: <span className="font-medium text-neutral-900">{signupSeries.total}</span>
+                <span className="mx-2 text-neutral-300">•</span>
+                {period === "today" ? "Today (hourly)" : period === "7d" ? "Last 7 days" : "This month"}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPeriod("today")}
+                aria-pressed={period === "today"}
+                className={
+                  "rounded-lg border px-3 py-2 text-sm font-medium " +
+                  (period === "today"
+                    ? "border-red-600 bg-red-600 text-white"
+                    : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50")
+                }
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriod("7d")}
+                aria-pressed={period === "7d"}
+                className={
+                  "rounded-lg border px-3 py-2 text-sm font-medium " +
+                  (period === "7d"
+                    ? "border-red-600 bg-red-600 text-white"
+                    : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50")
+                }
+              >
+                Last 7 days
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriod("month")}
+                aria-pressed={period === "month"}
+                className={
+                  "rounded-lg border px-3 py-2 text-sm font-medium " +
+                  (period === "month"
+                    ? "border-red-600 bg-red-600 text-white"
+                    : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50")
+                }
+              >
+                This month
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <SignupLineChart labels={signupSeries.labels} counts={signupSeries.counts} />
+          </div>
+        </section>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <input
