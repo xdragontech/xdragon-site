@@ -43,8 +43,7 @@ type MetricsErr = {
 type MetricsResponse = MetricsOk | MetricsErr;
 
 function emptyMetrics(period: MetricsPeriod): MetricsOk {
-  const now = new Date().toISOString();
-  return { ok: true, period, from: now, to: now, points: [], totals: { signups: 0, logins: 0 } };
+  return { ok: true, period, labels: [], signups: [], logins: [], totals: { signups: 0, logins: 0 } };
 }
 
 function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: number, h: number, pad = 12) {
@@ -63,6 +62,20 @@ function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: num
       return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
+}
+
+function arraysToPoints(m: MetricsOk): MetricsPoint[] {
+  return m.labels.map((label, i) => ({
+    label,
+    signups: Number(m.signups[i] ?? 0),
+    logins: Number(m.logins[i] ?? 0),
+  }));
+}
+
+function computeTotals(m: Pick<MetricsOk, "signups" | "logins">): { signups: number; logins: number } {
+  const signups = (m.signups || []).reduce((a, b) => a + (Number(b) || 0), 0);
+  const logins = (m.logins || []).reduce((a, b) => a + (Number(b) || 0), 0);
+  return { signups, logins };
 }
 
 function MiniLineChart({ points }: { points: MetricsPoint[] }) {
@@ -175,9 +188,11 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
     setMetricsLoading(true);
     setMetrics(emptyMetrics(nextPeriod));
     setMetricsError(null);
-    setMetrics(emptyMetrics(nextPeriod));
     try {
-      const res = await fetch(`/api/admin/metrics?period=${nextPeriod}`, { method: "GET" });
+      const res = await fetch(`/api/admin/metrics?period=${encodeURIComponent(nextPeriod)}`, {
+        method: "GET",
+        credentials: "include",
+      });
       if (!res.ok) {
         const t = await res.text();
         throw new Error(t || `HTTP ${res.status}`);
@@ -185,7 +200,16 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       const data = (await res.json()) as MetricsResponse;
 
       if (data && (data as any).ok === true) {
-        setMetrics(data as MetricsOk);
+        const ok = data as any as { ok: true; period: MetricsPeriod; labels?: unknown; signups?: unknown; logins?: unknown };
+        const labels = Array.isArray(ok.labels) ? (ok.labels as string[]) : [];
+        const signups = Array.isArray(ok.signups) ? (ok.signups as number[]) : [];
+        const logins = Array.isArray(ok.logins) ? (ok.logins as number[]) : [];
+        const totals = {
+          signups: signups.reduce((a, b) => a + (Number(b) || 0), 0),
+          logins: logins.reduce((a, b) => a + (Number(b) || 0), 0),
+        };
+
+        setMetrics({ ok: true, period: nextPeriod, labels, signups, logins, totals });
         setMetricsError(null);
       } else {
         setMetrics(emptyMetrics(nextPeriod));
