@@ -1,88 +1,104 @@
 // pages/api/admin/users/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-
 import { authOptions } from "../../auth/[...nextauth]";
 import { prisma } from "../../../../lib/prisma";
 
 /**
- * Admin user management (Pages Router):
- * - PATCH /api/admin/users/[id]  { status: "ACTIVE" | "BLOCKED" }
- * - DELETE /api/admin/users/[id]
+ * Admin user management for a single user
+ * - GET: return user details
+ * - PATCH/POST: update user status (BLOCKED/ACTIVE)
+ * - DELETE: delete user
  *
- * Guards:
- * - Requires an authenticated ADMIN user (and not BLOCKED)
- * - Prevents an admin from blocking/deleting themselves (avoids lockout)
+ * Safety:
+ * - Prevent an admin from blocking/deleting themselves.
+ * - Prevent blocking/deleting emails listed in ADMIN_EMAILS (protect "core admins").
  */
 
-type ApiOk = { ok: true; user?: any };
-type ApiErr = { ok: false; error: string };
-
-function getId(req: NextApiRequest): string | null {
-  const { id } = req.query;
-  if (typeof id === "string" && id.trim()) return id;
-  return null;
+function parseAdminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
 }
 
-async function requireAdmin(req: NextApiRequest, res: NextApiResponse): Promise<{ id: string; emailLower: string } | null> {
+function json(res: NextApiResponse, status: number, payload: any) {
+  return res.status(status).json(payload);
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
-  const email = session?.user?.email ?? null;
 
-  if (!email) return null;
+  const role = (session as any)?.role || (session as any)?.user?.role;
+  const meId = (session as any)?.user?.id;
+  const meEmail = ((session as any)?.user?.email || "").toLowerCase();
 
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-    select: { id: true, email: true, role: true, status: true },
+  if (!session || role !== "ADMIN") {
+    return json(res, 401, { ok: false, error: "Unauthorized" });
+  }
+
+  const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
+  if (!id) return json(res, 400, { ok: false, error: "Missing id" });
+
+  // Helper: fetch target user (needed for protections)
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, email: true, role: true, status: true, name: true, createdAt: true, lastLoginAt: true },
   });
 
-  // If email is missing in DB (shouldn't happen), fail closed.
-  if (!user?.email) return null;
-  if (user.role !== "ADMIN") return null;
-  if (user.status === "BLOCKED") return null;
+  if (!target) return json(res, 404, { ok: false, error: "User not found" });
 
-  return { id: user.id, emailLower: user.email.toLowerCase() };
-}
+  const targetEmail = (target.email || "").toLowerCase();
+  const protectedAdmins = parseAdminEmails();
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiOk | ApiErr>) {
-  const admin = await requireAdmin(req, res);
-  if (!admin) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const isSelf = meId && target.id === meId;
+  const isProtectedAdmin = targetEmail && protectedAdmins.includes(targetEmail);
 
-  const id = getId(req);
-  if (!id) return res.status(400).json({ ok: false, error: "Missing user id" });
-
-  try {
-    if (req.method === "PATCH") {
-      const statusRaw = (req.body?.status ?? "").toString().toUpperCase();
-      if (statusRaw !== "ACTIVE" && statusRaw !== "BLOCKED") {
-        return res.status(400).json({ ok: false, error: "Invalid status. Use ACTIVE or BLOCKED." });
-      }
-
-      if (id === admin.id && statusRaw === "BLOCKED") {
-        return res.status(400).json({ ok: false, error: "You cannot block your own admin account." });
-      }
-
-      const updated = await prisma.user.update({
-        where: { id },
-        data: { status: statusRaw as any },
-        select: { id: true, email: true, name: true, status: true, role: true, createdAt: true, lastLoginAt: true },
-      });
-
-      return res.status(200).json({ ok: true, user: updated });
-    }
-
-    if (req.method === "DELETE") {
-      if (id === admin.id) {
-        return res.status(400).json({ ok: false, error: "You cannot delete your own admin account." });
-      }
-
-      await prisma.user.delete({ where: { id } });
-      return res.status(200).json({ ok: true });
-    }
-
-    res.setHeader("Allow", "PATCH, DELETE");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  } catch (err: any) {
-    console.error("Admin user [id] API error:", err?.message || err);
-    return res.status(500).json({ ok: false, error: "Server error" });
+  // --- GET ---
+  if (req.method === "GET") {
+    return json(res, 200, { ok: true, user: target });
   }
+
+  // --- DELETE ---
+  if (req.method === "DELETE") {
+    if (isSelf) return json(res, 403, { ok: false, error: "You can't delete your own account." });
+    if (isProtectedAdmin) return json(res, 403, { ok: false, error: "This admin account is protected." });
+
+    await prisma.user.delete({ where: { id } });
+    return json(res, 200, { ok: true });
+  }
+
+  // --- PATCH / POST (status updates) ---
+  if (req.method === "PATCH" || req.method === "POST") {
+    if (isSelf) {
+      return json(res, 403, { ok: false, error: "You can't change your own status (lockout protection)." });
+    }
+    if (isProtectedAdmin) {
+      return json(res, 403, { ok: false, error: "This admin account is protected." });
+    }
+
+    // Accept either { status } or { action }
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const action = (body.action as string | undefined)?.toLowerCase();
+    let nextStatus: "ACTIVE" | "BLOCKED" | null = null;
+
+    if (body.status === "ACTIVE" || body.status === "BLOCKED") nextStatus = body.status;
+    else if (action === "block") nextStatus = "BLOCKED";
+    else if (action === "unblock") nextStatus = "ACTIVE";
+
+    if (!nextStatus) {
+      return json(res, 400, { ok: false, error: "Provide {status:'ACTIVE'|'BLOCKED'} or {action:'block'|'unblock'}." });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { status: nextStatus },
+      select: { id: true, email: true, role: true, status: true, name: true, lastLoginAt: true },
+    });
+
+    return json(res, 200, { ok: true, user: updated });
+  }
+
+  res.setHeader("Allow", "GET, PATCH, POST, DELETE");
+  return json(res, 405, { ok: false, error: "Method not allowed" });
 }

@@ -147,7 +147,7 @@ export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) 
       redirect: { destination: "/admin/signin?callbackUrl=/admin/users", permanent: false },
     };
   }
-  return { props: { ok: true } };
+  return { props: { ok: true, me: { id: (session as any).user?.id ?? null, email: (session as any).user?.email ?? null } } };
 };
 
 
@@ -201,7 +201,10 @@ function LoginIpsTable({
   );
 }
 
-export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+  const me = (props as any).me as { id?: string | null; email?: string | null } | undefined;
+  const myId = (me?.id || null) as string | null;
+  const myEmailLower = (me?.email ? String(me.email).toLowerCase() : null) as string | null;
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -216,10 +219,6 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
 
 
   const protectedAdmins = useMemo(() => parseProtectedAdmins(), []);
-  const myEmail =
-    typeof window !== "undefined"
-      ? (document.cookie.match(/next-auth\.session-token/) ? null : null) // placeholder; server guards do the real protection
-      : null;
 
   async function load() {
     setErr(null);
@@ -508,11 +507,13 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                 </tr>
               ) : (
                 filtered.map((u) => {
-                  const email = (u.email || "(no email)").toLowerCase();
-                  const isProtected = protectedAdmins.includes(email);
+                  const email = u.email || "(no email)";
+                  const emailLower = email.toLowerCase();
+                  const isProtected = protectedAdmins.includes(emailLower);
                   const isAdmin = u.role === "ADMIN";
                   const isBlocked = u.status === "BLOCKED";
                   const busy = busyId === u.id;
+                  const isSelf = (myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower);
 
                   return (
                     <tr key={u.id} className="hover:bg-neutral-50">
@@ -544,6 +545,9 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                         {isProtected && (
                           <div className="mt-1 text-xs text-neutral-500">Protected admin</div>
                         )}
+                        {isSelf && (
+                          <div className="mt-1 text-xs text-neutral-500">This is you</div>
+                        )}
                       </td>
 
                       <td className="px-4 py-3 text-neutral-700">{fmtDate(u.createdAt)}</td>
@@ -552,11 +556,11 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
                           <button
-                            disabled={busy || isProtected || isAdmin}
+                            disabled={busy || isProtected || isSelf}
                             onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
                             className={cn(
                               "rounded-xl px-3 py-1.5 text-xs border transition-colors",
-                              busy || isProtected || isAdmin
+                              busy || isProtected || isSelf
                                 ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
                                 : isBlocked
                                   ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
@@ -568,14 +572,14 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                           </button>
 
                           <button
-                            disabled={busy || isProtected || isAdmin}
+                            disabled={busy || isProtected || isSelf}
                             onClick={() => {
                               if (!confirm("Delete this user? This cannot be undone.")) return;
                               void act(u.id, "delete");
                             }}
                             className={cn(
                               "rounded-xl px-3 py-1.5 text-xs border transition-colors",
-                              busy || isProtected || isAdmin
+                              busy || isProtected || isSelf
                                 ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
                                 : "border-neutral-200 bg-white text-neutral-700 hover:border-red-300"
                             )}
@@ -639,11 +643,11 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
 
                   <div className="mt-4 flex gap-2">
                     <button
-                      disabled={busy || isProtected || isAdmin}
+                      disabled={busy || isProtected || isSelf}
                       onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
                       className={cn(
                         "flex-1 rounded-xl px-3 py-2 text-xs border",
-                        busy || isProtected || isAdmin
+                        busy || isProtected || isSelf
                           ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
                           : isBlocked
                             ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
@@ -653,14 +657,14 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                       {isBlocked ? "Unblock" : "Block"}
                     </button>
                     <button
-                      disabled={busy || isProtected || isAdmin}
+                      disabled={busy || isProtected || isSelf}
                       onClick={() => {
                         if (!confirm("Delete this user? This cannot be undone.")) return;
                         void act(u.id, "delete");
                       }}
                       className={cn(
                         "flex-1 rounded-xl px-3 py-2 text-xs border",
-                        busy || isProtected || isAdmin
+                        busy || isProtected || isSelf
                           ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
                           : "border-neutral-200 bg-white text-neutral-700"
                       )}
