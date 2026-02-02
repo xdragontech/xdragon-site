@@ -135,13 +135,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     await prisma.emailVerificationToken.create({
       data: {
-        userId: user.id,
+        identifier: email,
         token,
-        expiresAt,
+        expires: expiresAt,
       },
     });
-
-    const verifyUrl = `${baseUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
+const verifyUrl = `${baseUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
 
     // Best-effort email
     await sendVerifyEmail({ to: email, url: verifyUrl });
