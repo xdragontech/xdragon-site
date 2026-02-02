@@ -1,281 +1,283 @@
 // pages/auth/signin.tsx
 import React, { useMemo, useState } from "react";
-import { getProviders, signIn } from "next-auth/react";
 import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
+import { getCsrfToken, getProviders, signIn } from "next-auth/react";
+
+type Providers = Awaited<ReturnType<typeof getProviders>>;
 
 type Props = {
-  providers: Awaited<ReturnType<typeof getProviders>>;
+  providers: Providers;
+  csrfToken: string | null;
+  oauthEnabled: {
+    google: boolean;
+    github: boolean;
+  };
 };
 
-function asString(v: string | string[] | undefined): string | undefined {
-  if (!v) return undefined;
-  return Array.isArray(v) ? v[0] : v;
+function safeCallbackUrl(raw: unknown): string {
+  // Only allow relative callback URLs to prevent open-redirects.
+  if (typeof raw !== "string") return "/tools";
+  if (raw.startsWith("/")) return raw;
+  return "/tools";
 }
 
-export default function SignIn({ providers }: Props) {
+export default function SignIn({ providers, csrfToken, oauthEnabled }: Props) {
   const router = useRouter();
 
-  const callbackUrl = useMemo(() => {
-    const q = asString(router.query.callbackUrl);
-    // Keep it relative for safety; default to the tools landing page.
-    if (!q) return "/tools";
-    try {
-      // If someone passes a full URL, only allow same-origin paths.
-      const url = new URL(q, "https://www.xdragon.tech");
-      return url.pathname + url.search + url.hash;
-    } catch {
-      return "/tools";
-    }
-  }, [router.query.callbackUrl]);
+  const callbackUrl = safeCallbackUrl(
+    Array.isArray(router.query.callbackUrl) ? router.query.callbackUrl[0] : router.query.callbackUrl
+  );
 
-  const nextAuthError = asString(router.query.error);
-  const verified = asString(router.query.verified);
-
-  const emailProvider = providers && Object.values(providers).find((p) => p.id === "email");
-  const google = providers && Object.values(providers).find((p) => p.id === "google");
-  const github = providers && Object.values(providers).find((p) => p.id === "github");
+  const providerList = useMemo(() => Object.values(providers || {}), [providers]);
+  const emailProvider = providerList.find((p) => p.id === "email");
+  const credentialsProvider = providerList.find((p) => p.id === "credentials");
+  const oauthProviders = providerList.filter((p) => p.type === "oauth");
 
   const [magicEmail, setMagicEmail] = useState("");
-  const [magicSent, setMagicSent] = useState(false);
-  const [magicBusy, setMagicBusy] = useState(false);
+  const [magicStatus, setMagicStatus] = useState<"idle" | "sending" | "sent">("idle");
 
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginStatus, setLoginStatus] = useState<"idle" | "signing">("idle");
 
-  const [uiError, setUiError] = useState<string | null>(null);
-
-  const errorMessage = useMemo(() => {
-    if (uiError) return uiError;
-    if (!nextAuthError) return null;
-
-    // Map common NextAuth errors to something human-friendly
-    switch (nextAuthError) {
-      case "CredentialsSignin":
-        return "That email/password didn’t work. If you just signed up, make sure you verified your email first.";
-      case "EmailSignin":
-        return "We couldn’t send the magic link. Double-check your email address and try again.";
-      case "OAuthSignin":
-      case "OAuthCallback":
-        return "Sign-in failed. Please try again.";
-      default:
-        return "Sign-in failed. Please try again.";
-    }
-  }, [nextAuthError, uiError]);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
-    setUiError(null);
-    setMagicSent(false);
+    setError(null);
 
-    const email = magicEmail.trim();
-    if (!email) {
-      setUiError("Please enter your email address.");
+    const trimmed = magicEmail.trim();
+    if (!trimmed) {
+      setError("Please enter your email address.");
       return;
     }
 
-    if (!emailProvider) {
-      setUiError("Email sign-in isn’t available right now.");
-      return;
-    }
+    setMagicStatus("sending");
 
-    setMagicBusy(true);
     try {
-      const res = await signIn(emailProvider.id, {
-        email,
-        redirect: false,
+      // redirect:false lets us show an in-page confirmation
+      const res = await signIn("email", {
+        email: trimmed,
         callbackUrl,
+        redirect: false,
       });
 
       if (res?.error) {
-        setUiError("We couldn’t send the magic link. Please try again.");
-      } else {
-        setMagicSent(true);
+        setError(res.error);
+        setMagicStatus("idle");
+        return;
       }
+
+      setMagicStatus("sent");
     } catch (err) {
-      setUiError("We couldn’t send the magic link. Please try again.");
-    } finally {
-      setMagicBusy(false);
+      console.error("Magic link sign-in error", err);
+      setError("Something went wrong sending the magic link.");
+      setMagicStatus("idle");
     }
   }
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
-    setUiError(null);
+    setError(null);
 
-    const email = loginEmail.trim();
-    const password = loginPassword;
-
-    if (!email || !password) {
-      setUiError("Please enter your email and password.");
+    const emailTrim = email.trim();
+    if (!emailTrim || !password) {
+      setError("Please enter your email and password.");
       return;
     }
 
-    setLoginBusy(true);
+    setLoginStatus("signing");
+
     try {
       const res = await signIn("credentials", {
-        redirect: false,
-        callbackUrl,
-        email,
+        email: emailTrim,
         password,
+        callbackUrl,
+        redirect: false,
       });
 
       if (res?.error) {
-        setUiError("That email/password didn’t work. If you just signed up, verify your email first.");
+        // next-auth returns "CredentialsSignin" for bad login
+        setError(res.error === "CredentialsSignin" ? "Invalid email or password." : res.error);
+        setLoginStatus("idle");
         return;
       }
 
-      // Successful sign-in
+      // If next-auth gave us a URL, go there; otherwise fallback.
       await router.push(res?.url || callbackUrl);
     } catch (err) {
-      setUiError("Sign-in failed. Please try again.");
-    } finally {
-      setLoginBusy(false);
+      console.error("Password sign-in error", err);
+      setError("Something went wrong signing you in.");
+      setLoginStatus("idle");
     }
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-3xl border border-neutral-200 bg-white shadow-sm p-8">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-black text-white grid place-items-center font-bold">XD</div>
-          <div>
-            <div className="text-lg font-semibold">X Dragon Tools</div>
-            <div className="text-sm text-neutral-600">Sign in to access the Prompt Library.</div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <h1 className="text-2xl font-bold">Sign in</h1>
+          <p className="mt-2 text-sm text-neutral-600">
+            Access the prompt library and tools. Use a magic link or your password.
+          </p>
 
-        {(verified === "1" || verified === "true") && (
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            Email verified — you can log in now.
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* Email + Password */}
-        <div className="mt-6">
-          <div className="text-sm font-semibold">Email + Password</div>
-          <form className="mt-3 space-y-3" onSubmit={handlePasswordLogin}>
-            <div>
-              <label className="text-xs font-medium text-neutral-600">Email</label>
-              <input
-                type="email"
-                autoComplete="email"
-                className="mt-1 w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="you@company.com"
-              />
+          {error && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {error}
             </div>
+          )}
 
-            <div>
-              <label className="text-xs font-medium text-neutral-600">Password</label>
-              <input
-                type="password"
-                autoComplete="current-password"
-                className="mt-1 w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
-              />
+          {/* Magic link */}
+          {emailProvider ? (
+            <form onSubmit={handleMagicLink} className="mt-6">
+              <div className="text-sm font-semibold text-neutral-900">Email magic link</div>
+              <div className="mt-2">
+                <label className="text-sm font-medium text-neutral-700">Email</label>
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={magicEmail}
+                  onChange={(e) => setMagicEmail(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="you@company.com"
+                />
+              </div>
+
+              {/* csrfToken included for future-proofing / non-JS fallbacks */}
+              <input type="hidden" name="csrfToken" value={csrfToken || ""} />
+              <input type="hidden" name="callbackUrl" value={callbackUrl} />
+
+              <button
+                type="submit"
+                disabled={magicStatus === "sending" || magicStatus === "sent"}
+                className="mt-3 w-full rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {magicStatus === "sent" ? "Link sent" : magicStatus === "sending" ? "Sending…" : "Send magic link"}
+              </button>
+
+              {magicStatus === "sent" && (
+                <p className="mt-3 text-sm text-neutral-700">
+                  Check your email for a sign-in link. You can close this tab.
+                </p>
+              )}
+            </form>
+          ) : (
+            <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+              Magic link sign-in is not enabled.
             </div>
+          )}
 
-            <button
-              type="submit"
-              disabled={loginBusy}
-              className="w-full rounded-2xl bg-black text-white px-4 py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            >
-              {loginBusy ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
+          {/* Password login */}
+          <div className="mt-8 border-t border-neutral-200 pt-6">
+            <div className="text-sm font-semibold text-neutral-900">Password login</div>
 
-          <div className="mt-3 text-xs text-neutral-600">
-            New here?{" "}
-            <a href="/auth/signup" className="font-semibold underline">
-              Create an account
+            {credentialsProvider ? (
+              <form onSubmit={handlePasswordLogin} className="mt-2">
+                <div>
+                  <label className="text-sm font-medium text-neutral-700">Email</label>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="you@company.com"
+                  />
+                </div>
+
+                <div className="mt-3">
+                  <label className="text-sm font-medium text-neutral-700">Password</label>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                <div className="mt-3 flex items-center justify-between">
+                  <a href="/auth/forgot-password" className="text-sm font-medium text-neutral-700 hover:underline">
+                    Forgot password?
+                  </a>
+                  <a href="/auth/signup" className="text-sm font-medium text-neutral-700 hover:underline">
+                    Create account
+                  </a>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loginStatus === "signing"}
+                  className="mt-3 w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 hover:bg-neutral-50 disabled:opacity-60"
+                >
+                  {loginStatus === "signing" ? "Signing in…" : "Sign in"}
+                </button>
+
+                <p className="mt-3 text-xs text-neutral-500">
+                  Password accounts require email verification before they can sign in.
+                </p>
+              </form>
+            ) : (
+              <p className="mt-2 text-sm text-neutral-600">
+                Password login isn’t enabled yet.
+              </p>
+            )}
+          </div>
+
+          {/* OAuth */}
+          {oauthProviders.length > 0 && (
+            <div className="mt-8 border-t border-neutral-200 pt-6">
+              <div className="text-sm font-semibold text-neutral-900">Or continue with</div>
+              <div className="mt-3 flex flex-col gap-2">
+                {oauthProviders.map((p) => {
+                  const enabled = p.id === "google" ? oauthEnabled.google : p.id === "github" ? oauthEnabled.github : true;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => enabled && signIn(p.id, { callbackUrl })}
+                      disabled={!enabled}
+                      className="rounded-2xl border border-neutral-300 px-4 py-3 text-sm font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                      title={enabled ? undefined : "This provider is not configured yet."}
+                      type="button"
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 text-center">
+            <a href="/" className="text-sm text-neutral-600 hover:underline">
+              ← Back to home
             </a>
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-neutral-200" />
-          <div className="text-xs text-neutral-500">or</div>
-          <div className="h-px flex-1 bg-neutral-200" />
-        </div>
-
-        {/* Magic Link */}
-        <div>
-          <div className="text-sm font-semibold">Magic Link</div>
-          <form className="mt-3 space-y-3" onSubmit={handleMagicLink}>
-            <div>
-              <label className="text-xs font-medium text-neutral-600">Email</label>
-              <input
-                type="email"
-                autoComplete="email"
-                className="mt-1 w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                value={magicEmail}
-                onChange={(e) => setMagicEmail(e.target.value)}
-                placeholder="you@company.com"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={magicBusy || !emailProvider}
-              className="w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold hover:bg-neutral-50 disabled:opacity-60"
-            >
-              {magicBusy ? "Sending…" : "Send magic link"}
-            </button>
-
-            {magicSent && (
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800">
-                Check your inbox — we sent you a sign-in link.
-              </div>
-            )}
-          </form>
-
-          <p className="mt-3 text-xs text-neutral-500">
-            By continuing, you agree to receive a sign-in email if you choose Magic Link.
-          </p>
-        </div>
-
-        {/* OAuth buttons */}
-        {(google || github) && (
-          <div className="mt-6 space-y-3">
-            <div className="text-sm font-semibold">Or continue with</div>
-            <div className="grid grid-cols-2 gap-3">
-              {google && (
-                <button
-                  className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold hover:bg-neutral-50"
-                  onClick={() => signIn(google.id, { callbackUrl })}
-                >
-                  Google
-                </button>
-              )}
-              {github && (
-                <button
-                  className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold hover:bg-neutral-50"
-                  onClick={() => signIn(github.id, { callbackUrl })}
-                >
-                  GitHub
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+        <p className="mt-6 text-center text-xs text-neutral-500">
+          By signing in you agree to our terms.
+        </p>
       </div>
     </div>
   );
 }
 
-export const getServerSideProps: GetServerSideProps<Props> = async () => {
-  const providers = await getProviders();
-  return { props: { providers } };
+export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
+  const [providers, csrfToken] = await Promise.all([getProviders(), getCsrfToken(ctx)]);
+
+  return {
+    props: {
+      providers,
+      csrfToken: csrfToken ?? null,
+      oauthEnabled: {
+        google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+        github: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
+      },
+    },
+  };
 };
