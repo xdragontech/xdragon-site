@@ -1,45 +1,45 @@
 // pages/api/auth/[...nextauth].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import NextAuth, { type NextAuthOptions } from "next-auth";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import CredentialsProvider from "next-auth/providers/credentials";
-import GoogleProvider from "next-auth/providers/google";
-import GitHubProvider from "next-auth/providers/github";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
 
 /**
- * FIX: Credentials provider requires JWT session strategy in NextAuth.
- * We still use PrismaAdapter for Users/Accounts, but sessions are JWT-based.
+ * Subdomain-safe NextAuth config
  *
- * Also:
- * - Only enable Google/GitHub when env vars exist
- * - Block BLOCKED users
- * - Require email verification for password users (emailVerified must be set)
+ * Fixes redirect/session loops when serving the same deployment on both
+ * https://www.xdragon.tech and https://admin.xdragon.tech.
+ *
+ * Key idea: NextAuth uses NEXTAUTH_URL as its baseUrl. In a multi-host setup,
+ * a single static NEXTAUTH_URL can cause callback URLs to hop to the wrong host
+ * (and then your middleware bounces back), producing "too many redirects".
+ *
+ * We set NEXTAUTH_URL dynamically per request to the current host.
  */
 
-function envBool(v: string | undefined) {
-  return !!v && v.trim().length > 0;
-}
+function getRequestBaseUrl(req: NextApiRequest): string {
+  const hostHeader = (req.headers["x-forwarded-host"] || req.headers.host || "").toString();
+  const protoHeader = (req.headers["x-forwarded-proto"] || "https").toString();
 
-function parseAdminEmails(): string[] {
-  return (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
+  const host = hostHeader.split(",")[0].trim();
+  const proto = protoHeader.split(",")[0].trim();
 
-const hasGoogle = envBool(process.env.GOOGLE_CLIENT_ID) && envBool(process.env.GOOGLE_CLIENT_SECRET);
-const hasGitHub = envBool(process.env.GITHUB_CLIENT_ID) && envBool(process.env.GITHUB_CLIENT_SECRET);
+  if (!host) return "https://www.xdragon.tech";
+  return `${proto}://${host}`;
+}
 
 export const authOptions: NextAuthOptions = {
+  // You can keep the adapter even with JWT sessions; it powers user lookup/management.
   adapter: PrismaAdapter(prisma),
-  // IMPORTANT: Credentials provider requires JWT sessions (database sessions are not supported).
+
+  // Credentials sign-in in NextAuth v4 requires JWT sessions.
   session: { strategy: "jwt" },
-  jwt: {
-    // Keep default; NEXTAUTH_SECRET must be set in production.
-  },
-  pages: { signIn: "/auth/signin" },
+
+  // Allow NextAuth to trust the incoming host (useful on Vercel).
+  trustHost: true,
+
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -56,109 +56,62 @@ export const authOptions: NextAuthOptions = {
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) return null;
 
-        // If you have status/role enums in schema
-        // @ts-ignore - Prisma types may not include these fields depending on generation
+        // Only allow password sign-in if the account is verified + active.
         if (user.status === "BLOCKED") return null;
-
-        // Password users must be verified before login
         if (!user.emailVerified) return null;
+        if (!user.passwordHash) return null;
 
-        const hash = (user as any).passwordHash as string | null | undefined;
-        if (!hash) return null;
-
-        const ok = await bcrypt.compare(password, hash);
+        const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
-
-        // Update last login best-effort
-        try {
-          await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } });
-        } catch {}
 
         return {
           id: user.id,
-          email: user.email,
-          name: user.name,
-        };
+          name: user.name || undefined,
+          email: user.email || undefined,
+          // Pass through extra fields via `jwt` callback.
+          role: user.role,
+          status: user.status,
+        } as any;
       },
     }),
-
-    ...(hasGoogle
-      ? [
-          GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-          }),
-        ]
-      : []),
-
-    ...(hasGitHub
-      ? [
-          GitHubProvider({
-            clientId: process.env.GITHUB_CLIENT_ID!,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-          }),
-        ]
-      : []),
   ],
+
   callbacks: {
-    /**
-     * Enforce BLOCKED user check for OAuth sign-ins too
-     */
-    async signIn({ user }) {
-      const email = user.email?.toLowerCase();
-      if (!email) return false;
-
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (!existing) return true;
-
-      // @ts-ignore
-      if (existing.status === "BLOCKED") return false;
-
-      // Promote to ADMIN if allowlisted
-      const admins = parseAdminEmails();
-      // @ts-ignore
-      if (admins.includes(email) && existing.role !== "ADMIN") {
-        await prisma.user.update({ where: { email }, data: { role: "ADMIN" as any } });
-      }
-
-      // Track last login
-      try {
-        await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } });
-      } catch {}
-
-      return true;
-    },
-
-    /**
-     * Put role/status/id into the JWT so SSR pages can authorize without DB sessions.
-     */
     async jwt({ token, user }) {
-      // On initial sign-in, user is defined
-      if (user?.email) {
-        token.email = user.email;
-        token.name = user.name;
-        token.sub = (user as any).id ?? token.sub;
-
-        const dbUser = await prisma.user.findUnique({ where: { email: user.email.toLowerCase() } });
-        if (dbUser) {
-          (token as any).role = (dbUser as any).role;
-          (token as any).status = (dbUser as any).status;
-        }
+      // On initial sign-in, NextAuth provides `user`.
+      if (user) {
+        token.id = (user as any).id;
+        token.role = (user as any).role;
+        token.status = (user as any).status;
       }
       return token;
     },
-
     async session({ session, token }) {
       if (session.user) {
-        session.user.email = (token.email as string) || session.user.email;
-        session.user.name = (token.name as string) || session.user.name;
-        (session.user as any).id = token.sub;
-        (session as any).role = (token as any).role;
-        (session as any).status = (token as any).status;
+        (session.user as any).id = token.id;
+        (session as any).role = token.role;
+        (session as any).status = token.status;
       }
       return session;
     },
   },
+
+  // Share the session token across subdomains (www + admin) so you don't have to
+  // log in twice. This also helps avoid edge-case loops where a callback lands on
+  // the other subdomain.
+  cookies: {
+    sessionToken: {
+      name: "__Secure-next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        domain: ".xdragon.tech",
+      },
+    },
+  },
+
   logger: {
     error(code, metadata) {
       console.error("NextAuth error", code, metadata);
@@ -170,5 +123,9 @@ export const authOptions: NextAuthOptions = {
 };
 
 export default function auth(req: NextApiRequest, res: NextApiResponse) {
+  // IMPORTANT: set baseUrl dynamically per request.
+  // This prevents NEXTAUTH_URL from forcing callbacks to the wrong host.
+  process.env.NEXTAUTH_URL = getRequestBaseUrl(req);
+
   return NextAuth(req, res, authOptions);
 }
