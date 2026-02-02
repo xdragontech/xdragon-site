@@ -16,6 +16,79 @@ type UserRow = {
   lastLoginAt?: string | null;
 };
 
+
+type MetricsPeriod = "today" | "last7" | "month";
+
+type MetricsPoint = {
+  label: string;
+  signups: number;
+  logins: number;
+};
+
+type MetricsResponse = {
+  period: MetricsPeriod;
+  points: MetricsPoint[];
+  totals: { signups: number; logins: number };
+};
+
+function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: number, h: number, pad = 12) {
+  if (!points.length) return "";
+  const maxVal = Math.max(1, ...points.map((p) => p.signups, ...points.map((p) => p.logins)));
+  const innerW = w - pad * 2;
+  const innerH = h - pad * 2;
+
+  const xFor = (i: number) => pad + (points.length === 1 ? innerW / 2 : (innerW * i) / (points.length - 1));
+  const yFor = (v: number) => pad + innerH - (innerH * v) / maxVal;
+
+  return points
+    .map((p, i) => {
+      const x = xFor(i);
+      const y = yFor(p[key]);
+      return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function MiniLineChart({ points }: { points: MetricsPoint[] }) {
+  const w = 720;
+  const h = 180;
+  const hasData = points.length > 0;
+
+  const signupsPath = hasData ? buildLinePath(points, "signups", w, h) : "";
+  const loginsPath = hasData ? buildLinePath(points, "logins", w, h) : "";
+
+  return (
+    <div className="w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-950/40">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-[180px] w-full">
+        <defs>
+          <linearGradient id="xdragonGrid" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.08)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width={w} height={h} fill="url(#xdragonGrid)" />
+
+        {/* subtle grid */}
+        {[...Array(5)].map((_, i) => {
+          const y = (h * (i + 1)) / 6;
+          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />;
+        })}
+
+        {hasData ? (
+          <>
+            <path d={loginsPath} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" />
+            <path d={signupsPath} fill="none" stroke="rgba(239,68,68,0.9)" strokeWidth="2.5" />
+          </>
+        ) : (
+          <text x={w / 2} y={h / 2} textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="14">
+            No data
+          </text>
+        )}
+      </svg>
+    </div>
+  );
+}
+
 function fmtDate(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -34,114 +107,6 @@ function parseProtectedAdmins(): string[] {
     .filter(Boolean);
 }
 
-type Period = "today" | "7d" | "month";
-
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
-
-function fmtMonthDay(d: Date) {
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-type MetricsSeries = {
-  labels: string[];
-  signups: number[];
-  logins: number[];
-};
-
-type ActivityChartProps = {
-  labels: string[];
-  signups: number[];
-  logins: number[];
-};
-
-function ActivityLineChart({ labels, signups, logins }: ActivityChartProps) {
-  const max = Math.max(1, ...signups, ...logins);
-  const w = 720;
-  const h = 140;
-  const padX = 8;
-  const padY = 10;
-
-  const n = labels.length || 1;
-  const step = n > 1 ? (w - padX * 2) / (n - 1) : 0;
-
-  const yFor = (v: number) => {
-    const t = v / max;
-    return padY + (h - padY * 2) * (1 - t);
-  };
-
-  const pointsFor = (arr: number[]) =>
-    arr
-      .map((v, i) => `${padX + i * step},${yFor(v)}`)
-      .join(" ");
-
-  const signupsPts = pointsFor(signups);
-  const loginsPts = pointsFor(logins);
-
-  return (
-    <div className="w-full">
-      <div className="flex items-center gap-4 text-xs text-slate-300 mb-2">
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          New signups
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-slate-300" />
-          Logins
-        </span>
-      </div>
-
-      <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-        <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[140px]">
-          {/* grid */}
-          <line x1="0" y1={h - 1} x2={w} y2={h - 1} stroke="rgba(255,255,255,0.08)" />
-          <line x1="0" y1={h / 2} x2={w} y2={h / 2} stroke="rgba(255,255,255,0.06)" />
-          <line x1="0" y1={padY} x2={w} y2={padY} stroke="rgba(255,255,255,0.04)" />
-
-          {/* logins line */}
-          <polyline
-            fill="none"
-            stroke="rgba(226,232,240,0.9)"
-            strokeWidth="2"
-            points={loginsPts}
-          />
-
-          {/* signups line */}
-          <polyline
-            fill="none"
-            stroke="rgba(239,68,68,0.95)"
-            strokeWidth="2.5"
-            points={signupsPts}
-          />
-
-          {/* dots */}
-          {labels.map((_, i) => (
-            <g key={i}>
-              <circle cx={padX + i * step} cy={yFor(logins[i] ?? 0)} r="2" fill="rgba(226,232,240,0.9)" />
-              <circle cx={padX + i * step} cy={yFor(signups[i] ?? 0)} r="2.5" fill="rgba(239,68,68,0.95)" />
-            </g>
-          ))}
-        </svg>
-
-        {/* x-axis labels */}
-        <div className="mt-2 grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length || 1}, minmax(0, 1fr))` }}>
-          {labels.map((l, i) => (
-            <div key={i} className="text-[11px] text-slate-400 text-center truncate">
-              {l}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions as any);
   const role = (session as any)?.role || (session as any)?.user?.role;
@@ -158,9 +123,14 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [period, setPeriod] = useState<Period>("7d");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const [period, setPeriod] = useState<MetricsPeriod>("last7");
+  const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+
 
   const protectedAdmins = useMemo(() => parseProtectedAdmins(), []);
   const myEmail =
@@ -184,6 +154,31 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
     }
   }
 
+
+  async function loadMetrics(nextPeriod: MetricsPeriod) {
+    setMetricsLoading(true);
+    setMetricsError(null);
+    try {
+      const res = await fetch(`/api/admin/metrics?period=${nextPeriod}`, { method: "GET" });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as MetricsResponse;
+      setMetrics(data);
+    } catch (e: any) {
+      setMetricsError(e?.message || "Failed to load metrics");
+      setMetrics(null);
+    } finally {
+      setMetricsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadMetrics(period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
+
   useEffect(() => {
     void load();
   }, []);
@@ -196,47 +191,6 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       return hay.includes(s);
     });
   }, [q, users]);
-
-  const [metrics, setMetrics] = useState<MetricsSeries>({ labels: [], signups: [], logins: [] });
-  const [metricsLoading, setMetricsLoading] = useState(false);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setMetricsLoading(true);
-      setMetricsError(null);
-      try {
-        const res = await fetch(`/api/admin/metrics?period=${period}`);
-        const json = await res.json();
-        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-        if (cancelled) return;
-
-        setMetrics({
-          labels: json.labels || [],
-          signups: json.signups || [],
-          logins: json.logins || [],
-        });
-      } catch (err: any) {
-        if (cancelled) return;
-        setMetricsError(err?.message || "Failed to load metrics.");
-        setMetrics({ labels: [], signups: [], logins: [] });
-      } finally {
-        if (!cancelled) setMetricsLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [period]);
-
-  const totals = useMemo(() => {
-    const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
-    return { signups: sum(metrics.signups), logins: sum(metrics.logins) };
-  }, [metrics]);
 
   async function act(userId: string, action: "block" | "unblock" | "delete") {
     setErr(null);
@@ -295,7 +249,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
             <button
               onClick={() => signOut({ callbackUrl: "/admin/signin" })}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
@@ -307,24 +261,238 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {/* New signups chart */}
-        <section className="mb-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-                    <div className="text-sm font-semibold text-neutral-900">Activity</div>
-                    <div className="mt-1 text-xs text-neutral-500">
-                      New signups & logins ({period === "today" ? "today" : period === "7d" ? "last 7 days" : "month-to-date"})
-                    </div>
 
-                    <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                      <div className="text-sm text-neutral-700">
-                        <span className="font-semibold text-neutral-900">{totals.signups}</span> signups
-                      </div>
-                      <div className="text-sm text-neutral-700">
-                        <span className="font-semibold text-neutral-900">{totals.logins}</span> logins
-                      </div>
-                      {metricsLoading && <div className="text-xs text-neutral-500">Loading…</div>}
-                      {metricsError && <div className="text-xs text-red-600">{metricsError}</div>}
+        {/* Activity chart (signups + logins) */}
+        <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
+              <div className="mt-1 text-xs text-neutral-500">
+                Signups in <span className="font-medium text-red-600">red</span>, logins in <span className="font-medium text-neutral-700">white</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {([
+                { key: "today" as const, label: "Today" },
+                { key: "last7" as const, label: "Last 7 days" },
+                { key: "month" as const, label: "This month" },
+              ] as const).map((p) => {
+                const active = period === p.key;
+                return (
+                  <button
+                    key={p.key}
+                    onClick={() => setPeriod(p.key)}
+                    className={
+                      active
+                        ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
+                        : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                    }
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            {metricsLoading ? (
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
+            ) : metricsError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
+            ) : (
+              <>
+                <MiniLineChart points={metrics?.points ?? []} />
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                  <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                    <span className="text-neutral-500">Signups:</span> <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
+                  </div>
+                  <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                    <span className="text-neutral-500">Logins:</span> <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by email, name, role, status…"
+              className="w-full sm:w-[420px] rounded-xl bg-white border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+            />
+            <button
+              onClick={() => void load()}
+              className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 text-white px-3 py-2 text-sm hover:bg-neutral-800"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="text-sm text-neutral-500">
+            {loading ? "Loading…" : `${filtered.length} user${filtered.length === 1 ? "" : "s"}`}
+          </div>
+        </div>
+
+        {(err || msg) && (
+          <div className="mt-4 space-y-2">
+            {err && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {err}
+              </div>
+            )}
+            {msg && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {msg}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Desktop table */}
+        <div className="mt-6 hidden md:block overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-neutral-600">
+              <tr className="text-left">
+                <th className="px-4 py-3 font-medium">User</th>
+                <th className="px-4 py-3 font-medium">Role</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium">Last login</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-200">
+              {loading ? (
+                <tr>
+                  <td className="px-4 py-6 text-neutral-500" colSpan={6}>
+                    Loading…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-neutral-500" colSpan={6}>
+                    No users found.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((u) => {
+                  const email = (u.email || "(no email)").toLowerCase();
+                  const isProtected = protectedAdmins.includes(email);
+                  const isAdmin = u.role === "ADMIN";
+                  const isBlocked = u.status === "BLOCKED";
+                  const busy = busyId === u.id;
+
+                  return (
+                    <tr key={u.id} className="hover:bg-neutral-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-neutral-900">{u.name || "—"}</div>
+                        <div className="text-neutral-500">{email}</div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
+                            isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700"
+                          )}
+                        >
+                          {u.role}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
+                            isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          )}
+                        >
+                          {u.status}
+                        </span>
+                        {isProtected && (
+                          <div className="mt-1 text-xs text-neutral-500">Protected admin</div>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-neutral-700">{fmtDate(u.createdAt)}</td>
+                      <td className="px-4 py-3 text-neutral-700">{fmtDate(u.lastLoginAt)}</td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            disabled={busy || isProtected || isAdmin}
+                            onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
+                            className={cn(
+                              "rounded-xl px-3 py-1.5 text-xs border transition-colors",
+                              busy || isProtected || isAdmin
+                                ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
+                                : isBlocked
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                                  : "border-red-200 bg-red-50 text-red-800 hover:border-red-700"
+                            )}
+                            title={isAdmin ? "Blocking admins is disabled" : isProtected ? "Protected admin" : undefined}
+                          >
+                            {isBlocked ? "Unblock" : "Block"}
+                          </button>
+
+                          <button
+                            disabled={busy || isProtected || isAdmin}
+                            onClick={() => {
+                              if (!confirm("Delete this user? This cannot be undone.")) return;
+                              void act(u.id, "delete");
+                            }}
+                            className={cn(
+                              "rounded-xl px-3 py-1.5 text-xs border transition-colors",
+                              busy || isProtected || isAdmin
+                                ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
+                                : "border-neutral-200 bg-white text-neutral-700 hover:border-red-300"
+                            )}
+                            title={isAdmin ? "Deleting admins is disabled" : isProtected ? "Protected admin" : undefined}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="mt-6 grid gap-3 md:hidden">
+          {loading ? (
+            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">No users found.</div>
+          ) : (
+            filtered.map((u) => {
+              const email = (u.email || "(no email)").toLowerCase();
+              const isProtected = protectedAdmins.includes(email);
+              const isAdmin = u.role === "ADMIN";
+              const isBlocked = u.status === "BLOCKED";
+              const busy = busyId === u.id;
+
+              return (
+                <div key={u.id} className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{u.name || "—"}</div>
+                      <div className="text-sm text-neutral-500">{email}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700")}>
+                        {u.role}
+                      </span>
+                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800")}>
+                        {u.status}
+                      </span>
                     </div>
                   </div>
 
