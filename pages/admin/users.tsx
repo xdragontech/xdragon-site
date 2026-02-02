@@ -1,145 +1,164 @@
 // pages/admin/users.tsx
-import type { GetServerSideProps } from "next";
-import { requireAdmin } from "../../lib/auth";
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/router";
 
 type UserRow = {
   id: string;
   email: string | null;
   name: string | null;
-  status: "ACTIVE" | "BLOCKED";
-  role: "USER" | "ADMIN";
-  createdAt: string;
-  lastLoginAt: string | null;
+  role: "USER" | "ADMIN" | string;
+  status: "ACTIVE" | "BLOCKED" | string;
+  createdAt?: string;
+  lastLoginAt?: string | null;
 };
 
-type Props = { ok: true };
-
-export default function AdminUsers(_: Props) {
-  const [users, setUsers] = useState<UserRow[]>([]);
+export default function AdminUsersPage() {
+  const router = useRouter();
+  const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/admin/users");
-    const json = await res.json();
-    setUsers(json.users || []);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.status === 401 || res.status === 403) {
+        router.push("/auth/signin");
+        return;
+      }
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to load users");
+      setRows(json.users || []);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function setStatus(id: string, status: "ACTIVE" | "BLOCKED") {
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) await load();
-    else alert("Failed to update user status.");
+  async function deleteUser(id: string, email?: string | null) {
+    const label = email ? ` (${email})` : "";
+    const ok = confirm(
+      `Delete this user${label}?\n\nThis permanently removes the account and related sessions/accounts.`
+    );
+    if (!ok) return;
+
+    setBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Delete failed");
+
+      // Optimistic remove
+      setRows((prev) => prev.filter((u) => u.id !== id));
+    } catch (e: any) {
+      setError(e?.message || "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
   }
 
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+  }, [rows]);
+
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="font-semibold">Admin — Users</div>
-          <a href="/" className="text-sm font-medium hover:underline">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 px-4 py-10">
+      <div className="mx-auto max-w-5xl">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold">Admin — Users</h1>
+            <p className="mt-1 text-sm text-neutral-600">Manage access, block, and delete accounts.</p>
+          </div>
+          <Link className="underline text-sm" href="/">
             Back to site
-          </a>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
-        <div className="max-w-2xl">
-          <h1 className="text-2xl sm:text-3xl font-bold">User Access</h1>
-          <p className="mt-2 text-sm text-neutral-600">
-            Blocked users cannot sign in. Admin access + signup notifications use <code className="font-mono">ADMIN_EMAILS</code>.
-          </p>
+          </Link>
         </div>
 
-        <div className="mt-8 rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-neutral-200 flex items-center justify-between">
-            <div className="text-sm font-semibold">Users</div>
+        {error && (
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+        )}
+
+        <div className="mt-8 rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between">
+            <div className="text-sm font-semibold">
+              {loading ? "Loading…" : `${sorted.length} user${sorted.length === 1 ? "" : "s"}`}
+            </div>
             <button
               onClick={load}
-              className="rounded-2xl border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-neutral-50"
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
             >
               Refresh
             </button>
           </div>
 
-          {loading ? (
-            <div className="p-6 text-sm text-neutral-600">Loading…</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-600">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-neutral-50 border-b border-neutral-200">
+                <tr>
+                  <th className="text-left px-5 py-3 font-semibold">User</th>
+                  <th className="text-left px-5 py-3 font-semibold">Role</th>
+                  <th className="text-left px-5 py-3 font-semibold">Status</th>
+                  <th className="text-right px-5 py-3 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loading && sorted.length === 0 && (
                   <tr>
-                    <th className="text-left p-3">Email</th>
-                    <th className="text-left p-3">Name</th>
-                    <th className="text-left p-3">Role</th>
-                    <th className="text-left p-3">Status</th>
-                    <th className="text-left p-3">Created</th>
-                    <th className="text-left p-3">Last login</th>
-                    <th className="text-right p-3">Actions</th>
+                    <td className="px-5 py-6 text-neutral-600" colSpan={4}>
+                      No users found.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-t border-neutral-200">
-                      <td className="p-3">{u.email || "—"}</td>
-                      <td className="p-3">{u.name || "—"}</td>
-                      <td className="p-3">{u.role}</td>
-                      <td className="p-3">
-                        <span className={u.status === "ACTIVE" ? "text-emerald-700" : "text-red-700"}>
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="p-3">{new Date(u.createdAt).toLocaleString()}</td>
-                      <td className="p-3">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}</td>
-                      <td className="p-3 text-right">
-                        {u.status === "ACTIVE" ? (
-                          <button
-                            onClick={() => setStatus(u.id, "BLOCKED")}
-                            className="rounded-xl bg-black text-white px-3 py-2 text-xs font-semibold hover:opacity-90"
-                          >
-                            Block
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setStatus(u.id, "ACTIVE")}
-                            className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
-                          >
-                            Unblock
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {users.length === 0 && (
-                    <tr>
-                      <td className="p-6 text-sm text-neutral-600" colSpan={7}>
-                        No users yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+                )}
+
+                {sorted.map((u) => (
+                  <tr key={u.id} className="border-b border-neutral-100">
+                    <td className="px-5 py-4">
+                      <div className="font-semibold">{u.email || "(no email)"}</div>
+                      <div className="text-neutral-600">{u.name || ""}</div>
+                    </td>
+                    <td className="px-5 py-4">{u.role}</td>
+                    <td className="px-5 py-4">
+                      <span
+                        className={
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold " +
+                          (u.status === "ACTIVE"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : "bg-red-50 text-red-800 border border-red-200")
+                        }
+                      >
+                        {u.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        onClick={() => deleteUser(u.id, u.email)}
+                        disabled={busyId === u.id}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50 disabled:opacity-60"
+                      >
+                        {busyId === u.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-5 py-4 text-xs text-neutral-500">
+            Deleting a user removes their account and associated sessions/accounts. Use carefully.
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
-
-export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const { session, isAdmin } = await requireAdmin(ctx);
-  if (!session?.user?.email) return { redirect: { destination: "/auth/signin", permanent: false } };
-  if (!isAdmin) return { notFound: true };
-
-  return { props: { ok: true } };
-};
