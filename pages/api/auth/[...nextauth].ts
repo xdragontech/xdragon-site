@@ -3,42 +3,71 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
+import { prisma } from "../../../lib/prisma";
 
-/**
- * Subdomain-safe NextAuth config
- *
- * Fixes redirect/session loops when serving the same deployment on both
- * https://www.xdragon.tech and https://admin.xdragon.tech.
- *
- * Key idea: NextAuth uses NEXTAUTH_URL as its baseUrl. In a multi-host setup,
- * a single static NEXTAUTH_URL can cause callback URLs to hop to the wrong host
- * (and then your middleware bounces back), producing "too many redirects".
- *
- * We set NEXTAUTH_URL dynamically per request to the current host.
- */
+function cookieDomain(): string | undefined {
+  // Share the session cookie between www.xdragon.tech and admin.xdragon.tech in production.
+  // In local dev, DO NOT set a Domain attribute (browsers will reject it).
+  if (process.env.NODE_ENV !== "production") return undefined;
 
-function getRequestBaseUrl(req: NextApiRequest): string {
-  const hostHeader = (req.headers["x-forwarded-host"] || req.headers.host || "").toString();
-  const protoHeader = (req.headers["x-forwarded-proto"] || "https").toString();
+  // Allow override if you ever change domains.
+  return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
+}
 
-  const host = hostHeader.split(",")[0].trim();
-  const proto = protoHeader.split(",")[0].trim();
-
-  if (!host) return "https://www.xdragon.tech";
-  return `${proto}://${host}`;
+async function getUserByEmail(email: string) {
+  return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 }
 
 export const authOptions: NextAuthOptions = {
-  // You can keep the adapter even with JWT sessions; it powers user lookup/management.
   adapter: PrismaAdapter(prisma),
 
-  // Credentials sign-in in NextAuth v4 requires JWT sessions.
+  // Credentials sign-in requires JWT strategy in NextAuth v4.
   session: { strategy: "jwt" },
 
-  // Allow NextAuth to trust the incoming host (useful on Vercel).
+  secret: process.env.NEXTAUTH_SECRET,
+
+  // In multi-host setups on Vercel (www + admin), trust the incoming Host header.
+  // This prevents accidental bounces to the wrong hostname when NEXTAUTH_URL is set.
   trustHost: true,
+  useSecureCookies: true,
+
+  // Keep the default user sign-in page. Admin routes should redirect to /admin/signin via middleware.
+  pages: { signIn: "/auth/signin" },
+
+  cookies: {
+    sessionToken: {
+      name: "__Secure-next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        domain: cookieDomain(),
+      },
+    },
+    callbackUrl: {
+      name: "__Secure-next-auth.callback-url",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        domain: cookieDomain(),
+      },
+    },
+    csrfToken: {
+      // Use a non-__Host cookie so we can share across subdomains when desired.
+      name: "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        domain: cookieDomain(),
+      },
+    },
+  },
 
   providers: [
     CredentialsProvider({
@@ -48,67 +77,90 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = (credentials?.email || "").trim().toLowerCase();
-        const password = (credentials?.password || "").trim();
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password ?? "";
 
         if (!email || !password) return null;
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await getUserByEmail(email);
         if (!user) return null;
 
-        // Only allow password sign-in if the account is verified + active.
+        // Enforce your safety controls.
         if (user.status === "BLOCKED") return null;
         if (!user.emailVerified) return null;
+
+        // Password login only for users with a password set.
         if (!user.passwordHash) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        return {
-          id: user.id,
-          name: user.name || undefined,
-          email: user.email || undefined,
-          // Pass through extra fields via `jwt` callback.
-          role: user.role,
-          status: user.status,
-        } as any;
+        // Optional: update last login time
+        try {
+          await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+        } catch {
+          // best-effort
+        }
+
+        return { id: user.id, email: user.email ?? undefined, name: user.name ?? undefined };
       },
     }),
   ],
 
   callbacks: {
     async jwt({ token, user }) {
-      // On initial sign-in, NextAuth provides `user`.
       if (user) {
-        token.id = (user as any).id;
-        token.role = (user as any).role;
-        token.status = (user as any).status;
+        token.sub = user.id;
+        token.email = user.email;
+        token.name = user.name;
       }
+
+      // Pull role/status from DB (keeps token accurate if you block/unblock).
+      if (token.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: String(token.email).toLowerCase() },
+          select: { role: true, status: true },
+        });
+        if (dbUser) {
+          (token as any).role = dbUser.role;
+          (token as any).status = dbUser.status;
+        }
+      }
+
       return token;
     },
+
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id;
-        (session as any).role = token.role;
-        (session as any).status = token.status;
+        session.user.email = typeof token.email === "string" ? token.email : session.user.email;
+        session.user.name = typeof token.name === "string" ? token.name : session.user.name;
+        (session.user as any).id = typeof token.sub === "string" ? token.sub : undefined;
       }
+      (session as any).role = (token as any).role;
+      (session as any).status = (token as any).status;
       return session;
     },
-  },
 
-  // Share the session token across subdomains (www + admin) so you don't have to
-  // log in twice. This also helps avoid edge-case loops where a callback lands on
-  // the other subdomain.
-  cookies: {
-    sessionToken: {
-      name: "__Secure-next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-        domain: ".xdragon.tech",
-      },
+    async redirect({ url, baseUrl }) {
+      // Prevent redirects to unexpected hosts (e.g. *.vercel.app) while still
+      // allowing www/admin subdomains + the apex domain.
+      try {
+        if (url.startsWith("/")) return `${baseUrl}${url}`;
+
+        const target = new URL(url);
+        const host = target.hostname.toLowerCase();
+
+        const allowed =
+          host === "xdragon.tech" ||
+          host === "www.xdragon.tech" ||
+          host === "admin.xdragon.tech" ||
+          host.endsWith(".xdragon.tech");
+
+        if (allowed) return url;
+      } catch {
+        // fall through
+      }
+      return baseUrl;
     },
   },
 
@@ -123,9 +175,5 @@ export const authOptions: NextAuthOptions = {
 };
 
 export default function auth(req: NextApiRequest, res: NextApiResponse) {
-  // IMPORTANT: set baseUrl dynamically per request.
-  // This prevents NEXTAUTH_URL from forcing callbacks to the wrong host.
-  process.env.NEXTAUTH_URL = getRequestBaseUrl(req);
-
   return NextAuth(req, res, authOptions);
 }
