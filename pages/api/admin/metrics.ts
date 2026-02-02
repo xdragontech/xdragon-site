@@ -4,103 +4,118 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { prisma } from "../../../lib/prisma";
 
-type Period = "today" | "7d" | "month";
+export type MetricsPeriod = "today" | "7d" | "month";
 
-type IpGroup = {
-  ip: string;
-  country: string | null;
-  count: number;
+type IpGroup = { ip: string; country: string | null; count: number };
+
+type MetricsOk = {
+  ok: true;
+  period: MetricsPeriod;
+  from: string;
+  to: string;
+  labels: string[];
+  signups: number[];
+  logins: number[];
+  totals: { signups: number; logins: number };
+  ipGroups: IpGroup[];
 };
 
-type MetricsResponse =
-  | {
-      ok: true;
-      period: Period;
-      labels: string[];
-      signups: number[];
-      logins: number[];
-      totals: { signups: number; logins: number };
-      ipGroups: IpGroup[];
-    }
-  | { ok: false; error: string };
+type MetricsErr = { ok: false; error: string };
 
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
+type MetricsResponse = MetricsOk | MetricsErr;
+
+function getSessionRole(session: any): string | null {
+  return (session?.role as string) || (session?.user?.role as string) || null;
 }
 
-function startOfMonth(d: Date) {
-  const x = new Date(d);
-  x.setDate(1);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function addDays(d: Date, days: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
-}
-
-function safePeriod(value: unknown): Period {
-  if (value === "today" || value === "7d" || value === "month") return value;
-  return "7d";
-}
-
-function normalizeIp(raw: string | null | undefined): string {
-  if (!raw) return "";
-  // Strip IPv6 prefix for IPv4-mapped addresses (e.g. ::ffff:1.2.3.4)
-  const cleaned = raw.trim();
-  if (cleaned.startsWith("::ffff:")) return cleaned.slice("::ffff:".length);
-  return cleaned;
-}
-
-function isPrivateIp(ip: string): boolean {
-  if (!ip) return true;
-  if (ip === "127.0.0.1" || ip === "::1") return true;
-  // RFC1918 + link-local
+function isPrivateIp(ip: string) {
   return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
     ip.startsWith("10.") ||
     ip.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip) ||
-    ip.startsWith("169.254.")
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
   );
 }
 
-function getGeoCache(): Map<string, string | null> {
-  const g = global as any;
-  if (!g.__xdragonGeoCache) g.__xdragonGeoCache = new Map<string, string | null>();
-  return g.__xdragonGeoCache;
-}
+// Cache country lookups within a single serverless instance.
+const geoCache: Map<string, string | null> =
+  (global as any).__xdragonGeoCache || ((global as any).__xdragonGeoCache = new Map<string, string | null>());
 
-async function countryForIp(ipRaw: string): Promise<string | null> {
-  const ip = normalizeIp(ipRaw);
+async function countryForIp(ip: string): Promise<string | null> {
   if (!ip) return null;
   if (isPrivateIp(ip)) return "Private";
+  if (geoCache.has(ip)) return geoCache.get(ip) ?? null;
 
-  const cache = getGeoCache();
-  if (cache.has(ip)) return cache.get(ip) ?? null;
-
-  // Best-effort: use a free endpoint. Do not fail the API if lookup fails.
+  // Best-effort: do NOT fail the endpoint if geo lookup fails.
   try {
-    const resp = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/country_name/`, {
-      headers: { "User-Agent": "xdragon-tech-admin-metrics" },
+    // ipwho.is has a generous free tier for simple lookups.
+    const r = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country_code,country`, {
+      method: "GET",
+      headers: { "User-Agent": "xdragon-admin-metrics" },
     });
-
-    if (!resp.ok) {
-      cache.set(ip, null);
-      return null;
-    }
-
-    const text = (await resp.text()).trim();
-    const val = text && text.length <= 80 ? text : null;
-    cache.set(ip, val);
-    return val;
+    const j: any = await r.json().catch(() => null);
+    const c = j && j.success ? (j.country_code || j.country || null) : null;
+    geoCache.set(ip, c);
+    return c;
   } catch {
-    cache.set(ip, null);
+    geoCache.set(ip, null);
     return null;
   }
+}
+
+function parsePeriod(p: unknown): MetricsPeriod {
+  if (p === "today" || p === "7d" || p === "month") return p;
+  return "7d";
+}
+
+function periodBounds(period: MetricsPeriod) {
+  const now = new Date();
+  const end = new Date(now);
+
+  const start = new Date(now);
+  if (period === "today") {
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "7d") {
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    // month
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  }
+
+  return { start, end };
+}
+
+function buildLabels(period: MetricsPeriod, start: Date, end: Date): string[] {
+  const labels: string[] = [];
+
+  if (period === "today") {
+    // Hour buckets
+    for (let h = 0; h < 24; h++) labels.push(`${h.toString().padStart(2, "0")}:00`);
+    return labels;
+  }
+
+  // Day buckets (inclusive)
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+  while (cur <= end) {
+    labels.push(cur.toISOString().slice(0, 10));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return labels;
+}
+
+function bucketIndex(period: MetricsPeriod, start: Date, when: Date): number {
+  if (period === "today") return when.getHours();
+
+  const d0 = new Date(start);
+  d0.setHours(0, 0, 0, 0);
+  const d1 = new Date(when);
+  d1.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((d1.getTime() - d0.getTime()) / (24 * 60 * 60 * 1000));
+  return diffDays;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<MetricsResponse>) {
@@ -109,91 +124,74 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const session = await getServerSession(req, res, authOptions);
-  const me = session?.user as any;
-  if (!me || me.role !== "ADMIN" || me.status === "BLOCKED") {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
+  // Auth: must be signed in AND an ADMIN.
+  const session = await getServerSession(req, res, authOptions as any);
+  const role = getSessionRole(session);
+  if (!session || role !== "ADMIN") return res.status(401).json({ ok: false, error: "Unauthorized" });
 
-  const period = safePeriod(req.query.period);
-  const now = new Date();
+  const period = parsePeriod(req.query.period);
+  const { start, end } = periodBounds(period);
 
-  let start: Date;
-  let end: Date;
-  let labels: string[] = [];
-  let bucketIndex: (d: Date) => number;
-  let bucketCount = 0;
+  const labels = buildLabels(period, start, end);
+  const signups = Array(labels.length).fill(0) as number[];
+  const logins = Array(labels.length).fill(0) as number[];
 
-  if (period === "today") {
-    start = startOfDay(now);
-    end = addDays(start, 1);
-    bucketCount = 24;
-    labels = Array.from({ length: 24 }, (_, i) => `${i}`);
-    bucketIndex = (d) => d.getHours();
-  } else if (period === "month") {
-    start = startOfMonth(now);
-    end = addDays(startOfDay(now), 1); // include today
-    bucketCount = now.getDate();
-    labels = Array.from({ length: bucketCount }, (_, i) => `${i + 1}`);
-    bucketIndex = (d) => d.getDate() - 1;
-  } else {
-    // 7d (includes today)
-    start = startOfDay(addDays(now, -6));
-    end = addDays(startOfDay(now), 1);
-    bucketCount = 7;
-    labels = Array.from({ length: 7 }, (_, i) => {
-      const day = addDays(start, i);
-      return day.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    });
-    bucketIndex = (d) => Math.floor((startOfDay(d).getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
-  }
-
-  const [signupEvents, loginEvents] = await Promise.all([
+  // Fetch counts for signups and logins.
+  // NOTE: We only pull the timestamp columns and aggregate in JS to keep the endpoint simple.
+  const [users, events] = await Promise.all([
     prisma.user.findMany({
-      where: { createdAt: { gte: start, lt: end } },
+      where: { createdAt: { gte: start, lte: end } },
       select: { createdAt: true },
     }),
     prisma.loginEvent.findMany({
-      where: { createdAt: { gte: start, lt: end } },
+      where: { createdAt: { gte: start, lte: end } },
       select: { createdAt: true, ip: true },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
-  const signups = Array.from({ length: bucketCount }, () => 0);
-  const logins = Array.from({ length: bucketCount }, () => 0);
-
-  for (const e of signupEvents) {
-    const idx = bucketIndex(e.createdAt);
-    if (idx >= 0 && idx < bucketCount) signups[idx] += 1;
+  for (const u of users) {
+    const idx = bucketIndex(period, start, u.createdAt);
+    if (idx >= 0 && idx < signups.length) signups[idx] += 1;
   }
 
-  // group ip counts + bucketed logins
-  const ipCount = new Map<string, number>();
-  for (const e of loginEvents) {
-    const idx = bucketIndex(e.createdAt);
-    if (idx >= 0 && idx < bucketCount) logins[idx] += 1;
+  // Aggregate login buckets + ip groups
+  const ipCounts = new Map<string, number>();
+  for (const ev of events) {
+    const idx = bucketIndex(period, start, ev.createdAt);
+    if (idx >= 0 && idx < logins.length) logins[idx] += 1;
 
-    const ip = normalizeIp(e.ip);
-    if (!ip) continue;
-    ipCount.set(ip, (ipCount.get(ip) || 0) + 1);
+    const ip = (ev.ip || "").trim();
+    if (ip) ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
   }
 
   const totals = {
-    signups: signups.reduce((a, b) => a + b, 0),
-    logins: logins.reduce((a, b) => a + b, 0),
+    signups: users.length,
+    logins: events.length,
   };
 
-  const ipEntries = Array.from(ipCount.entries())
-    .map(([ip, count]) => ({ ip, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 50); // keep response small
+  // Top IPs by count
+  const topIps = [...ipCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 50);
 
-  const ipGroups: IpGroup[] = await Promise.all(
-    ipEntries.map(async ({ ip, count }) => {
-      const country = await countryForIp(ip);
-      return { ip, country, count };
-    })
-  );
+  // Resolve countries (best-effort)
+  const ipGroups: IpGroup[] = [];
+  for (const [ip, count] of topIps) {
+    // eslint-disable-next-line no-await-in-loop
+    const country = await countryForIp(ip);
+    ipGroups.push({ ip, country, count });
+  }
 
-  return res.status(200).json({ ok: true, period, labels, signups, logins, totals, ipGroups });
+  return res.status(200).json({
+    ok: true,
+    period,
+    from: start.toISOString(),
+    to: end.toISOString(),
+    labels,
+    signups,
+    logins,
+    totals,
+    ipGroups,
+  });
 }
