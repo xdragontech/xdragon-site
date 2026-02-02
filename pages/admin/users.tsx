@@ -126,7 +126,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
           <div className="flex items-start gap-4">
               <div className="flex flex-col items-start">
                 <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
-                <div className="mt-1 text-lg font-semibold text-neutral-900">Command</div>
+                <div className="mt-1 text-4xl font-semibold leading-none text-neutral-900">Command</div>
               </div>
               <div className="flex h-11 items-center">
                 <div className="text-sm text-neutral-600">User management</div>
