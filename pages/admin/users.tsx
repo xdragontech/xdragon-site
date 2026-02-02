@@ -263,7 +263,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
           logins: logins.reduce((a, b) => a + (Number(b) || 0), 0),
         };
 
-        const ipGroups: IpGroup[] = Array.isArray(ok.ipGroups)
+        const ipGroups: LoginIpGroup[] = Array.isArray(ok.ipGroups)
           ? (ok.ipGroups as any[])
               .map((g) => {
                 const ip = typeof (g as any)?.ip === "string" ? (g as any).ip : "";
@@ -272,7 +272,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                 const count = typeof (g as any)?.count === "number" ? (g as any).count : Number((g as any)?.count || 0);
                 return { ip, country, count };
               })
-              .filter(Boolean) as IpGroup[]
+              .filter(Boolean) as LoginIpGroup[]
           : [];
 
         setMetrics({ ok: true, period: nextPeriod, labels, signups, logins, totals, ipGroups });
