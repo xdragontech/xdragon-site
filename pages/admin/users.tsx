@@ -116,28 +116,28 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <Head>
         <title>Admin • Users</title>
       </Head>
 
-      <header className="border-b border-slate-800">
+      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-slate-900 border border-slate-800 grid place-items-center">
-              <span className="text-sm font-semibold">XD</span>
+            <div className="h-9 w-9 rounded-xl bg-white border border-neutral-200 grid place-items-center shadow-sm grid place-items-center">
+              <span className="text-sm font-semibold text-red-600">XD</span>
             </div>
             <div>
-              <div className="text-sm text-slate-400">Admin</div>
+              <div className="text-sm text-neutral-500">Admin</div>
               <h1 className="text-lg font-semibold leading-tight">User Management</h1>
             </div>
           </div>
 
           <nav className="flex items-center gap-3">
-            <Link href="/tools" className="text-sm text-slate-300 hover:text-white">
+            <Link href="/tools" className="text-sm text-neutral-600 hover:text-neutral-900">
               Tools
             </Link>
-            <Link href="/" className="text-sm text-slate-300 hover:text-white">
+            <Link href="/" className="text-sm text-neutral-600 hover:text-neutral-900">
               Website
             </Link>
           </nav>
@@ -151,17 +151,17 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by email, name, role, status…"
-              className="w-full sm:w-[420px] rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-sm outline-none focus:border-slate-600"
+              className="w-full sm:w-[420px] rounded-xl bg-white border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
             />
             <button
               onClick={() => void load()}
-              className="shrink-0 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm hover:border-slate-600"
+              className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 text-white px-3 py-2 text-sm hover:bg-neutral-800"
             >
               Refresh
             </button>
           </div>
 
-          <div className="text-sm text-slate-400">
+          <div className="text-sm text-neutral-500">
             {loading ? "Loading…" : `${filtered.length} user${filtered.length === 1 ? "" : "s"}`}
           </div>
         </div>
@@ -169,12 +169,12 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
         {(err || msg) && (
           <div className="mt-4 space-y-2">
             {err && (
-              <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                 {err}
               </div>
             )}
             {msg && (
-              <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 {msg}
               </div>
             )}
@@ -182,9 +182,9 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
         )}
 
         {/* Desktop table */}
-        <div className="mt-6 hidden md:block overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40">
+        <div className="mt-6 hidden md:block overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-slate-900/70 text-slate-300">
+            <thead className="bg-neutral-50 text-neutral-600">
               <tr className="text-left">
                 <th className="px-4 py-3 font-medium">User</th>
                 <th className="px-4 py-3 font-medium">Role</th>
@@ -194,16 +194,16 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                 <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-neutral-200">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6 text-slate-400" colSpan={6}>
+                  <td className="px-4 py-6 text-neutral-500" colSpan={6}>
                     Loading…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-slate-400" colSpan={6}>
+                  <td className="px-4 py-6 text-neutral-500" colSpan={6}>
                     No users found.
                   </td>
                 </tr>
@@ -216,17 +216,17 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                   const busy = busyId === u.id;
 
                   return (
-                    <tr key={u.id} className="hover:bg-slate-900/60">
+                    <tr key={u.id} className="hover:bg-neutral-50">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-100">{u.name || "—"}</div>
-                        <div className="text-slate-400">{email}</div>
+                        <div className="font-medium text-neutral-900">{u.name || "—"}</div>
+                        <div className="text-neutral-500">{email}</div>
                       </td>
 
                       <td className="px-4 py-3">
                         <span
                           className={cn(
                             "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-                            isAdmin ? "border-amber-800/60 bg-amber-900/20 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-200"
+                            isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700"
                           )}
                         >
                           {u.role}
@@ -237,18 +237,18 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                         <span
                           className={cn(
                             "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-                            isBlocked ? "border-red-900/60 bg-red-950/30 text-red-200" : "border-emerald-900/60 bg-emerald-950/20 text-emerald-200"
+                            isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"
                           )}
                         >
                           {u.status}
                         </span>
                         {isProtected && (
-                          <div className="mt-1 text-xs text-slate-400">Protected admin</div>
+                          <div className="mt-1 text-xs text-neutral-500">Protected admin</div>
                         )}
                       </td>
 
-                      <td className="px-4 py-3 text-slate-300">{fmtDate(u.createdAt)}</td>
-                      <td className="px-4 py-3 text-slate-300">{fmtDate(u.lastLoginAt)}</td>
+                      <td className="px-4 py-3 text-neutral-700">{fmtDate(u.createdAt)}</td>
+                      <td className="px-4 py-3 text-neutral-700">{fmtDate(u.lastLoginAt)}</td>
 
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
@@ -256,12 +256,12 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                             disabled={busy || isProtected || isAdmin}
                             onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
                             className={cn(
-                              "rounded-xl px-3 py-1.5 text-xs border",
+                              "rounded-xl px-3 py-1.5 text-xs border transition-colors",
                               busy || isProtected || isAdmin
-                                ? "border-slate-800 bg-slate-900/40 text-slate-500 cursor-not-allowed"
+                                ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
                                 : isBlocked
-                                  ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200 hover:border-emerald-700"
-                                  : "border-red-900/60 bg-red-950/30 text-red-200 hover:border-red-700"
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                                  : "border-red-200 bg-red-50 text-red-800 hover:border-red-700"
                             )}
                             title={isAdmin ? "Blocking admins is disabled" : isProtected ? "Protected admin" : undefined}
                           >
@@ -275,10 +275,10 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                               void act(u.id, "delete");
                             }}
                             className={cn(
-                              "rounded-xl px-3 py-1.5 text-xs border",
+                              "rounded-xl px-3 py-1.5 text-xs border transition-colors",
                               busy || isProtected || isAdmin
-                                ? "border-slate-800 bg-slate-900/40 text-slate-500 cursor-not-allowed"
-                                : "border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
+                                ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
+                                : "border-neutral-200 bg-white text-neutral-700 hover:border-red-300"
                             )}
                             title={isAdmin ? "Deleting admins is disabled" : isProtected ? "Protected admin" : undefined}
                           >
@@ -297,9 +297,9 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
         {/* Mobile cards */}
         <div className="mt-6 grid gap-3 md:hidden">
           {loading ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-4 text-slate-400">Loading…</div>
+            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">Loading…</div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-4 text-slate-400">No users found.</div>
+            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">No users found.</div>
           ) : (
             filtered.map((u) => {
               const email = (u.email || "(no email)").toLowerCase();
@@ -309,34 +309,34 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
               const busy = busyId === u.id;
 
               return (
-                <div key={u.id} className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-4">
+                <div key={u.id} className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{u.name || "—"}</div>
-                      <div className="text-sm text-slate-400">{email}</div>
+                      <div className="text-sm text-neutral-500">{email}</div>
                     </div>
                     <div className="flex gap-2">
-                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isAdmin ? "border-amber-800/60 bg-amber-900/20 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-200")}>
+                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700")}>
                         {u.role}
                       </span>
-                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isBlocked ? "border-red-900/60 bg-red-950/30 text-red-200" : "border-emerald-900/60 bg-emerald-950/20 text-emerald-200")}>
+                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800")}>
                         {u.status}
                       </span>
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-300">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-neutral-700">
                     <div>
-                      <div className="text-slate-500">Created</div>
+                      <div className="text-neutral-500">Created</div>
                       <div>{fmtDate(u.createdAt)}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500">Last login</div>
+                      <div className="text-neutral-500">Last login</div>
                       <div>{fmtDate(u.lastLoginAt)}</div>
                     </div>
                   </div>
 
-                  {isProtected && <div className="mt-2 text-xs text-slate-400">Protected admin</div>}
+                  {isProtected && <div className="mt-2 text-xs text-neutral-500">Protected admin</div>}
 
                   <div className="mt-4 flex gap-2">
                     <button
@@ -345,10 +345,10 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                       className={cn(
                         "flex-1 rounded-xl px-3 py-2 text-xs border",
                         busy || isProtected || isAdmin
-                          ? "border-slate-800 bg-slate-900/40 text-slate-500 cursor-not-allowed"
+                          ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
                           : isBlocked
                             ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
-                            : "border-red-900/60 bg-red-950/30 text-red-200"
+                            : "border-red-200 bg-red-50 text-red-800"
                       )}
                     >
                       {isBlocked ? "Unblock" : "Block"}
@@ -362,8 +362,8 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
                       className={cn(
                         "flex-1 rounded-xl px-3 py-2 text-xs border",
                         busy || isProtected || isAdmin
-                          ? "border-slate-800 bg-slate-900/40 text-slate-500 cursor-not-allowed"
-                          : "border-slate-700 bg-slate-900 text-slate-200"
+                          ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
+                          : "border-neutral-200 bg-white text-neutral-700"
                       )}
                     >
                       Delete
@@ -375,9 +375,9 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
           )}
         </div>
 
-        <div className="mt-8 text-xs text-slate-500">
-          Tip: set <code className="rounded bg-slate-900 px-1 py-0.5 border border-slate-800">NEXT_PUBLIC_ADMIN_EMAILS</code> (comma-separated) to label “protected”
-          admin accounts in the UI. Server-side protection still uses <code className="rounded bg-slate-900 px-1 py-0.5 border border-slate-800">ADMIN_EMAILS</code>.
+        <div className="mt-8 text-xs text-neutral-500">
+          Tip: set <code className="rounded bg-neutral-100 px-1 py-0.5 border border-neutral-200">NEXT_PUBLIC_ADMIN_EMAILS</code> (comma-separated) to label “protected”
+          admin accounts in the UI. Server-side protection still uses <code className="rounded bg-neutral-100 px-1 py-0.5 border border-neutral-200">ADMIN_EMAILS</code>.
         </div>
       </main>
     </div>
