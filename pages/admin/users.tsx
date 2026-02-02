@@ -40,7 +40,6 @@ type MetricsErr = {
 };
 
 type MetricsResponse = MetricsOk | MetricsErr;
-};
 
 function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: number, h: number, pad = 12) {
   if (!points.length) return "";
