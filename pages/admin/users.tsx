@@ -35,11 +35,18 @@ function parseProtectedAdmins(): string[] {
 }
 
 export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) => {
+  const host = String(ctx.req.headers.host || "").toLowerCase();
+  // If someone hits admin pages on the main domain, bounce to the admin subdomain.
+  if (host === "www.xdragon.tech" || host === "xdragon.tech") {
+    return {
+      redirect: { destination: `https://admin.xdragon.tech${ctx.resolvedUrl}`, permanent: false },
+    };
+  }
   const session = await getServerSession(ctx.req, ctx.res, authOptions as any);
   const role = (session as any)?.role || (session as any)?.user?.role;
   if (!session || role !== "ADMIN") {
     return {
-      redirect: { destination: "/admin/signin?callbackUrl=/admin/users", permanent: false },
+      redirect: { destination: `/admin/signin?callbackUrl=${encodeURIComponent(ctx.resolvedUrl || "/admin/users")}`, permanent: false },
     };
   }
   return { props: { ok: true } };
