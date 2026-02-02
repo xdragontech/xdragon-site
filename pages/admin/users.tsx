@@ -513,8 +513,9 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
                   const isAdmin = u.role === "ADMIN";
                   const isBlocked = u.status === "BLOCKED";
                   const busy = busyId === u.id;
-                  const isSelf = Boolean((myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower));
-return (
+                  const isSelf = (myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower);
+
+                  return (
                     <tr key={u.id} className="hover:bg-neutral-50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-neutral-900">{u.name || "—"}</div>
@@ -604,18 +605,20 @@ return (
             <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">No users found.</div>
           ) : (
             filtered.map((u) => {
-              const email = (u.email || "(no email)").toLowerCase();
-              const isProtected = protectedAdmins.includes(email);
-              const isAdmin = u.role === "ADMIN";
-              const isBlocked = u.status === "BLOCKED";
-              const busy = busyId === u.id;
+                  const emailLower = (u.email || "").toLowerCase();
+                  const emailDisplay = (u.email || "(no email)").toLowerCase();
+                  const isProtected = !!emailLower && protectedAdmins.includes(emailLower);
+                  const isAdmin = u.role === "ADMIN";
+                  const isBlocked = u.status === "BLOCKED";
+                  const busy = busyId === u.id;
+                  const isSelf = Boolean((myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower));
 
               return (
                 <div key={u.id} className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{u.name || "—"}</div>
-                      <div className="text-sm text-neutral-500">{email}</div>
+                      <div className="text-sm text-neutral-500">{emailDisplay}</div>
                     </div>
                     <div className="flex gap-2">
                       <span className={cn("rounded-full border px-2 py-0.5 text-xs", isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700")}>
