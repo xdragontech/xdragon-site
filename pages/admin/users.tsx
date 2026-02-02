@@ -67,6 +67,32 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function toggleBlock(user: UserRow) {
+    const nextStatus = user.status === "BLOCKED" ? "ACTIVE" : "BLOCKED";
+    const label = user.email ? ` (${user.email})` : "";
+    const ok = confirm(`${nextStatus === "BLOCKED" ? "Block" : "Unblock"} this user${label}?`);
+    if (!ok) return;
+
+    setBusyId(user.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Update failed");
+
+      // Optimistic update
+      setRows((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));
+    } catch (e: any) {
+      setError(e?.message || "Update failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => (a.email || "").localeCompare(b.email || ""));
   }, [rows]);
@@ -140,6 +166,19 @@ export default function AdminUsersPage() {
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
+                      <button
+                        onClick={() => toggleBlock(u)}
+                        disabled={busyId === u.id}
+                        className={
+                          "mr-2 rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60 " +
+                          (u.status === "BLOCKED"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                            : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100")
+                        }
+                        title={u.status === "BLOCKED" ? "Unblock user" : "Block user"}
+                      >
+                        {u.status === "BLOCKED" ? "Unblock" : "Block"}
+                      </button>
                       <button
                         onClick={() => deleteUser(u.id, u.email)}
                         disabled={busyId === u.id}
