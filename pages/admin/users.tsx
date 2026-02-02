@@ -508,12 +508,13 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
               ) : (
                 filtered.map((u) => {
                   const email = u.email || "(no email)";
-                  const emailLower = email.toLowerCase();
-                  const isProtected = protectedAdmins.includes(emailLower);
+                  // Use the real email for comparisons; keep a separate display fallback.
+                  const emailLower = (u.email || "").toLowerCase();
+                  const isProtected = !!emailLower && protectedAdmins.includes(emailLower);
                   const isAdmin = u.role === "ADMIN";
                   const isBlocked = u.status === "BLOCKED";
                   const busy = busyId === u.id;
-                  const isSelf = (myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower);
+                  const isSelf = (!!myId && u.id === myId) || (!!myEmailLower && emailLower === myEmailLower);
 
                   return (
                     <tr key={u.id} className="hover:bg-neutral-50">
