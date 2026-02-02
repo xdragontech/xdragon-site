@@ -1,5 +1,4 @@
 // prisma/schema.prisma
-// Add this to your project and run: npx prisma migrate dev --name init_auth
 // Requires DATABASE_URL (Postgres)
 
 generator client {
@@ -35,6 +34,8 @@ model User {
 
   accounts Account[]
   sessions Session[]
+
+  @@index([email])
 }
 
 model Account {
@@ -79,4 +80,14 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// Password reset flow (store HASHED token, not raw)
+model PasswordResetToken {
+  identifier String    // user email (lowercased)
+  token      String    @unique // SHA-256 hash of the raw token
+  expires    DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([identifier])
 }
