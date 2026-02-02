@@ -39,7 +39,13 @@ type MetricsErr = {
   error: string;
 };
 
+
 type MetricsResponse = MetricsOk | MetricsErr;
+
+function emptyMetrics(period: MetricsPeriod): MetricsOk {
+  const now = new Date().toISOString();
+  return { ok: true, period, from: now, to: now, points: [], totals: { signups: 0, logins: 0 } };
+}
 
 function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: number, h: number, pad = 12) {
   if (!points.length) return "";
@@ -137,7 +143,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
   const [err, setErr] = useState<string | null>(null);
 
   const [period, setPeriod] = useState<MetricsPeriod>("last7");
-  const [metrics, setMetrics] = useState<MetricsOk | null>(null);
+  const [metrics, setMetrics] = useState<MetricsOk>(() => emptyMetrics("today"));
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
@@ -167,7 +173,9 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
 
   async function loadMetrics(nextPeriod: MetricsPeriod) {
     setMetricsLoading(true);
+    setMetrics(emptyMetrics(nextPeriod));
     setMetricsError(null);
+    setMetrics(emptyMetrics(nextPeriod));
     try {
       const res = await fetch(`/api/admin/metrics?period=${nextPeriod}`, { method: "GET" });
       if (!res.ok) {
@@ -176,16 +184,16 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       }
       const data = (await res.json()) as MetricsResponse;
 
-      if (!data.ok) {
-        setMetricsError(data.error || "Failed to load metrics");
-        setMetrics(null);
-        return;
+      if (data && (data as any).ok === true) {
+        setMetrics(data as MetricsOk);
+        setMetricsError(null);
+      } else {
+        setMetrics(emptyMetrics(nextPeriod));
+        setMetricsError((data as any)?.error || "Failed to load metrics");
       }
-
-      setMetrics(data);
     } catch (e: any) {
       setMetricsError(e?.message || "Failed to load metrics");
-      setMetrics(null);
+      setMetrics(emptyMetrics(nextPeriod));
     } finally {
       setMetricsLoading(false);
     }
