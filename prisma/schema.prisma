@@ -1,5 +1,4 @@
 // prisma/schema.prisma
-// Add this to your project and run: npx prisma migrate dev --name init_auth
 // Requires DATABASE_URL (Postgres)
 
 generator client {
@@ -22,6 +21,7 @@ enum UserRole {
 }
 
 model User {
+
   id            String     @id @default(cuid())
   name          String?
   email         String?    @unique
@@ -32,10 +32,12 @@ model User {
   role          UserRole   @default(USER)
   createdAt     DateTime   @default(now())
   lastLoginAt   DateTime?
-  loginEvents LoginEvent[]
 
   accounts Account[]
   sessions Session[]
+  loginEvents LoginEvent[]
+
+  @@index([email])
 }
 
 model Account {
@@ -82,14 +84,24 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Password reset flow (store HASHED token, not raw)
+model PasswordResetToken {
+  identifier String    // user email (lowercased)
+  token      String    @unique // SHA-256 hash of the raw token
+  expires    DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([identifier])
+}
 model LoginEvent {
   id        String   @id @default(cuid())
   userId    String
-  ip        String?
+  ip        String
   userAgent String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, createdAt])
+  @@index([userId])
+  @@index([createdAt])
 }
