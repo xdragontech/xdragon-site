@@ -82,6 +82,13 @@ export default function AdminCommandSignIn() {
     <>
       <Head>
         <title>X Dragon Command — Sign in</title>
+        {/* Orbitron for the "Command" mark */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
       </Head>
 
       <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -90,7 +97,12 @@ export default function AdminCommandSignIn() {
           <div className="mb-8 flex items-start justify-center gap-4">
             <div className="flex flex-col items-start">
               <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
-                <div className="mt-1 text-4xl font-semibold leading-none text-neutral-900">Command</div>
+              <div
+                className="mt-1 font-semibold leading-none text-neutral-900"
+                style={{ fontFamily: "Orbitron, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", fontSize: "1.6875rem" }}
+              >
+                Command
+              </div>
             </div>
             <div className="flex h-11 items-center">
               <div className="text-sm text-neutral-600">Admin access</div>

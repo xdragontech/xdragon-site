@@ -119,19 +119,31 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <Head>
         <title>Admin • Users</title>
+        {/* Orbitron for the "Command" mark */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </Head>
 
       <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-start gap-4">
-              <div className="flex flex-col items-start">
-                <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
-                <div className="mt-1 text-4xl font-semibold leading-none text-neutral-900">Command</div>
-              </div>
-              <div className="flex h-11 items-center">
-                <div className="text-sm text-neutral-600">User management</div>
+            <div className="flex flex-col items-start">
+              <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
+              <div
+                className="mt-1 font-semibold leading-none text-neutral-900"
+                style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+              >
+                Command
               </div>
             </div>
+            <div className="flex h-11 items-center">
+              <div className="text-sm text-neutral-600">User management</div>
+            </div>
+          </div>
 
             <div className="flex items-center gap-2">
             <button
