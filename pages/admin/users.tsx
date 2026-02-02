@@ -25,10 +25,21 @@ type MetricsPoint = {
   logins: number;
 };
 
-type MetricsResponse = {
+type MetricsOk = {
+  ok: true;
   period: MetricsPeriod;
-  points: MetricsPoint[];
+  labels: string[];
+  signups: number[];
+  logins: number[];
   totals: { signups: number; logins: number };
+};
+
+type MetricsErr = {
+  ok: false;
+  error: string;
+};
+
+type MetricsResponse = MetricsOk | MetricsErr;
 };
 
 function buildLinePath(points: MetricsPoint[], key: "signups" | "logins", w: number, h: number, pad = 12) {
@@ -127,7 +138,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
   const [err, setErr] = useState<string | null>(null);
 
   const [period, setPeriod] = useState<MetricsPeriod>("last7");
-  const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
+  const [metrics, setMetrics] = useState<MetricsOk | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
@@ -165,6 +176,13 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
         throw new Error(t || `HTTP ${res.status}`);
       }
       const data = (await res.json()) as MetricsResponse;
+
+      if (!data.ok) {
+        setMetricsError(data.error || "Failed to load metrics");
+        setMetrics(null);
+        return;
+      }
+
       setMetrics(data);
     } catch (e: any) {
       setMetricsError(e?.message || "Failed to load metrics");
@@ -302,7 +320,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
             ) : (
               <>
-                <MiniLineChart points={metrics?.points ?? []} />
+                <MiniLineChart points={metrics ? metrics.labels.map((label, i) => ({ label, signups: metrics.signups[i] ?? 0, logins: metrics.logins[i] ?? 0 })) : []} />
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
                   <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
                     <span className="text-neutral-500">Signups:</span> <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
