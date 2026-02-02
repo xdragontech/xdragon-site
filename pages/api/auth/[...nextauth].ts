@@ -26,10 +26,6 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
 
   secret: process.env.NEXTAUTH_SECRET,
-
-  // In multi-host setups on Vercel (www + admin), trust the incoming Host header.
-  // This prevents accidental bounces to the wrong hostname when NEXTAUTH_URL is set.
-  trustHost: true,
   useSecureCookies: true,
 
   // Keep the default user sign-in page. Admin routes should redirect to /admin/signin via middleware.
