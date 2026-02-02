@@ -50,135 +50,98 @@ function fmtMonthDay(d: Date) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function buildSignupSeries(users: UserRow[], period: Period) {
-  const now = new Date();
-  const dates = users
-    .map((u) => (u.createdAt ? new Date(u.createdAt) : null))
-    .filter((d): d is Date => !!d && !Number.isNaN(d.getTime()));
+type MetricsSeries = {
+  labels: string[];
+  signups: number[];
+  logins: number[];
+};
 
-  if (period === "today") {
-    const start = startOfDay(now);
-    const counts = Array.from({ length: 24 }, () => 0);
-    for (const d of dates) {
-      if (d >= start && d < new Date(start.getTime() + 24 * 60 * 60 * 1000)) {
-        counts[clamp(d.getHours(), 0, 23)] += 1;
-      }
-    }
-    const labels = Array.from({ length: 24 }, (_, i) => `${i}`);
-    return { labels, counts, total: counts.reduce((a, b) => a + b, 0) };
-  }
+type ActivityChartProps = {
+  labels: string[];
+  signups: number[];
+  logins: number[];
+};
 
-  if (period === "7d") {
-    const start = startOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
-    const counts = Array.from({ length: 7 }, () => 0);
-    for (const d of dates) {
-      const idx = Math.floor((startOfDay(d).getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
-      if (idx >= 0 && idx < 7) counts[idx] += 1;
-    }
-    const labels = Array.from({ length: 7 }, (_, i) => fmtMonthDay(new Date(start.getTime() + i * 24 * 60 * 60 * 1000)));
-    return { labels, counts, total: counts.reduce((a, b) => a + b, 0) };
-  }
-
-  // month
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const days = now.getDate();
-  const counts = Array.from({ length: days }, () => 0);
-  for (const d of dates) {
-    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
-      const idx = d.getDate() - 1;
-      if (idx >= 0 && idx < days) counts[idx] += 1;
-    }
-  }
-  const labels = Array.from({ length: days }, (_, i) => `${i + 1}`);
-  return { labels, counts, total: counts.reduce((a, b) => a + b, 0) };
-}
-
-function SignupLineChart({ labels, counts }: { labels: string[]; counts: number[] }) {
+function ActivityLineChart({ labels, signups, logins }: ActivityChartProps) {
+  const max = Math.max(1, ...signups, ...logins);
   const w = 720;
-  const h = 180;
-  const pad = 28;
-  const max = Math.max(1, ...counts);
-  const n = Math.max(1, counts.length);
-  const xStep = (w - pad * 2) / Math.max(1, n - 1);
-  const yScale = (h - pad * 2) / max;
+  const h = 140;
+  const padX = 8;
+  const padY = 10;
 
-  const pts = counts
-    .map((c, i) => {
-      const x = pad + i * xStep;
-      const y = h - pad - c * yScale;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
+  const n = labels.length || 1;
+  const step = n > 1 ? (w - padX * 2) / (n - 1) : 0;
 
-  const last = counts[counts.length - 1] ?? 0;
+  const yFor = (v: number) => {
+    const t = v / max;
+    return padY + (h - padY * 2) * (1 - t);
+  };
+
+  const pointsFor = (arr: number[]) =>
+    arr
+      .map((v, i) => `${padX + i * step},${yFor(v)}`)
+      .join(" ");
+
+  const signupsPts = pointsFor(signups);
+  const loginsPts = pointsFor(logins);
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-sm text-neutral-400">New signups</div>
-          <div className="text-2xl font-semibold text-white">{last}</div>
-        </div>
-        <div className="text-xs text-neutral-400">Max in range: {max}</div>
+    <div className="w-full">
+      <div className="flex items-center gap-4 text-xs text-slate-300 mb-2">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-red-500" />
+          New signups
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-slate-300" />
+          Logins
+        </span>
       </div>
 
-      <div className="mt-3 overflow-x-auto">
-        <svg viewBox={`0 0 ${w} ${h}`} className="h-[180px] w-full min-w-[560px]">
-          {/* axes */}
-          <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="currentColor" className="text-neutral-700" />
-          <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="currentColor" className="text-neutral-700" />
-
+      <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[140px]">
           {/* grid */}
-          {[0.25, 0.5, 0.75].map((t) => {
-            const y = h - pad - max * yScale * t;
-            return (
-              <line
-                key={t}
-                x1={pad}
-                y1={y}
-                x2={w - pad}
-                y2={y}
-                stroke="currentColor"
-                className="text-neutral-900"
-              />
-            );
-          })}
+          <line x1="0" y1={h - 1} x2={w} y2={h - 1} stroke="rgba(255,255,255,0.08)" />
+          <line x1="0" y1={h / 2} x2={w} y2={h / 2} stroke="rgba(255,255,255,0.06)" />
+          <line x1="0" y1={padY} x2={w} y2={padY} stroke="rgba(255,255,255,0.04)" />
 
-          {/* line */}
-          <polyline fill="none" strokeWidth="3" points={pts} stroke="currentColor" className="text-red-500" />
+          {/* logins line */}
+          <polyline
+            fill="none"
+            stroke="rgba(226,232,240,0.9)"
+            strokeWidth="2"
+            points={loginsPts}
+          />
+
+          {/* signups line */}
+          <polyline
+            fill="none"
+            stroke="rgba(239,68,68,0.95)"
+            strokeWidth="2.5"
+            points={signupsPts}
+          />
 
           {/* dots */}
-          {counts.map((c, i) => {
-            const x = pad + i * xStep;
-            const y = h - pad - c * yScale;
-            return <circle key={i} cx={x} cy={y} r={3} fill="currentColor" className="text-red-500" />;
-          })}
-
-          {/* x labels (sparse) */}
-          {labels.map((lab, i) => {
-            const show = labels.length <= 8 || i === 0 || i === labels.length - 1 || i % Math.ceil(labels.length / 6) === 0;
-            if (!show) return null;
-            const x = pad + i * xStep;
-            return (
-              <text
-                key={i}
-                x={x}
-                y={h - 8}
-                textAnchor="middle"
-                fontSize="10"
-                fill="currentColor"
-                className="text-neutral-400"
-              >
-                {lab}
-              </text>
-            );
-          })}
+          {labels.map((_, i) => (
+            <g key={i}>
+              <circle cx={padX + i * step} cy={yFor(logins[i] ?? 0)} r="2" fill="rgba(226,232,240,0.9)" />
+              <circle cx={padX + i * step} cy={yFor(signups[i] ?? 0)} r="2.5" fill="rgba(239,68,68,0.95)" />
+            </g>
+          ))}
         </svg>
+
+        {/* x-axis labels */}
+        <div className="mt-2 grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length || 1}, minmax(0, 1fr))` }}>
+          {labels.map((l, i) => (
+            <div key={i} className="text-[11px] text-slate-400 text-center truncate">
+              {l}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
-
 export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions as any);
   const role = (session as any)?.role || (session as any)?.user?.role;
@@ -234,7 +197,46 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
     });
   }, [q, users]);
 
-  const signupSeries = useMemo(() => buildSignupSeries(users, period), [users, period]);
+  const [metrics, setMetrics] = useState<MetricsSeries>({ labels: [], signups: [], logins: [] });
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setMetricsLoading(true);
+      setMetricsError(null);
+      try {
+        const res = await fetch(`/api/admin/metrics?period=${period}`);
+        const json = await res.json();
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        if (cancelled) return;
+
+        setMetrics({
+          labels: json.labels || [],
+          signups: json.signups || [],
+          logins: json.logins || [],
+        });
+      } catch (err: any) {
+        if (cancelled) return;
+        setMetricsError(err?.message || "Failed to load metrics.");
+        setMetrics({ labels: [], signups: [], logins: [] });
+      } finally {
+        if (!cancelled) setMetricsLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
+
+  const totals = useMemo(() => {
+    const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+    return { signups: sum(metrics.signups), logins: sum(metrics.logins) };
+  }, [metrics]);
 
   async function act(userId: string, action: "block" | "unblock" | "delete") {
     setErr(null);
@@ -309,238 +311,20 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
         <section className="mb-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="text-sm font-semibold text-neutral-900">New signups</div>
-              <div className="mt-1 text-xs text-neutral-600">
-                Total: <span className="font-medium text-neutral-900">{signupSeries.total}</span>
-                <span className="mx-2 text-neutral-300">•</span>
-                {period === "today" ? "Today (hourly)" : period === "7d" ? "Last 7 days" : "This month"}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPeriod("today")}
-                aria-pressed={period === "today"}
-                className={
-                  "rounded-lg border px-3 py-2 text-sm font-medium " +
-                  (period === "today"
-                    ? "border-red-600 bg-red-600 text-white"
-                    : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50")
-                }
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriod("7d")}
-                aria-pressed={period === "7d"}
-                className={
-                  "rounded-lg border px-3 py-2 text-sm font-medium " +
-                  (period === "7d"
-                    ? "border-red-600 bg-red-600 text-white"
-                    : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50")
-                }
-              >
-                Last 7 days
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriod("month")}
-                aria-pressed={period === "month"}
-                className={
-                  "rounded-lg border px-3 py-2 text-sm font-medium " +
-                  (period === "month"
-                    ? "border-red-600 bg-red-600 text-white"
-                    : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50")
-                }
-              >
-                This month
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <SignupLineChart labels={signupSeries.labels} counts={signupSeries.counts} />
-          </div>
-        </section>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by email, name, role, status…"
-              className="w-full sm:w-[420px] rounded-xl bg-white border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-            />
-            <button
-              onClick={() => void load()}
-              className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 text-white px-3 py-2 text-sm hover:bg-neutral-800"
-            >
-              Refresh
-            </button>
-          </div>
-
-          <div className="text-sm text-neutral-500">
-            {loading ? "Loading…" : `${filtered.length} user${filtered.length === 1 ? "" : "s"}`}
-          </div>
-        </div>
-
-        {(err || msg) && (
-          <div className="mt-4 space-y-2">
-            {err && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                {err}
-              </div>
-            )}
-            {msg && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                {msg}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Desktop table */}
-        <div className="mt-6 hidden md:block overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-600">
-              <tr className="text-left">
-                <th className="px-4 py-3 font-medium">User</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3 font-medium">Last login</th>
-                <th className="px-4 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-200">
-              {loading ? (
-                <tr>
-                  <td className="px-4 py-6 text-neutral-500" colSpan={6}>
-                    Loading…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-6 text-neutral-500" colSpan={6}>
-                    No users found.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((u) => {
-                  const email = (u.email || "(no email)").toLowerCase();
-                  const isProtected = protectedAdmins.includes(email);
-                  const isAdmin = u.role === "ADMIN";
-                  const isBlocked = u.status === "BLOCKED";
-                  const busy = busyId === u.id;
-
-                  return (
-                    <tr key={u.id} className="hover:bg-neutral-50">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-neutral-900">{u.name || "—"}</div>
-                        <div className="text-neutral-500">{email}</div>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-                            isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700"
-                          )}
-                        >
-                          {u.role}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-                            isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                          )}
-                        >
-                          {u.status}
-                        </span>
-                        {isProtected && (
-                          <div className="mt-1 text-xs text-neutral-500">Protected admin</div>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-neutral-700">{fmtDate(u.createdAt)}</td>
-                      <td className="px-4 py-3 text-neutral-700">{fmtDate(u.lastLoginAt)}</td>
-
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            disabled={busy || isProtected || isAdmin}
-                            onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
-                            className={cn(
-                              "rounded-xl px-3 py-1.5 text-xs border transition-colors",
-                              busy || isProtected || isAdmin
-                                ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-                                : isBlocked
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                                  : "border-red-200 bg-red-50 text-red-800 hover:border-red-700"
-                            )}
-                            title={isAdmin ? "Blocking admins is disabled" : isProtected ? "Protected admin" : undefined}
-                          >
-                            {isBlocked ? "Unblock" : "Block"}
-                          </button>
-
-                          <button
-                            disabled={busy || isProtected || isAdmin}
-                            onClick={() => {
-                              if (!confirm("Delete this user? This cannot be undone.")) return;
-                              void act(u.id, "delete");
-                            }}
-                            className={cn(
-                              "rounded-xl px-3 py-1.5 text-xs border transition-colors",
-                              busy || isProtected || isAdmin
-                                ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-                                : "border-neutral-200 bg-white text-neutral-700 hover:border-red-300"
-                            )}
-                            title={isAdmin ? "Deleting admins is disabled" : isProtected ? "Protected admin" : undefined}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="mt-6 grid gap-3 md:hidden">
-          {loading ? (
-            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">Loading…</div>
-          ) : filtered.length === 0 ? (
-            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">No users found.</div>
-          ) : (
-            filtered.map((u) => {
-              const email = (u.email || "(no email)").toLowerCase();
-              const isProtected = protectedAdmins.includes(email);
-              const isAdmin = u.role === "ADMIN";
-              const isBlocked = u.status === "BLOCKED";
-              const busy = busyId === u.id;
-
-              return (
-                <div key={u.id} className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{u.name || "—"}</div>
-                      <div className="text-sm text-neutral-500">{email}</div>
+                    <div className="text-sm font-semibold text-neutral-900">Activity</div>
+                    <div className="mt-1 text-xs text-neutral-500">
+                      New signups & logins ({period === "today" ? "today" : period === "7d" ? "last 7 days" : "month-to-date"})
                     </div>
-                    <div className="flex gap-2">
-                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700")}>
-                        {u.role}
-                      </span>
-                      <span className={cn("rounded-full border px-2 py-0.5 text-xs", isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800")}>
-                        {u.status}
-                      </span>
+
+                    <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                      <div className="text-sm text-neutral-700">
+                        <span className="font-semibold text-neutral-900">{totals.signups}</span> signups
+                      </div>
+                      <div className="text-sm text-neutral-700">
+                        <span className="font-semibold text-neutral-900">{totals.logins}</span> logins
+                      </div>
+                      {metricsLoading && <div className="text-xs text-neutral-500">Loading…</div>}
+                      {metricsError && <div className="text-xs text-red-600">{metricsError}</div>}
                     </div>
                   </div>
 
