@@ -6,16 +6,17 @@ import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { compare } from "bcryptjs";
 import { prisma } from "../../../lib/prisma";
-import bcrypt from "bcryptjs";
 
 /**
- * X Dragon Tools Auth (Pages Router)
- * - Email magic link (SMTP)
- * - Password login (credentials)
- * - Optional Google/GitHub (if client IDs are set)
- * - Admin allowlist via ADMIN_EMAILS (comma-separated)
- * - Block/deactivate users via User.status in DB
+ * Notes:
+ * - Supports Email magic link (SMTP), optional Google/GitHub, and password login via Credentials.
+ * - Password login requires a verified email. We treat a user as verified if:
+ *   - user.emailVerified is set, OR
+ *   - they have an OAuth/email Account record (created after completing an email/OAuth sign-in)
+ * - Users can be BLOCKED via `status` in DB.
+ * - Admin allowlist is via ADMIN_EMAILS (comma-separated).
  */
 
 function parseAdminEmails(): string[] {
@@ -23,6 +24,22 @@ function parseAdminEmails(): string[] {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
+}
+
+async function isUserVerified(userId: string, emailVerified: Date | null): Promise<boolean> {
+  if (emailVerified) return true;
+
+  // If the user has ever completed a sign-in via email/OAuth, NextAuth creates an Account row.
+  // That is strong evidence they control the email or provider identity.
+  const acct = await prisma.account.findFirst({
+    where: {
+      userId,
+      provider: { in: ["email", "google", "github"] },
+    },
+    select: { id: true },
+  });
+
+  return !!acct;
 }
 
 async function notifyAdminsNewSignup(params: { email?: string | null; name?: string | null; provider?: string }) {
@@ -34,6 +51,7 @@ async function notifyAdminsNewSignup(params: { email?: string | null; name?: str
 
   const from = process.env.RESEND_FROM || process.env.EMAIL_FROM || "hello@xdragon.tech";
 
+  // best-effort (never break auth)
   try {
     const subject = `New Tools Signup — ${params.email || "unknown email"}`;
     const text = [
@@ -62,12 +80,10 @@ async function notifyAdminsNewSignup(params: { email?: string | null; name?: str
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
-  // database sessions are fine with credentials as long as authorize returns {id, email}
   session: { strategy: "database" },
+  secret: process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/auth/signin" },
-
   providers: [
-    // Email magic link (SMTP). Works with Resend SMTP or any SMTP provider.
     EmailProvider({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
@@ -81,19 +97,29 @@ export const authOptions: NextAuthOptions = {
       maxAge: 24 * 60 * 60,
     }),
 
-    // Password login (credentials)
+    // Optional OAuth providers (safe to keep enabled; sign-in page will show buttons only if configured)
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    }),
+    GitHubProvider({
+      clientId: process.env.GITHUB_CLIENT_ID || "",
+      clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+    }),
+
+    // Password login
     CredentialsProvider({
       name: "Password",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(creds) {
-        const email = (creds?.email || "").trim().toLowerCase();
-        const password = (creds?.password || "").trim();
+      async authorize(credentials) {
+        const email = (credentials?.email || "").trim().toLowerCase();
+        const password = (credentials?.password || "").trim();
+
         if (!email || !password) return null;
 
-        // Pull ALL fields we need for checks and compare
         const user = await prisma.user.findUnique({
           where: { email },
           select: {
@@ -108,66 +134,48 @@ export const authOptions: NextAuthOptions = {
 
         if (!user) return null;
         if (user.status === "BLOCKED") return null;
-
-        // Only allow password login when an email has been verified
-        if (!user.emailVerified) return null;
-
-        // Must have a password set
         if (!user.passwordHash) return null;
 
-        const ok = await bcrypt.compare(password, user.passwordHash);
+        // Require verified email (or prior verified account sign-in)
+        const verified = await isUserVerified(user.id, user.emailVerified);
+        if (!verified) return null;
+
+        const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
 
-        // NextAuth requires at least {id, email}
-        return { id: user.id, email: user.email!, name: user.name || undefined };
+        return { id: user.id, email: user.email ?? undefined, name: user.name ?? undefined };
       },
     }),
-
-    // OAuth providers are optional; they can be shown on the UI only if configured
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-    GitHubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID || "",
-      clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-    }),
   ],
-
   callbacks: {
-    /**
-     * IMPORTANT: Always check status + verification using the DB record,
-     * not the `user` object (which varies by provider and may omit fields).
-     */
-    async signIn({ user, account }) {
+    async signIn({ user }) {
       const email = user.email?.toLowerCase();
       if (!email) return false;
 
-      const dbUser = await prisma.user.findUnique({
+      const existing = await prisma.user.findUnique({
         where: { email },
-        select: { status: true, role: true, emailVerified: true },
+        select: { email: true, status: true, role: true },
       });
-      if (!dbUser) return false;
-      if (dbUser.status === "BLOCKED") return false;
 
-      // Enforce verification for password logins only
-      if (account?.provider === "credentials" && !dbUser.emailVerified) {
-        // Returning false redirects back to /auth/signin?error=AccessDenied
-        return false;
-      }
+      if (existing?.status === "BLOCKED") return false;
 
       // Promote to ADMIN if in allowlist
       const admins = parseAdminEmails();
-      if (admins.includes(email) && dbUser.role !== "ADMIN") {
+      if (existing && admins.includes(email) && existing.role !== "ADMIN") {
         await prisma.user.update({ where: { email }, data: { role: "ADMIN" } });
       }
 
-      // Update last login time (best effort)
-      await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
+      // Track last login time (best-effort)
+      try {
+        if (existing) {
+          await prisma.user.update({ where: { email }, data: { lastLoginAt: new Date() } });
+        }
+      } catch (e) {
+        console.warn("lastLoginAt update failed:", e);
+      }
 
       return true;
     },
-
     async session({ session, user }) {
       if (session.user) {
         session.user.email = user.email;
@@ -176,7 +184,6 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-
   events: {
     async createUser(message) {
       const email = message.user.email?.toLowerCase();
@@ -193,7 +200,6 @@ export const authOptions: NextAuthOptions = {
       });
     },
   },
-
   logger: {
     error(code, metadata) {
       console.error("NextAuth error", code, metadata);
