@@ -1,75 +1,108 @@
-// pages/auth/verify.tsx
-import React from "react";
-import type { GetServerSideProps } from "next";
-import Link from "next/link";
-import { prisma } from "../../lib/prisma";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
 
-type Props = {
-  success: boolean;
-  message: string;
-};
+/**
+ * /auth/verify
+ * Expects: ?token=...
+ *
+ * Robust against Next.js router query hydration timing by also reading
+ * from window.location.search on the client.
+ */
+export default function VerifyEmailPage() {
+  const router = useRouter();
+  const [state, setState] = useState<"idle" | "verifying" | "success" | "error">("idle");
+  const [message, setMessage] = useState<string>("");
 
-export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const token = String(ctx.query.token || "");
-  const email = String(ctx.query.email || "").toLowerCase().trim();
+  const token = useMemo(() => {
+    // 1) Next router (when ready)
+    const q = router?.query?.token;
+    if (typeof q === "string" && q.trim()) return q.trim();
 
-  if (!token || !email) {
-    return { props: { success: false, message: "Missing verification token." } };
-  }
+    // 2) Client-side URLSearchParams fallback (handles initial query empty)
+    if (typeof window !== "undefined") {
+      const t = new URLSearchParams(window.location.search).get("token");
+      if (t && t.trim()) return t.trim();
+    }
+    return "";
+  }, [router?.query?.token]);
 
-  try {
-    const record = await prisma.emailVerificationToken.findUnique({ where: { token } });
-    if (!record || record.identifier !== email) {
-      return { props: { success: false, message: "That verification link is invalid or has already been used." } };
+  useEffect(() => {
+    // Wait for client to mount; router.isReady helps but isn't perfect alone
+    if (typeof window === "undefined") return;
+
+    if (!token) {
+      // Don't flash an error while router is still populating the query.
+      // If it's still empty after mount, show the error.
+      const t = new URLSearchParams(window.location.search).get("token");
+      if (!t) {
+        setState("error");
+        setMessage("Missing verification token. Please use the link from your email.");
+      }
+      return;
     }
 
-    if (record.expires.getTime() < Date.now()) {
-      await prisma.emailVerificationToken.delete({ where: { token } }).catch(() => {});
-      return { props: { success: false, message: "That verification link has expired. Please sign up again." } };
-    }
+    let cancelled = false;
 
-    await prisma.user.update({
-      where: { email },
-      data: { emailVerified: new Date() },
-    });
+    (async () => {
+      try {
+        setState("verifying");
+        setMessage("Verifying your email…");
 
-    await prisma.emailVerificationToken.delete({ where: { token } }).catch(() => {});
+        const res = await fetch("/api/auth/verify-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
 
-    return { props: { success: true, message: "Email verified — you can now log in." } };
-  } catch (e) {
-    console.error("verify error:", e);
-    return { props: { success: false, message: "Verification failed. Please try again." } };
-  }
-};
+        const data = await res.json().catch(() => ({}));
 
-export default function VerifyPage({ success, message }: Props) {
+        if (!res.ok || !data?.ok) {
+          const errMsg =
+            data?.error ||
+            (res.status === 410
+              ? "This verification link has expired. Please sign up again."
+              : "Verification failed. Please request a new link.");
+          throw new Error(errMsg);
+        }
+
+        if (cancelled) return;
+
+        setState("success");
+        setMessage("You're verified — you can now log in.");
+
+        // Small pause, then send them to the login page (or tools)
+        setTimeout(() => {
+          router.replace("/auth/signin");
+        }, 1200);
+      } catch (e: any) {
+        if (cancelled) return;
+        setState("error");
+        setMessage(e?.message || "Verification failed. Please request a new link.");
+      }
+    })();
+
+    return () => {
+      cancelled = true
+    };
+  }, [token, router]);
+
   return (
-    <main className="min-h-screen bg-neutral-50 text-neutral-900 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold">Account Verification</h1>
-        <p className="mt-3 text-sm text-neutral-700">{message}</p>
+        <h1 className="text-xl font-semibold">Email Verification</h1>
+        <p className="mt-3 text-sm text-neutral-700">{message || "Loading…"}</p>
 
-        <div className="mt-6 flex gap-3">
-          <Link
-            href="/auth/signin"
-            className="inline-flex items-center justify-center rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
-          >
-            Go to Login
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold"
-          >
-            Back to Site
-          </Link>
-        </div>
-
-        {success && (
-          <p className="mt-4 text-xs text-neutral-500">
-            You can now log in with your email + password.
-          </p>
+        {state === "error" && (
+          <div className="mt-4">
+            <a
+              href="/auth/signin"
+              className="inline-flex items-center justify-center rounded-xl bg-black text-white px-4 py-2 text-sm font-semibold"
+            >
+              Back to Sign In
+            </a>
+          </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
