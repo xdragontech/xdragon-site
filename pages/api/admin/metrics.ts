@@ -171,7 +171,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   };
 
   // Top IPs by count
-  const topIps = [...ipCounts.entries()]
+  const topIps = Array.from(ipCounts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 50);
 
