@@ -1,8 +1,8 @@
 // pages/admin/users.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Head from "next/head";
-import Link from "next/link";
 import { getServerSession } from "next-auth/next";
+import { signOut } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { authOptions } from "../api/auth/[...nextauth]";
 
@@ -39,7 +39,7 @@ export const getServerSideProps: GetServerSideProps<{ ok: true }> = async (ctx) 
   const role = (session as any)?.role || (session as any)?.user?.role;
   if (!session || role !== "ADMIN") {
     return {
-      redirect: { destination: "/auth/signin?callbackUrl=/admin/users", permanent: false },
+      redirect: { destination: "/admin/signin?callbackUrl=/admin/users", permanent: false },
     };
   }
   return { props: { ok: true } };
@@ -124,23 +124,21 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
       <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-white border border-neutral-200 grid place-items-center shadow-sm grid place-items-center">
-              <span className="text-sm font-semibold text-red-600">XD</span>
-            </div>
-            <div>
-              <div className="text-sm text-neutral-500">Admin</div>
-              <h1 className="text-lg font-semibold leading-tight">User Management</h1>
+            <img src="/logo.png" alt="X Dragon Technologies" className="h-8 w-auto" />
+            <div className="leading-tight">
+              <div className="text-lg font-semibold text-neutral-900">Command</div>
+              <div className="text-xs text-neutral-600">User management</div>
             </div>
           </div>
 
-          <nav className="flex items-center gap-3">
-            <Link href="/tools" className="text-sm text-neutral-600 hover:text-neutral-900">
-              Tools
-            </Link>
-            <Link href="/" className="text-sm text-neutral-600 hover:text-neutral-900">
-              Website
-            </Link>
-          </nav>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => signOut({ callbackUrl: "/admin/signin" })}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
