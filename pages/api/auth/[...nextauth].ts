@@ -72,7 +72,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password ?? "";
 
@@ -97,6 +97,21 @@ export const authOptions: NextAuthOptions = {
         } catch {
           // best-effort
         }
+
+// Record login IP (best-effort; do not block auth on logging failure)
+try {
+  const ip = getClientIp(req);
+  const userAgent = getUserAgent(req);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+    prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent } }),
+  ]);
+} catch (err) {
+  console.warn("LoginEvent write failed:", err);
+  // still allow login
+}
+
+
 
         return { id: user.id, email: user.email ?? undefined, name: user.name ?? undefined };
       },
