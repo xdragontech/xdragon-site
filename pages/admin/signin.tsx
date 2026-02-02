@@ -87,10 +87,12 @@ export default function AdminCommandSignIn() {
       <div className="min-h-screen bg-neutral-50 text-neutral-900">
         <div className="mx-auto max-w-lg px-4 py-16">
           {/* Brand */}
-          <div className="mb-8 flex items-center justify-center gap-3">
-            <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
-            <div className="leading-tight">
-              <div className="text-xl font-semibold text-neutral-900">Command</div>
+          <div className="mb-8 flex items-start justify-center gap-4">
+            <div className="flex flex-col items-start">
+              <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
+              <div className="mt-1 text-sm font-semibold text-neutral-900">Command</div>
+            </div>
+            <div className="flex h-11 items-center">
               <div className="text-sm text-neutral-600">Admin access</div>
             </div>
           </div>
