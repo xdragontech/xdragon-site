@@ -15,6 +15,39 @@ function cookieDomain(): string | undefined {
   return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
 }
 
+function getHeader(req: any, name: string): string | undefined {
+  const headers = req?.headers;
+  if (!headers) return undefined;
+
+  const key = name.toLowerCase();
+  const val = headers[key] ?? headers[name] ?? headers[name.toLowerCase()];
+  if (Array.isArray(val)) return val[0];
+  if (typeof val === "string") return val;
+  return undefined;
+}
+
+function getClientIp(req: any): string {
+  // Vercel/Proxies: x-forwarded-for is usually a comma-separated list
+  const xff = getHeader(req, "x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
+
+  const realIp = getHeader(req, "x-real-ip");
+  if (realIp) return realIp.trim();
+
+  // Node req sometimes has socket/connection
+  const socketIp = req?.socket?.remoteAddress || req?.connection?.remoteAddress;
+  if (typeof socketIp === "string" && socketIp) return socketIp;
+
+  return "unknown";
+}
+
+function getUserAgent(req: any): string {
+  return getHeader(req, "user-agent")?.trim() || "";
+}
+
 async function getUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 }
@@ -91,27 +124,17 @@ export const authOptions: NextAuthOptions = {
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        // Optional: update last login time
+        // Record last login + IP (best-effort; never block auth if this fails)
         try {
-          await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-        } catch {
-          // best-effort
+          const ip = getClientIp(req);
+          const userAgent = getUserAgent(req);
+          await prisma.$transaction([
+            prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+            prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent } }),
+          ]);
+        } catch (err) {
+          console.warn("LoginEvent write failed:", err);
         }
-
-// Record login IP (best-effort; do not block auth on logging failure)
-try {
-  const ip = getClientIp(req);
-  const userAgent = getUserAgent(req);
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
-    prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent } }),
-  ]);
-} catch (err) {
-  console.warn("LoginEvent write failed:", err);
-  // still allow login
-}
-
-
 
         return { id: user.id, email: user.email ?? undefined, name: user.name ?? undefined };
       },
