@@ -90,7 +90,7 @@ export default function AdminCommandSignIn() {
           <div className="mb-8 flex items-start justify-center gap-4">
             <div className="flex flex-col items-start">
               <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
-              <div className="mt-1 text-sm font-semibold text-neutral-900">Command</div>
+                <div className="mt-1 text-lg font-semibold text-neutral-900">Command</div>
             </div>
             <div className="flex h-11 items-center">
               <div className="text-sm text-neutral-600">Admin access</div>
