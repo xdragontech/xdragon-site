@@ -78,27 +78,26 @@ export default function ToolsPage({ email, prompts }: Props) {
             <div className="flex items-center gap-2">
               <Link
                 href="/"
-                className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm hover:bg-neutral-50"
+                className="rounded-full border border-red-600 bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
               >
                 Main Site
               </Link>
               <button
                 onClick={() => void signOut({ callbackUrl: "/auth/signin" })}
-                className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm hover:bg-neutral-50"
+                className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800"
               >
                 Sign out
               </button>
+            </div>
+            <div className="mt-2 text-right">
+              <div className="text-sm font-medium text-neutral-600">Signed in as</div>
+              <div className="text-sm font-medium text-neutral-600">{email}</div>
             </div>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6">
-          <div className="text-sm text-neutral-600">Signed in as</div>
-          <div className="font-semibold">{email}</div>
-        </div>
-
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
           {/* Category buttons */}
           <div className="flex flex-wrap gap-2">
@@ -108,8 +107,8 @@ export default function ToolsPage({ email, prompts }: Props) {
               className={[
                 "rounded-full px-4 py-2 text-sm font-semibold border transition-colors",
                 category === "All"
-                  ? "bg-red-600 border-red-600 text-white"
-                  : "bg-white border-red-200 text-red-700 hover:bg-red-50",
+                  ? "bg-neutral-900 border-neutral-900 text-white"
+                  : "bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-50",
               ].join(" ")}
             >
               ALL
@@ -123,8 +122,8 @@ export default function ToolsPage({ email, prompts }: Props) {
                 className={[
                   "rounded-full px-4 py-2 text-sm font-semibold border transition-colors",
                   category === c
-                    ? "bg-red-600 border-red-600 text-white"
-                    : "bg-white border-red-200 text-red-700 hover:bg-red-50",
+                    ? "bg-neutral-900 border-neutral-900 text-white"
+                    : "bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-50",
                 ].join(" ")}
               >
                 {c}
