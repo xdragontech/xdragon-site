@@ -44,34 +44,27 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           rel="stylesheet"
         />
       </Head>
-
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex flex-col">
-              <div className="flex items-center gap-3">
-                <Image src="/logo_symbol.png" alt="X Dragon" width={32} height={32} className="rounded" />
-                <div className="flex flex-col">
-                  <div className="text-xl font-semibold leading-tight" style={{ fontFamily: "Orbitron, ui-sans-serif" }}>
-                    X Dragon
-                  </div>
-                  <div className="text-[28px] font-semibold leading-tight" style={{ fontFamily: "Orbitron, ui-sans-serif" }}>
-                    Command
-                  </div>
-                </div>
+              <Image src="/logo.png" alt="X Dragon" width={160} height={44} className="h-11 w-auto" priority />
+              <div
+                className="mt-1 text-sm font-semibold uppercase tracking-widest text-neutral-900"
+                style={{ fontFamily: "Orbitron, ui-sans-serif" }}
+              >
+                Command
               </div>
             </div>
-            <div className="ml-2 text-sm text-neutral-600">Library management</div>
+            <div className="text-sm text-neutral-600">Library</div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => void signOut({ callbackUrl: "/admin/signin" })}
-              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
-            >
-              Sign out
-            </button>
-          </div>
+          <button
+            onClick={() => void signOut({ callbackUrl: "/admin/signin" })}
+            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
