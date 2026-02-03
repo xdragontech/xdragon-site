@@ -188,8 +188,7 @@ function toCsv(rows: any[], fields: ExportField<any>[]) {
 
   const header = fields.map((f) => esc(f.header)).join(",");
   const lines = rows.map((r) => fields.map((f) => esc(f.get(r))).join(","));
-  return [header, ...lines].join("
-");
+  return [header, ...lines].join("\n");
 }
 
 function exportUsersCsv(rows: any[]) {
