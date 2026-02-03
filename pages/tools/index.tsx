@@ -1,5 +1,6 @@
 // pages/tools/index.tsx
 import type { GetServerSideProps } from "next";
+import Head from "next/head";
 import { signOut } from "next-auth/react";
 import { requireUser } from "../../lib/auth";
 import { PROMPTS, type PromptItem } from "../../content/prompts";
