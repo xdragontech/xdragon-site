@@ -14,6 +14,26 @@ export default function ToolsPage({ email, prompts }: Props) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<PromptItem["category"] | "All">("All");
 
+  const categories = useMemo(() => {
+    // Stable ordering for your primary audience; fall back to alphabetical for anything extra.
+    const preferred = ["Marketing", "Operations", "Customer Support", "Analytics"] as const;
+    const seen = new Set<string>();
+    const out: string[] = [];
+
+    for (const c of preferred) {
+      if (prompts.some((p) => p.category === c)) {
+        out.push(c);
+        seen.add(c);
+      }
+    }
+
+    const extras = Array.from(new Set(prompts.map((p) => p.category)))
+      .filter((c) => !seen.has(c))
+      .sort((a, b) => a.localeCompare(b));
+
+    return [...out, ...extras];
+  }, [prompts]);
+
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     return prompts.filter((p) => {
@@ -55,24 +75,46 @@ export default function ToolsPage({ email, prompts }: Props) {
           </p>
         </div>
 
-        <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:items-center">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-full sm:max-w-md rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-            placeholder="Search prompts…"
-          />
-          <select
-            value={cat}
-            onChange={(e) => setCat(e.target.value as any)}
-            className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm"
-          >
-            <option value="All">All categories</option>
-            <option value="Marketing">Marketing</option>
-            <option value="Operations">Operations</option>
-            <option value="Customer Support">Customer Support</option>
-            <option value="Analytics">Analytics</option>
-          </select>
+        <div className="mt-8">
+          {/* Category buttons (replaces the dropdown) */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setCat("All")}
+              className={
+                cat === "All"
+                  ? "shrink-0 rounded-full bg-red-600 text-white px-4 py-2 text-xs font-semibold"
+                  : "shrink-0 rounded-full border border-red-200 bg-white text-red-700 px-4 py-2 text-xs font-semibold hover:bg-red-50"
+              }
+            >
+              ALL
+            </button>
+
+            {categories.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCat(c as any)}
+                className={
+                  cat === c
+                    ? "shrink-0 rounded-full bg-red-600 text-white px-4 py-2 text-xs font-semibold"
+                    : "shrink-0 rounded-full border border-red-200 bg-white text-red-700 px-4 py-2 text-xs font-semibold hover:bg-red-50"
+                }
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="mt-3">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="w-full sm:max-w-md rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              placeholder="Search prompts…"
+            />
+          </div>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
