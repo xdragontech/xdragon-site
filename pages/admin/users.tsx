@@ -94,109 +94,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
     });
   }, [q, users]);
 
-  
-  // Export configuration (base fields) + auto-include any future primitive fields.
-  const EXPORT_BASE_FIELDS: Array<{
-    key: string;
-    header: string;
-    get: (u: any) => string | number | boolean | null | undefined;
-  }> = [
-    { key: "id", header: "ID", get: (u) => u.id },
-    { key: "name", header: "Name", get: (u) => u.name },
-    { key: "email", header: "Email", get: (u) => u.email },
-    { key: "role", header: "Role", get: (u) => u.role },
-    { key: "status", header: "Status", get: (u) => u.status },
-    { key: "createdAt", header: "Created At", get: (u) => u.createdAt },
-    { key: "lastLoginAt", header: "Last Login At", get: (u) => u.lastLoginAt },
-  ];
-
-  function buildExportFields(rows: any[]) {
-    const baseKeys = new Set(EXPORT_BASE_FIELDS.map((f) => f.key));
-
-    // Add extra primitive keys that might appear over time (e.g., company, plan, phone).
-    const extraKeys: string[] = [];
-    for (const r of rows) {
-      for (const k of Object.keys(r || {})) {
-        if (baseKeys.has(k)) continue;
-        const v = (r as any)[k];
-        const t = typeof v;
-        const primitive = v == null || t === "string" || t === "number" || t === "boolean";
-        if (!primitive) continue;
-        if (!extraKeys.includes(k)) extraKeys.push(k);
-      }
-    }
-
-    const extras = extraKeys.map((k) => ({
-      key: k,
-      header: k,
-      get: (u: any) => (u as any)[k] ?? null,
-    }));
-
-    return [...EXPORT_BASE_FIELDS, ...extras];
-  }
-
-  function escapeCsv(value: any) {
-    const s = value == null ? "" : String(value);
-    // Escape quotes, wrap if needed
-    const needsWrap = /[",\n\r]/.test(s);
-    const escaped = s.replace(/"/g, '""');
-    return needsWrap ? `"${escaped}"` : escaped;
-  }
-
-  function downloadBlob(filename: string, blob: Blob) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  async function exportUsersCSV() {
-    try {
-      const rows = filtered as any[];
-      const fields = buildExportFields(rows);
-      const header = fields.map((f) => escapeCsv(f.header)).join(",");
-      const lines = rows.map((u) => fields.map((f) => escapeCsv(f.get(u))).join(","));
-      const csv = [header, ...lines].join("\n");
-
-      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-      downloadBlob(`xdragon-users-${ts}.csv`, new Blob([csv], { type: "text/csv;charset=utf-8" }));
-      setMsg(`Exported ${rows.length} users (CSV).`);
-    } catch (e: any) {
-      setErr(e?.message || "Export failed");
-    }
-  }
-
-  async function exportUsersXLSX() {
-    // Optional XLSX export: if the `xlsx` package isn't installed, fall back to CSV.
-    try {
-      const rows = filtered as any[];
-      const fields = buildExportFields(rows);
-
-      const xlsx = await import("xlsx");
-      const jsonRows = rows.map((u) => {
-        const o: Record<string, any> = {};
-        for (const f of fields) o[f.header] = f.get(u);
-        return o;
-      });
-
-      const ws = xlsx.utils.json_to_sheet(jsonRows);
-      const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, "Users");
-
-      const out = xlsx.write(wb, { type: "array", bookType: "xlsx" });
-      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-      downloadBlob(`xdragon-users-${ts}.xlsx`, new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      setMsg(`Exported ${rows.length} users (XLSX).`);
-    } catch (e: any) {
-      // If xlsx isn't available, export CSV instead.
-      await exportUsersCSV();
-    }
-  }
-async function act(userId: string, action: "block" | "unblock" | "delete") {
+  async function act(userId: string, action: "block" | "unblock" | "delete") {
     setErr(null);
     setMsg(null);
     setBusyId(userId);
@@ -305,19 +203,6 @@ async function act(userId: string, action: "block" | "unblock" | "delete") {
               className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 text-white px-3 py-2 text-sm hover:bg-neutral-800"
             >
               Refresh
-            </button>
-            <button
-              onClick={() => void exportUsersCSV()}
-              className="shrink-0 rounded-xl border border-neutral-300 bg-white text-neutral-800 px-3 py-2 text-sm hover:bg-neutral-50"
-            >
-              Export CSV
-            </button>
-            <button
-              onClick={() => void exportUsersXLSX()}
-              className="shrink-0 rounded-xl border border-neutral-300 bg-white text-neutral-800 px-3 py-2 text-sm hover:bg-neutral-50"
-              title="Exports as .xlsx if available; otherwise falls back to CSV."
-            >
-              Export XLSX
             </button>
           </div>
 
