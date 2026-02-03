@@ -65,11 +65,6 @@ function MiniLineChart({ points }: { points: MetricsPoint[] }) {
 
   const signupsPath = hasData ? buildLinePath(points, "signups", w, h) : "";
   const loginsPath = hasData ? buildLinePath(points, "logins", w, h) : "";
-  const metricPoints: MetricsPoint[] = metrics.labels.map((label, i) => ({
-    label,
-    signups: metrics.signups[i] ?? 0,
-    logins: metrics.logins[i] ?? 0,
-  }));
 
 
   return (
