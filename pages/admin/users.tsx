@@ -388,7 +388,7 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
             </div>
           </div>
 
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => signOut({ callbackUrl: "/admin/signin" })}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
@@ -430,77 +430,6 @@ export default function AdminUsersPage(_props: InferGetServerSidePropsType<typeo
         <div className="mb-4 grid gap-4 lg:grid-cols-10">
           <div className="lg:col-span-7">
             <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
-                          <div className="mt-1 text-xs text-neutral-500">
-                            Signups in <span className="font-medium text-red-600">red</span>, logins in <span className="font-medium text-neutral-700">white</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {([
-                            { key: "today" as const, label: "Today" },
-                            { key: "7d" as const, label: "Last 7 days" },
-                            { key: "month" as const, label: "This month" },
-                          ] as const).map((p) => {
-                            const active = period === p.key;
-                            return (
-                              <button
-                                key={p.key}
-                                onClick={() => setPeriod(p.key)}
-                                className={
-                                  active
-                                    ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
-                                    : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                                }
-                              >
-                                {p.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-            
-                      <div className="mt-3">
-                        {metricsLoading ? (
-                          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
-                        ) : metricsError ? (
-                          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
-                        ) : (
-                          <>
-                            <MiniLineChart points={metrics ? metrics.labels.map((label, i) => ({ label, signups: metrics.signups[i] ?? 0, logins: metrics.logins[i] ?? 0 })) : []} />
-                            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                              <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-                                <span className="text-neutral-500">Signups:</span> <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
-                              </div>
-                              <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-                                <span className="text-neutral-500">Logins:</span> <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-          </div>
-          <div className="lg:col-span-3">
-            <LoginIpsTable
-              loading={metricsLoading}
-              error={metricsError}
-              groups={metrics?.ok ? metrics.ipGroups : []}
-            />
-          </div>
-        </div>
-
-
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              
-
-        
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <input
