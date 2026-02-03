@@ -1,43 +1,48 @@
 // lib/requireUser.ts
-import type { GetServerSideProps, GetServerSidePropsContext, GetServerSidePropsResult } from "next";
+import type { GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../pages/api/auth/[...nextauth]";
+import { prisma } from "./prisma";
 
-type Session = Awaited<ReturnType<typeof getServerSession>>;
-
-function absoluteUrl(ctx: GetServerSidePropsContext, pathOrUrl: string) {
-  try {
-    // If already absolute, keep as-is
-    const u = new URL(pathOrUrl);
-    return u.toString();
-  } catch {
-    const host = (ctx.req.headers["x-forwarded-host"] as string) || ctx.req.headers.host || "localhost:3000";
-    const proto = (ctx.req.headers["x-forwarded-proto"] as string) || "https";
-    return `${proto}://${host}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
-  }
-}
-
-export function requireUser<P extends Record<string, any> = Record<string, any>>(
-  handler?: (ctx: GetServerSidePropsContext, session: NonNullable<Session>) => Promise<GetServerSidePropsResult<P>> | GetServerSidePropsResult<P>,
-  opts?: { signInPath?: string }
-): GetServerSideProps<P> {
-  const signInPath = opts?.signInPath || "/auth/signin";
-
-  return async (ctx) => {
-    const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-    if (!session || !session.user) {
-      // Preserve intended destination
-      const callbackUrl = absoluteUrl(ctx, ctx.resolvedUrl || "/");
-      const dest = `${signInPath}?callbackUrl=${encodeURIComponent(callbackUrl)}`;
-
-      return {
-        redirect: { destination: dest, permanent: false },
-      } as GetServerSidePropsResult<P>;
-    }
-
-    if (handler) return await handler(ctx, session as NonNullable<Session>);
-
-    return { props: {} as P };
+export type RequireUserOk = {
+  ok: true;
+  session: Awaited<ReturnType<typeof getServerSession>>;
+  user: {
+    id: string;
+    email: string | null;
+    name: string | null;
+    role?: string | null;
+    status?: string | null;
   };
+};
+
+export type RequireUserErr = {
+  ok: false;
+  redirect: { destination: string; permanent: false };
+};
+
+export type RequireUserResult = RequireUserOk | RequireUserErr;
+
+/**
+ * Loads the NextAuth session + corresponding Prisma user.
+ * Returns a redirect helper when unauthenticated.
+ */
+export async function requireUser(ctx: GetServerSidePropsContext): Promise<RequireUserResult> {
+  const session = await getServerSession(ctx.req, ctx.res, authOptions);
+
+  const email = session?.user?.email ? String(session.user.email).toLowerCase() : null;
+  if (!email) {
+    return { ok: false, redirect: { destination: "/auth/signin", permanent: false } };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, name: true, role: true, status: true },
+  });
+
+  if (!user) {
+    return { ok: false, redirect: { destination: "/auth/signin", permanent: false } };
+  }
+
+  return { ok: true, session, user };
 }
