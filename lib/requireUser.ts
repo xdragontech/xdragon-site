@@ -1,48 +1,35 @@
 // lib/requireUser.ts
 import type { GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
+import type { Session } from "next-auth";
 import { authOptions } from "../pages/api/auth/[...nextauth]";
 import { prisma } from "./prisma";
 
-export type RequireUserOk = {
-  ok: true;
-  session: Awaited<ReturnType<typeof getServerSession>>;
-  user: {
-    id: string;
-    email: string | null;
-    name: string | null;
-    role?: string | null;
-    status?: string | null;
-  };
-};
-
-export type RequireUserErr = {
-  ok: false;
-  redirect: { destination: string; permanent: false };
-};
-
-export type RequireUserResult = RequireUserOk | RequireUserErr;
-
 /**
- * Loads the NextAuth session + corresponding Prisma user.
- * Returns a redirect helper when unauthenticated.
+ * A helper for Pages Router SSR that returns BOTH `session` and `user` keys
+ * in all cases, so callers can safely destructure:
+ *   const { session, user, redirectTo } = await requireUser(ctx)
  */
+export type RequireUserResult = {
+  session: Session | null;
+  user: Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
+  redirectTo?: string;
+};
+
 export async function requireUser(ctx: GetServerSidePropsContext): Promise<RequireUserResult> {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
   const email = session?.user?.email ? String(session.user.email).toLowerCase() : null;
+
   if (!email) {
-    return { ok: false, redirect: { destination: "/auth/signin", permanent: false } };
+    return { session: null, user: null, redirectTo: "/auth/signin" };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, name: true, role: true, status: true },
-  });
+  const user = await prisma.user.findUnique({ where: { email } });
 
-  if (!user) {
-    return { ok: false, redirect: { destination: "/auth/signin", permanent: false } };
+  // If user record missing or blocked, treat as not signed in
+  if (!user || user.status === "BLOCKED") {
+    return { session: null, user: null, redirectTo: "/auth/signin" };
   }
 
-  return { ok: true, session, user };
+  return { session, user };
 }
