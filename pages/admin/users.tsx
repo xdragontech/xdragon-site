@@ -160,12 +160,32 @@ function LoginIpsTable({
   error: string | null;
   groups: LoginIpGroup[];
 }) {
-  return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-      <div className="text-sm font-semibold text-neutral-900">Logins by IP</div>
-      <div className="mt-1 text-xs text-neutral-500">Top IPs for the selected period.</div>
+  const PAGE_SIZE = 8;
+  const [page, setPage] = useState(0);
 
-      <div className="mt-3">
+  // Reset pagination whenever the dataset changes (period switch, refresh, etc.)
+  useEffect(() => {
+    setPage(0);
+  }, [loading, error, groups]);
+
+  const total = groups.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const start = safePage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, total);
+  const pageGroups = groups.slice(start, end);
+
+  const canPrev = safePage > 0;
+  const canNext = safePage < totalPages - 1;
+
+  return (
+    <div className="h-full rounded-2xl border border-neutral-200 bg-white p-4 flex flex-col">
+      <div>
+        <div className="text-sm font-semibold text-neutral-900">Logins by IP</div>
+        <div className="mt-1 text-xs text-neutral-500">Top IPs for the selected period.</div>
+      </div>
+
+      <div className="mt-3 flex-1 min-h-0">
         {loading ? (
           <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
         ) : error ? (
@@ -174,29 +194,58 @@ function LoginIpsTable({
           <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">No login events yet.</div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-neutral-200">
-            <div className="max-h-[260px] overflow-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-neutral-50 text-xs text-neutral-500">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">IP</th>
-                    <th className="px-3 py-2 font-medium">Country</th>
-                    <th className="px-3 py-2 text-right font-medium">Logins</th>
+            <table className="w-full text-left text-sm">
+              <thead className="bg-neutral-50 text-xs text-neutral-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">IP</th>
+                  <th className="px-3 py-2 font-medium">Country</th>
+                  <th className="px-3 py-2 text-right font-medium">Logins</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageGroups.map((g) => (
+                  <tr key={g.ip} className="border-t border-neutral-200">
+                    <td className="px-3 py-2 font-mono text-xs text-neutral-900">{g.ip}</td>
+                    <td className="px-3 py-2 text-neutral-700">{g.country || "Unknown"}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-neutral-900">{g.count}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {groups.map((g) => (
-                    <tr key={g.ip} className="border-t border-neutral-200">
-                      <td className="px-3 py-2 font-mono text-xs text-neutral-900">{g.ip}</td>
-                      <td className="px-3 py-2 text-neutral-700">{g.country || "Unknown"}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-neutral-900">{g.count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {!loading && !error && total > 0 && (
+        <div className="mt-3 flex items-center justify-between text-xs text-neutral-600">
+          <div>
+            Showing <span className="font-medium text-neutral-900">{start + 1}</span>–
+            <span className="font-medium text-neutral-900">{end}</span> of{" "}
+            <span className="font-medium text-neutral-900">{total}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={!canPrev}
+              className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-neutral-700 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <div className="tabular-nums">
+              {safePage + 1}/{totalPages}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={!canNext}
+              className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-neutral-700 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
