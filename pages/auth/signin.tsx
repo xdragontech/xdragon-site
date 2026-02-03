@@ -1,3 +1,4 @@
+import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/router";
@@ -101,8 +102,41 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-50 text-neutral-900">
-      <div className="mx-auto max-w-md px-4 py-16">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <Head>
+        <title>X Dragon • Sign in</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
+
+      {/* Header style matched to /admin/users (but branded as Library) */}
+      <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-stretch justify-between px-4 py-3">
+          <div className="flex items-start gap-4">
+            <div className="flex flex-col">
+              <img src="/logo.png" alt="X Dragon" className="h-11 w-auto" />
+              <div
+                className="mt-1 text-3xl font-semibold tracking-tight leading-none text-neutral-900"
+                style={{
+                  fontFamily:
+                    "Orbitron, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
+                }}
+              >
+                Library
+              </div>
+            </div>
+
+            <div className="flex h-11 items-center text-sm font-medium text-neutral-700">Sign in</div>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <div className="mx-auto max-w-md px-4 py-16">
         <h1 className="text-2xl font-bold">Sign in</h1>
         <p className="mt-2 text-sm text-neutral-600">Access the prompt library and tools.</p>
 
@@ -160,7 +194,8 @@ export default function SignInPage() {
             </div>
           </div>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </div>
   );
 }
