@@ -126,7 +126,17 @@ export default function SignInPage() {
           </div>
         )}
 
-        <form onSubmit={handlePasswordSignIn} className="mt-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        {/* Main site shortcut (above the top-right corner of the sign-in card) */}
+        <div className="mt-6 flex justify-end">
+          <a
+            href="/"
+            className="inline-flex items-center rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            Main Site
+          </a>
+        </div>
+
+        <form onSubmit={handlePasswordSignIn} className="mt-2 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <label className="block text-sm font-medium">Email</label>
           <input
             className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
