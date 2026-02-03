@@ -92,7 +92,7 @@ export default function ToolsPage({ email, prompts }: Props) {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="flex items-start gap-3">
-                <img src="/logo_symbol.png" alt="X Dragon" className="h-11 w-11" />
+                <img src="/logo.png" alt="X Dragon" className="h-11 w-11" />
                 <div className="leading-tight">
                   <div className="text-sm font-semibold tracking-wide">X Dragon</div>
                   <div className="font-[Orbitron] text-[1.6875rem] font-bold tracking-wider text-red-600">
