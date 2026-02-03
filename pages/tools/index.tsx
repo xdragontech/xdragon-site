@@ -93,7 +93,7 @@ export default function ToolsPage({ email, prompts }: Props) {
             <div className="flex items-center gap-4">
               <div className="flex flex-col items-start leading-none">
                 <img src="/logo.png" alt="X Dragon" className="h-12 w-auto" />
-                <div className="mt-1 font-[Orbitron] text-[2.25rem] font-bold tracking-wide text-red-600">Library</div>
+                <div className="mt-1 font-[Orbitron] text-[2.25rem] font-bold tracking-wide text-neutral-900">Library</div>
               </div>
               <div className="text-sm font-medium text-neutral-600">Prompt library</div>
             </div>
