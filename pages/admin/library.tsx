@@ -1,7 +1,6 @@
 // pages/admin/library.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Head from "next/head";
-import Image from "next/image";
 import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
@@ -44,27 +43,31 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           rel="stylesheet"
         />
       </Head>
-      <header className="border-b border-neutral-200 bg-white">
+      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col">
-              <Image src="/logo.png" alt="X Dragon" width={160} height={44} className="h-11 w-auto" priority />
+          <div className="flex items-start gap-4">
+            <div className="flex flex-col items-start">
+              <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
               <div
-                className="mt-1 text-sm font-semibold uppercase tracking-widest text-neutral-900"
-                style={{ fontFamily: "Orbitron, ui-sans-serif" }}
+                className="mt-1 font-semibold leading-none text-neutral-900"
+                style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
               >
                 Command
               </div>
             </div>
-            <div className="text-sm text-neutral-600">Library</div>
+            <div className="flex h-11 items-center">
+              <div className="text-sm text-neutral-600">Library</div>
+            </div>
           </div>
 
-          <button
-            onClick={() => void signOut({ callbackUrl: "/admin/signin" })}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-          >
-            Sign out
-          </button>
+            <div className="flex items-center gap-2">
+            <button
+              onClick={() => signOut({ callbackUrl: "/admin/signin" })}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
