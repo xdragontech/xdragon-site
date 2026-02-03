@@ -91,32 +91,23 @@ export default function ToolsPage({ email, prompts }: Props) {
         <div className="mx-auto max-w-6xl px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex items-start gap-3">
+              <div className="flex flex-col items-start leading-none">
                 <img src="/logo.png" alt="X Dragon" className="h-12 w-auto" />
-                <div className="leading-tight">
-                  <div className="text-sm font-semibold tracking-wide">X Dragon</div>
-                  <div className="font-[Orbitron] text-[2.25rem] font-bold tracking-wider text-black">
-                    Library
-                  </div>
-                </div>
+                <div className="mt-1 font-[Orbitron] text-[2.25rem] font-bold tracking-wide text-red-600">Library</div>
               </div>
-
-              <div className="hidden sm:block border-l border-neutral-200 pl-4">
-                <div className="text-sm text-neutral-600">Prompt library</div>
-              </div>
+              <div className="text-sm font-medium text-neutral-600">Prompt library</div>
             </div>
 
             <div className="flex items-center gap-2">
               <Link
                 href="/"
-                className="inline-flex rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
+                className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm hover:bg-neutral-50"
               >
                 Main site
               </Link>
-
               <button
-                onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
+                onClick={() => void signOut({ callbackUrl: '/auth/signin' })}
+                className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm hover:bg-neutral-50"
               >
                 Sign out
               </button>
