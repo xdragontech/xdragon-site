@@ -102,31 +102,23 @@ export default function SignInPage() {
 
   return (
     <main className="min-h-screen bg-neutral-50 text-neutral-900">
-      
-      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex flex-col items-start leading-none">
-                <img src="/logo.png" alt="X Dragon" className="h-10 w-auto" />
-                <div
-                  className="mt-1 text-[28px] font-semibold tracking-wide"
-                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" }}
-                >
-                  Library
-                </div>
-              </div>
-
-              <div className="ml-2 text-sm text-neutral-600">Library access</div>
+      <div className="mx-auto max-w-md px-4 py-14">
+        {/* Header (centered above form) */}
+        <div className="flex items-center justify-center gap-6">
+          <div className="flex flex-col items-start leading-none">
+            <img src="/logo.png" alt="X Dragon" className="h-10 w-auto" />
+            <div
+              className="mt-1 text-[28px] font-semibold tracking-wide"
+              style={{
+                fontFamily: "Orbitron, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
+              }}
+            >
+              Library
             </div>
-
-            <div className="text-sm text-neutral-500">Sign in</div>
           </div>
+
+          <div className="text-sm text-neutral-600">Library access</div>
         </div>
-      </header>
-<div className="mx-auto max-w-md px-4 py-16">
-        <h1 className="text-2xl font-bold">Sign in</h1>
-        <p className="mt-2 text-sm text-neutral-600">Access the prompt library and tools.</p>
 
         {error && (
           <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
