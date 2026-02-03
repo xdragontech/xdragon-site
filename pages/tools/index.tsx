@@ -92,10 +92,12 @@ export default function ToolsPage({ email, prompts }: Props) {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="flex flex-col items-start leading-none">
-                <img src="/logo.png" alt="X Dragon" className="h-12 w-auto" />
-                <div className="mt-1 font-[Orbitron] text-[2.25rem] font-bold tracking-wide text-neutral-900">Library</div>
+                <img src="/logo.png" alt="X Dragon" className="h-11 w-auto" />
+                <div className="mt-1 font-[Orbitron] text-[1.6875rem] font-bold tracking-wide text-neutral-900">Library</div>
               </div>
-              <div className="text-sm font-medium text-neutral-600">Prompt library</div>
+              <div className="flex h-11 items-center">
+                <div className="text-sm font-medium text-neutral-600">Prompt library</div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -103,7 +105,7 @@ export default function ToolsPage({ email, prompts }: Props) {
                 href="/"
                 className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm hover:bg-neutral-50"
               >
-                Main site
+                Main Site
               </Link>
               <button
                 onClick={() => void signOut({ callbackUrl: '/auth/signin' })}
