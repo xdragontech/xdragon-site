@@ -10,6 +10,7 @@ import { requireUser } from "../../lib/requireUser";
 type PromptItem = {
   id: string;
   title: string;
+  description?: string | null;
   category: string;
   prompt: string;
 };
@@ -27,12 +28,23 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 export default function ToolsPage({ email, prompts }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("All");
+  // Collapsed by default: IDs present in this set are expanded.
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
 
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const p of prompts) set.add(p.category);
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [prompts]);
+
+  function toggleOpen(id: string) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -139,14 +151,32 @@ export default function ToolsPage({ email, prompts }: Props) {
         </div>
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {filtered.map((p) => (
+          {filtered.map((p) => {
+          const isOpen = openIds.has(p.id);
+          return (
             <div key={p.id} className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
-              <div className="text-xs font-semibold text-neutral-500">{p.category}</div>
-              <h2 className="mt-2 text-lg font-semibold">{p.title}</h2>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-neutral-500">{p.category}</div>
+                  <h2 className="mt-2 text-lg font-semibold">{p.title}</h2>
+                  {p.description ? <div className="mt-1 text-sm text-neutral-600">{p.description}</div> : null}
+                </div>
 
-              <pre className="mt-4 whitespace-pre-wrap rounded-2xl bg-neutral-50 border border-neutral-200 p-4 text-sm text-neutral-800">
-                {p.prompt}
-              </pre>
+                <button
+                  type="button"
+                  onClick={() => toggleOpen(p.id)}
+                  className="shrink-0 rounded-2xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+                  aria-expanded={isOpen}
+                >
+                  {isOpen ? "Collapse" : "Expand"}
+                </button>
+              </div>
+
+              {isOpen ? (
+                <pre className="mt-4 whitespace-pre-wrap rounded-2xl bg-neutral-50 border border-neutral-200 p-4 text-sm text-neutral-800">
+                  {p.prompt}
+                </pre>
+              ) : null}
 
               <button
                 className="mt-4 rounded-2xl bg-black text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
@@ -157,7 +187,8 @@ export default function ToolsPage({ email, prompts }: Props) {
                 Copy prompt
               </button>
             </div>
-          ))}
+          );
+        })}
         </div>
 
         {filtered.length === 0 && (
@@ -190,6 +221,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const prompts: PromptItem[] = rows.map((p) => ({
     id: p.id,
     title: p.title,
+    description: (p as any).description ?? null,
     category: p.category?.name || "Uncategorized",
     prompt: p.content,
   }));
