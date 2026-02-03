@@ -49,37 +49,45 @@ export default function ToolsPage({ email, prompts }: Props) {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="border-b border-neutral-800 bg-neutral-950 text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-4">
+      <Head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet" />
+      </Head>
+      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-6">
             <div className="flex flex-col items-start leading-none">
-              <img src="/logo.png" alt="X Dragon" className="h-8 w-auto" />
+              <img
+                src="/logo.png"
+                alt="X Dragon"
+                className="h-11 w-auto"
+                style={{ imageRendering: "auto" }}
+              />
               <div
-                className="mt-6 tracking-wider text-white/90"
-                style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.25rem" }}
+                className="mt-2 tracking-wider text-neutral-900"
+                style={{ fontFamily: "Orbitron, system-ui, sans-serif", fontSize: "1.6875rem" }}
               >
                 Library
               </div>
             </div>
 
-            <div className="min-w-0">
-              <div className="truncate text-lg font-semibold sm:text-xl">Prompt Library</div>
-              {email ? (
-                <div className="mt-0.5 truncate text-xs text-white/60">Signed in as {email}</div>
-              ) : (
-                <div className="mt-0.5 truncate text-xs text-white/60">Loading session…</div>
-              )}
+            <div className="flex h-11 min-w-0 items-center">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-neutral-900">Prompt library</div>
+                <div className="mt-0.5 truncate text-xs text-neutral-500">
+                  {email ? `Signed in as ${email}` : "Loading session…"}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center">
-            <button
-              onClick={() => void signOut({ callbackUrl: "/auth/signin" })}
-              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-            >
-              Sign out
-            </button>
-          </div>
+          <button
+            onClick={() => void signOut({ callbackUrl: "/auth/signin" })}
+            className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
