@@ -49,17 +49,36 @@ export default function ToolsPage({ email, prompts }: Props) {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div>
-            <div className="text-sm text-neutral-500">Signed in as</div>
-            <div className="text-sm font-semibold">{email}</div>
+      <header className="border-b border-neutral-800 bg-neutral-950 text-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-5 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex flex-col items-start leading-none">
+              <img src="/logo.png" alt="X Dragon" className="h-8 w-auto" />
+              <div
+                className="mt-2 tracking-wider text-white/90"
+                style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+              >
+                Library
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="truncate text-lg font-semibold sm:text-xl">Prompt Library</div>
+              {email ? (
+                <div className="mt-0.5 truncate text-xs text-white/60">Signed in as {email}</div>
+              ) : (
+                <div className="mt-0.5 truncate text-xs text-white/60">Loading session…</div>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <a href="/" className="text-sm font-medium hover:underline">Back to site</a>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <a href="/" className="text-sm font-medium text-white/80 hover:text-white hover:underline">
+              Back to site
+            </a>
             <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-2xl bg-black text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
+              onClick={() => void signOut({ callbackUrl: "/auth/signin" })}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
             >
               Sign out
             </button>
@@ -69,7 +88,7 @@ export default function ToolsPage({ email, prompts }: Props) {
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
         <div className="max-w-2xl">
-          <h1 className="text-3xl sm:text-4xl font-bold">Prompt Library</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold">Browse prompts</h1>
           <p className="mt-3 text-neutral-600">
             Copy-and-run prompts designed for startups to mid-market teams. Tweak to match your exact context.
           </p>
