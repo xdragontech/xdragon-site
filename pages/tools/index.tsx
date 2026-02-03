@@ -55,8 +55,8 @@ export default function ToolsPage({ email, prompts }: Props) {
             <div className="flex flex-col items-start leading-none">
               <img src="/logo.png" alt="X Dragon" className="h-8 w-auto" />
               <div
-                className="mt-2 tracking-wider text-white/90"
-                style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+                className="mt-6 tracking-wider text-white/90"
+                style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.25rem" }}
               >
                 Library
               </div>
@@ -72,10 +72,7 @@ export default function ToolsPage({ email, prompts }: Props) {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <a href="/" className="text-sm font-medium text-white/80 hover:text-white hover:underline">
-              Back to site
-            </a>
+          <div className="flex shrink-0 items-center">
             <button
               onClick={() => void signOut({ callbackUrl: "/auth/signin" })}
               className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
