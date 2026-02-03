@@ -35,8 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const prompts = await (prisma as any).prompt.findMany({
         where,
+        include: { category: true },
         orderBy: [{ updatedAt: "desc" }],
-        take: 250,
+        take: 500,
       });
 
       return res.status(200).json({ ok: true, prompts });
@@ -48,6 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const content = typeof body.content === "string" ? body.content.trim() : "";
       const description = typeof body.description === "string" ? body.description.trim() : null;
       const status = typeof body.status === "string" ? body.status : "DRAFT";
+      const categoryId = typeof body.categoryId === "string" ? body.categoryId : null;
 
       if (!title) return res.status(400).json({ ok: false, error: "Title is required" });
       if (!content) return res.status(400).json({ ok: false, error: "Content is required" });
@@ -58,7 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           content,
           description,
           status,
+          categoryId,
         },
+        include: { category: true },
       });
 
       return res.status(200).json({ ok: true, prompt: created });

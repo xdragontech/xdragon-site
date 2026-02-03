@@ -1,4 +1,4 @@
-// pages/api/admin/library/prompts/[id].ts
+// pages/api/admin/library/categories/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
@@ -14,6 +14,15 @@ function isAdminSession(session: any) {
   return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
 }
 
+function slugify(input: string) {
+  return String(input || "")
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions as any);
   if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -24,30 +33,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (req.method === "PUT") {
       const body = req.body || {};
-      const data: any = {};
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!name) return res.status(400).json({ ok: false, error: "Name is required" });
 
-      if (typeof body.title === "string") data.title = body.title.trim();
-      if (typeof body.content === "string") data.content = body.content.trim();
-      if (typeof body.description === "string") data.description = body.description.trim();
-      if (body.description === null) data.description = null;
-      if (typeof body.status === "string") data.status = body.status;
-      if (body.categoryId === null) data.categoryId = null;
-      if (typeof body.categoryId === "string") data.categoryId = body.categoryId;
+      const base = slugify(name) || "category";
+      let slug = base;
+      for (let i = 2; i < 100; i++) {
+        const exists = await (prisma as any).category.findUnique({ where: { slug } });
+        if (!exists || exists.id === id) break;
+        slug = `${base}-${i}`;
+      }
 
-      if ("title" in data && !data.title) return res.status(400).json({ ok: false, error: "Title is required" });
-      if ("content" in data && !data.content) return res.status(400).json({ ok: false, error: "Content is required" });
-
-      const updated = await (prisma as any).prompt.update({
+      const updated = await (prisma as any).category.update({
         where: { id },
-        data,
-        include: { category: true },
+        data: { name, slug },
       });
 
-      return res.status(200).json({ ok: true, prompt: updated });
+      return res.status(200).json({ ok: true, category: updated });
     }
 
     if (req.method === "DELETE") {
-      await (prisma as any).prompt.delete({ where: { id } });
+      await (prisma as any).category.delete({ where: { id } });
       return res.status(200).json({ ok: true });
     }
 
