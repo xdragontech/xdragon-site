@@ -142,6 +142,20 @@ function SmallModal({
 
 export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
+
+  const [loggedInAs, setLoggedInAs] = useState<string>("");
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => {
+        const u = s?.user;
+        const label = (u?.name || u?.email || "").toString();
+        setLoggedInAs(label);
+      })
+      .catch(() => {});
+  }, []);
+
   const isDashboard = router.pathname === "/admin/users";
   const isAccounts = router.pathname === "/admin/accounts";
   const isLibrary = router.pathname === "/admin/library";
@@ -429,6 +443,9 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
             >
               Sign out
             </button>
+            {loggedInAs ? (
+              <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
+            ) : null}
           </div>
         </div>
       </header>
