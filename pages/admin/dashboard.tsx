@@ -353,6 +353,222 @@ function LoginIpsTable({
   );
 }
 
+
+type GeoMode = "signups" | "logins";
+
+type CountryCount = { country: string; count: number };
+
+function normalizeCountryLabel(c: string) {
+  const s = (c || "").toString().trim();
+  if (!s) return "Unknown";
+  // Normalize a few common variants
+  const lower = s.toLowerCase();
+  if (lower === "united states" || lower === "usa" || lower === "us") return "United States";
+  if (lower === "united kingdom" || lower === "uk" || lower === "gb") return "United Kingdom";
+  if (lower === "uae") return "United Arab Emirates";
+  return s;
+}
+
+function aggregateCountries(rows: Array<{ country?: string | null; count?: number | null }>): CountryCount[] {
+  const map = new Map<string, number>();
+  for (const r of rows || []) {
+    const key = normalizeCountryLabel(r?.country || "Unknown");
+    const v = Number(r?.count || 0);
+    map.set(key, (map.get(key) || 0) + (Number.isFinite(v) ? v : 0));
+  }
+  return Array.from(map.entries())
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// Very lightweight "continent-ish" bucketing (not perfect, but stable and dependency-free).
+function bucketToRegion(country: string): "NA" | "SA" | "EU" | "AF" | "AS" | "OC" | "UN" {
+  const c = country.toLowerCase();
+  // North America
+  if (
+    ["canada", "united states", "mexico", "guatemala", "honduras", "el salvador", "nicaragua", "costa rica", "panama", "jamaica", "haiti", "dominican", "cuba", "bahamas"].some((k) => c.includes(k))
+  ) return "NA";
+  // South America
+  if (
+    ["brazil", "argentina", "chile", "colombia", "peru", "venezuela", "ecuador", "bolivia", "paraguay", "uruguay", "guyana", "suriname"].some((k) => c.includes(k))
+  ) return "SA";
+  // Europe
+  if (
+    ["united kingdom", "ireland", "france", "germany", "spain", "portugal", "italy", "netherlands", "belgium", "switzerland", "austria", "sweden", "norway", "denmark", "finland", "poland", "czech", "slovakia", "hungary", "romania", "bulgaria", "greece", "ukraine", "russia"].some((k) => c.includes(k))
+  ) return "EU";
+  // Africa
+  if (
+    ["south africa", "nigeria", "kenya", "egypt", "morocco", "algeria", "tunisia", "ghana", "ethiopia", "uganda", "tanzania", "angola"].some((k) => c.includes(k))
+  ) return "AF";
+  // Oceania
+  if (["australia", "new zealand", "papua", "fiji"].some((k) => c.includes(k))) return "OC";
+  // Asia (fallback for common)
+  if (
+    ["india", "china", "japan", "korea", "singapore", "indonesia", "malaysia", "philippines", "thailand", "vietnam", "pakistan", "bangladesh", "sri lanka", "israel", "saudi", "turkey", "uae", "united arab emirates"].some((k) => c.includes(k))
+  ) return "AS";
+  return "UN";
+}
+
+function sumByRegion(countries: CountryCount[]) {
+  const sums = { NA: 0, SA: 0, EU: 0, AF: 0, AS: 0, OC: 0, UN: 0 };
+  for (const row of countries) {
+    const r = bucketToRegion(row.country);
+    sums[r] += row.count;
+  }
+  return sums;
+}
+
+function heatFill(value: number, max: number) {
+  // Neutral -> red scale without specifying custom palettes.
+  if (!max || max <= 0) return "rgba(0,0,0,0.05)";
+  const t = Math.max(0, Math.min(1, value / max));
+  const a = 0.12 + t * 0.68; // 0.12..0.80
+  return `rgba(220, 38, 38, ${a.toFixed(3)})`;
+}
+
+function WorldHeatMapCard({
+  mode,
+  onModeChange,
+  periodLabel,
+  countries,
+  loading,
+  error,
+}: {
+  mode: GeoMode;
+  onModeChange: (m: GeoMode) => void;
+  periodLabel: string;
+  countries: CountryCount[];
+  loading: boolean;
+  error: string | null;
+}) {
+  const top = countries.slice(0, 6);
+  const regions = sumByRegion(countries);
+  const maxRegion = Math.max(1, regions.NA, regions.SA, regions.EU, regions.AF, regions.AS, regions.OC, regions.UN);
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-neutral-900">Global activity heatmap</div>
+          <div className="mt-1 text-xs text-neutral-500">
+            Based on {periodLabel}. Toggle between signups and logins.
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {([
+            { key: "signups" as const, label: "New signups" },
+            { key: "logins" as const, label: "Logins" },
+          ] as const).map((opt) => {
+            const active = mode === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => onModeChange(opt.key)}
+                className={
+                  active
+                    ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
+                    : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                }
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        {loading ? (
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
+        ) : error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        ) : mode === "signups" && countries.length === 0 ? (
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+            Signups geo breakdown isn’t available yet from the metrics API. (Logins works immediately via IP geo.)
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-9">
+              {/* Stylized world map (continent regions) */}
+              <svg viewBox="0 0 1000 420" className="h-[240px] w-full rounded-xl border border-neutral-200 bg-neutral-950">
+                {/* Ocean grid */}
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <line key={`h${i}`} x1={0} y1={i * 42} x2={1000} y2={i * 42} stroke="rgba(255,255,255,0.06)" />
+                ))}
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <line key={`v${i}`} x1={i * 100} y1={0} x2={i * 100} y2={420} stroke="rgba(255,255,255,0.05)" />
+                ))}
+
+                {/* Continents (very simplified shapes) */}
+                <path
+                  d="M110,110 C140,80 240,70 305,95 C360,115 410,160 380,205 C350,250 280,250 240,235 C200,220 170,250 140,235 C110,220 70,160 110,110 Z"
+                  fill={heatFill(regions.NA, maxRegion)}
+                  stroke="rgba(255,255,255,0.18)"
+                />
+                <path
+                  d="M300,235 C345,220 380,250 370,295 C360,345 330,370 300,385 C270,400 245,370 255,330 C265,290 265,260 300,235 Z"
+                  fill={heatFill(regions.SA, maxRegion)}
+                  stroke="rgba(255,255,255,0.18)"
+                />
+                <path
+                  d="M470,105 C510,80 575,80 615,95 C650,110 660,145 630,160 C595,175 545,160 520,175 C495,190 450,155 470,105 Z"
+                  fill={heatFill(regions.EU, maxRegion)}
+                  stroke="rgba(255,255,255,0.18)"
+                />
+                <path
+                  d="M505,175 C545,165 595,180 625,205 C660,235 665,285 635,315 C600,350 545,340 510,315 C480,295 465,245 485,210 C495,190 490,180 505,175 Z"
+                  fill={heatFill(regions.AF, maxRegion)}
+                  stroke="rgba(255,255,255,0.18)"
+                />
+                <path
+                  d="M635,150 C680,120 775,115 855,145 C910,165 940,205 900,235 C860,265 800,250 770,270 C735,295 690,285 660,260 C635,235 600,190 635,150 Z"
+                  fill={heatFill(regions.AS, maxRegion)}
+                  stroke="rgba(255,255,255,0.18)"
+                />
+                <path
+                  d="M820,295 C855,275 910,280 935,300 C960,320 945,355 910,365 C875,375 845,360 825,340 C805,320 800,305 820,295 Z"
+                  fill={heatFill(regions.OC, maxRegion)}
+                  stroke="rgba(255,255,255,0.18)"
+                />
+
+                {/* Legend label */}
+                <text x="18" y="28" fill="rgba(255,255,255,0.75)" fontSize="14" fontFamily="ui-sans-serif, system-ui">
+                  {mode === "signups" ? "New signups" : "Logins"} by region
+                </text>
+              </svg>
+            </div>
+
+            <div className="lg:col-span-3">
+              <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                <div className="text-xs font-semibold text-neutral-900">Top countries</div>
+                <div className="mt-2 space-y-2">
+                  {top.length ? (
+                    top.map((r) => (
+                      <div key={r.country} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="truncate text-neutral-700">{r.country}</div>
+                        <div className="rounded-lg bg-neutral-100 px-2 py-1 text-xs font-semibold text-neutral-900">
+                          {r.count}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-neutral-600">No geo data yet.</div>
+                  )}
+                </div>
+                <div className="mt-3 text-xs text-neutral-500">
+                  This is a lightweight heatmap. For country-level shading, we can add a topojson map dependency and use the same data.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 export default function AdminDashboardPage(props: DashboardProps) {
   const [loggedInAs, setLoggedInAs] = useState<string>("");
 
@@ -371,6 +587,15 @@ export default function AdminDashboardPage(props: DashboardProps) {
   const [metrics, setMetrics] = useState<MetricsOk>(() => emptyMetrics("today"));
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
+
+
+  const [geoMode, setGeoMode] = useState<GeoMode>("logins");
+
+  // Geo breakdown:
+  // - logins: derived from ipGroups immediately
+  // - signups: supported if the metrics API returns `signupCountries` (optional), otherwise empty
+  const loginCountries = aggregateCountries((metrics?.ok ? metrics.ipGroups : []) as any);
+  const signupCountries = aggregateCountries(((metrics as any)?.signupCountries || []) as any);
 
   async function loadMetrics(nextPeriod: MetricsPeriod) {
     setMetricsLoading(true);
@@ -537,7 +762,21 @@ export default function AdminDashboardPage(props: DashboardProps) {
                       </>
                     )}
                   </div>
+                
+                {/* World heatmap (uses same period as chart) */}
+                <div className="mt-4">
+                  <WorldHeatMapCard
+                    mode={geoMode}
+                    onModeChange={setGeoMode}
+                    periodLabel={
+                      period === "today" ? "today" : period === "7d" ? "the last 7 days" : "this month"
+                    }
+                    countries={geoMode === "logins" ? loginCountries : signupCountries}
+                    loading={metricsLoading}
+                    error={metricsError}
+                  />
                 </div>
+</div>
               </div>
 
               <div className="lg:col-span-3">
