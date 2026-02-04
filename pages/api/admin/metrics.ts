@@ -182,9 +182,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     // eslint-disable-next-line no-await-in-loop
     const country = await countryForIp(ip);
     ipGroups.push({ ip, country, count });
-
+  }
   // Countries for signups:
-  // User model doesn't store a signup IP, so we approximate using the earliest LoginEvent IP
+  // User model doesn't store a signup IP. We approximate using the earliest LoginEvent IP
   // for users created within the selected window.
   const signupCountriesMap = new Map<string, number>();
   try {
@@ -217,14 +217,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       signupCountriesMap.set(key, (signupCountriesMap.get(key) || 0) + 1);
     }
   } catch {
-    // ignore; will return empty
+    // ignore; returns empty
   }
 
-  const signupCountries = Array.from(signupCountriesMap.entries())
+  const signupCountries: { country: string | null; count: number }[] = Array.from(signupCountriesMap.entries())
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count);
 
-  }
+
 
   return res.status(200).json({
     ok: true,
