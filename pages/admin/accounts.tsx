@@ -143,6 +143,22 @@ async function exportXls(rows: UserRow[]) {
 
 export default function AdminAccountsPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
+
+  const [loggedInAs, setLoggedInAs] = useState<string>("");
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => {
+        const u = s?.user;
+        const email = (u?.email || "").toString();
+        const name = (u?.name || "").toString();
+        const username = email ? email.split("@")[0] : (name ? name.split(" ")[0] : "");
+        setLoggedInAs(username);
+      })
+      .catch(() => {});
+  }, []);
+
   const isDashboard = router.pathname === "/admin/users";
   const isAccounts = router.pathname === "/admin/accounts";
   const isLibrary = router.pathname === "/admin/library";
@@ -248,12 +264,17 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end">
             <button
               onClick={() => signOut({ callbackUrl: "/admin/signin" })}
               className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
             >
               Sign out
             </button>
+            {loggedInAs ? (
+              <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
+            ) : null}
+          </div>
           </div>
         </div>
       </header>
