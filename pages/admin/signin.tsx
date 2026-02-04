@@ -69,7 +69,7 @@ const callbackUrl = useMemo(() => {
     const e2 = email.trim().toLowerCase();
     const p2 = password.trim();
     if (!e2 || !p2) {
-      setError("Please enter both email and password.");
+      setError("Please enter your email/username and password.");
       return;
     }
 
@@ -149,11 +149,11 @@ const callbackUrl = useMemo(() => {
                 <label className="block text-sm font-medium text-neutral-700">Email</label>
                 <input
                   className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900"
-                  type="email"
-                  autoComplete="email"
+                  type="text"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@xdragon.tech"
+                  placeholder="you@xdragon.tech or xdadmin"
                 />
               </div>
 
