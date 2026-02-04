@@ -142,22 +142,7 @@ function SmallModal({
 
 export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
-
-  const [loggedInAs, setLoggedInAs] = useState<string>("");
-
-  useEffect(() => {
-    fetch("/api/auth/session")
-      .then((r) => r.json())
-      .then((s) => {
-        const u = s?.user;
-        const label = (u?.name || u?.email || "").toString();
-        setLoggedInAs(label);
-      })
-      .catch(() => {});
-  }, []);
-
   const isDashboard = router.pathname === "/admin/users";
-  const isAccounts = router.pathname === "/admin/accounts";
   const isLibrary = router.pathname === "/admin/library";
 
   const [loading, setLoading] = useState(true);
@@ -439,13 +424,10 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           <div className="flex items-center gap-2">
             <button
               onClick={() => signOut({ callbackUrl: "/admin/signin" })}
-              className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
             >
               Sign out
             </button>
-            {loggedInAs ? (
-              <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
-            ) : null}
           </div>
         </div>
       </header>
@@ -464,16 +446,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 >
                   Dashboard
                 </Link>
-                                <Link
-                  href="/admin/accounts"
-                  className={
-                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
-                    (isAccounts ? " ring-2 ring-neutral-900/20" : "")
-                  }
-                >
-                  Accounts
-                </Link>
-<Link
+                <Link
                   href="/admin/library"
                   className={
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
