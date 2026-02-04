@@ -298,7 +298,9 @@ function LoginIpsTable({
         ) : error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         ) : !groups.length ? (
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">No login events yet.</div>
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+            No login events yet.
+          </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-neutral-200">
             <table className="w-full text-left text-sm">
@@ -330,9 +332,9 @@ function LoginIpsTable({
             <span className="font-medium text-neutral-900">{end}</span> of{" "}
             <span className="font-medium text-neutral-900">{total}</span>
           </div>
+
           <div className="flex items-center gap-2">
-            <div className="flex flex-col items-end">
-              <button
+            <button
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={!canPrev}
