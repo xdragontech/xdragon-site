@@ -74,19 +74,15 @@ function arraysToPoints(m: MetricsOk): MetricsPoint[] {
   }));
 }
 
-function stripDiacritics(s: string) {
-  // Remove accent marks so "Côte d'Ivoire" matches "Cote dIvoire"
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
 function normalizeKey(name: string) {
-  const base = stripDiacritics((name || "").toString().trim().toLowerCase());
-  return base
+  return (name || "")
+    .toString()
+    .trim()
+    .toLowerCase()
     .replace(/\./g, "")
     .replace(/\s+/g, " ")
     .replace(/[’'"]/g, "")
     .replace(/\(.*?\)/g, "")
-    .replace(/&/g, "and")
     .trim();
 }
 
@@ -115,12 +111,11 @@ function canonicalCountryKey(name: string) {
 }
 
 function heatFill(value: number, max: number) {
-  // Visible on white: zero gets faint neutral, positives get red with gamma scaling.
-  if (!max || max <= 0) return "rgba(0,0,0,0.04)";
-  if (!value || value <= 0) return "rgba(0,0,0,0.03)";
+  // White background with red shading. Gamma curve makes differences visible.
+  if (!max || max <= 0) return "rgba(220, 38, 38, 0.00)";
   const raw = Math.max(0, Math.min(1, value / max));
   const t = Math.pow(raw, 0.55);
-  const a = 0.10 + t * 0.80; // 0.10..0.90
+  const a = value <= 0 ? 0.0 : 0.08 + t * 0.77; // 0.08..0.85
   return `rgba(220, 38, 38, ${a.toFixed(3)})`;
 }
 
@@ -237,12 +232,9 @@ function CountryWorldMap({ data, title }: { data: CountryMapDatum[]; title: stri
         // Build a stable lookup from our data
         const valueByName = new Map<string, number>();
         for (const row of data || []) {
-          const rawName = (row.name || "").toString();
-          const k1 = canonicalCountryKey(rawName);
-          const k2 = normalizeKey(rawName);
-          const v = Number(row.count) || 0;
-          if (k1) valueByName.set(k1, (valueByName.get(k1) || 0) + v);
-          if (k2) valueByName.set(k2, (valueByName.get(k2) || 0) + v);
+          const key = canonicalCountryKey(row.name);
+          if (!key) continue;
+          valueByName.set(key, (valueByName.get(key) || 0) + (Number(row.count) || 0));
         }
 
         const values = Array.from(valueByName.values());
@@ -256,9 +248,8 @@ function CountryWorldMap({ data, title }: { data: CountryMapDatum[]; title: stri
         const out: Array<{ d: string; name: string; value: number }> = [];
         for (const f of features) {
           const name = ((f as any)?.properties?.name || "Unknown").toString();
-          const key1 = canonicalCountryKey(name);
-          const key2 = normalizeKey(name);
-          const value = (key1 && valueByName.get(key1)) || (key2 && valueByName.get(key2)) || 0;
+          const key = canonicalCountryKey(name);
+          const value = valueByName.get(key) || 0;
           const d = pathGen(f);
           if (d) out.push({ d, name, value });
         }
@@ -391,6 +382,7 @@ function WorldHeatMapCard({
   const counts = countries.map((c) => c.count || 0);
   const legendMin = counts.length ? Math.min(...counts) : 0;
   const legendMax = counts.length ? Math.max(...counts) : 0;
+  const legendMid = Math.round((legendMin + legendMax) / 2);
 
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-4">
@@ -440,6 +432,7 @@ function WorldHeatMapCard({
         </div>
 
         <div className="lg:col-span-3">
+          {/* Counts box: keep exact formatting */}
           <div className="rounded-xl border border-neutral-200 bg-white p-3">
             <div className="text-xs font-semibold text-neutral-900">Top countries</div>
             <div className="mt-2 space-y-2">
@@ -447,28 +440,39 @@ function WorldHeatMapCard({
                 top.map((r) => (
                   <div key={r.country} className="flex items-center justify-between gap-2 text-sm">
                     <div className="truncate text-neutral-700">{r.country}</div>
-                    <div className="rounded-lg bg-neutral-100 px-2 py-1 text-xs font-semibold text-neutral-900">{r.count}</div>
-
-          <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
-            <div className="text-xs font-semibold text-neutral-900">Legend</div>
-            <div className="mt-2 flex items-center gap-3">
-              <div className="h-3 w-full rounded-full border border-neutral-200 bg-gradient-to-r from-neutral-100 to-red-600" />
-              <div className="shrink-0 text-xs text-neutral-600">
-                <span className="font-semibold text-neutral-900">{legendMin}</span>
-                <span className="mx-1">–</span>
-                <span className="font-semibold text-neutral-900">{legendMax}</span>
-              </div>
-            </div>
-            <div className="mt-2 text-xs text-neutral-500">
-              Darker red = higher {mode === "signups" ? "signups" : "logins"}.
-            </div>
-          </div>
-
-        </div>
+                    <div className="rounded-lg bg-neutral-100 px-2 py-1 text-xs font-semibold text-neutral-900">
+                      {r.count}
+                    </div>
+                  </div>
                 ))
               ) : (
                 <div className="text-sm text-neutral-600">No geo data yet.</div>
               )}
+            </div>
+          </div>
+
+          {/* Legend box: separate, vertical scale */}
+          <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
+            <div className="text-xs font-semibold text-neutral-900">Legend</div>
+            <div className="mt-3 flex items-start gap-3">
+              <div className="relative h-32 w-4 overflow-hidden rounded-full border border-neutral-200 bg-gradient-to-b from-red-600 to-neutral-100" />
+              <div className="flex h-32 flex-col justify-between text-xs text-neutral-600">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 rounded bg-red-600/70" />
+                  <span className="font-semibold text-neutral-900">{legendMax}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 rounded bg-red-300/60" />
+                  <span className="font-semibold text-neutral-900">{legendMid}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 rounded bg-neutral-200" />
+                  <span className="font-semibold text-neutral-900">{legendMin}</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 text-xs text-neutral-500">
+              Darker red = higher {mode === "signups" ? "signups" : "logins"}.
             </div>
           </div>
         </div>
