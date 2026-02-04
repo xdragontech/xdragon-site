@@ -130,6 +130,111 @@ function fmtDate(iso?: string | null) {
   return d.toLocaleString();
 }
 
+type ExportField<T> = { header: string; get: (row: T) => any };
+
+function stamp() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildExportFields(rows: any[]): ExportField<any>[] {
+  // Base fields we care about now (easy to reorder/extend later)
+  const base: ExportField<any>[] = [
+    { header: "id", get: (u) => u.id },
+    { header: "name", get: (u) => u.name ?? "" },
+    { header: "email", get: (u) => u.email ?? "" },
+    { header: "role", get: (u) => u.role ?? "" },
+    { header: "status", get: (u) => u.status ?? "" },
+    { header: "createdAt", get: (u) => u.createdAt ?? "" },
+    { header: "lastLoginAt", get: (u) => u.lastLoginAt ?? "" },
+  ];
+
+  // Future-proof: include any additional primitive fields present on the row objects
+  const seen = new Set(base.map((f) => f.header));
+  for (const r of rows) {
+    if (!r || typeof r !== "object") continue;
+    for (const k of Object.keys(r)) {
+      if (seen.has(k)) continue;
+      const v = (r as any)[k];
+      const isPrimitive =
+        v == null || typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+      if (!isPrimitive) continue;
+      base.push({ header: k, get: (u) => (u as any)[k] ?? "" });
+      seen.add(k);
+    }
+  }
+
+  return base;
+}
+
+function toCsv(rows: any[], fields: ExportField<any>[]) {
+  const esc = (v: any) => {
+    const s = String(v ?? "");
+    // Wrap in quotes and escape quotes by doubling
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+
+  const header = fields.map((f) => esc(f.header)).join(",");
+  const lines = rows.map((r) => fields.map((f) => esc(f.get(r))).join(","));
+  return [header, ...lines].join("\n");
+}
+
+function exportUsersCsv(rows: any[]) {
+  const fields = buildExportFields(rows);
+  const csv = toCsv(rows, fields);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  downloadBlob(blob, `customers-${stamp()}.csv`);
+}
+
+function exportUsersXls(rows: any[]) {
+  // No external deps: generate an Excel-readable HTML table and download as .xls
+  const fields = buildExportFields(rows);
+
+  const escape = (v: any) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const header = fields.map((f) => `<th>${escape(f.header)}</th>`).join("");
+  const body = rows
+    .map((u) => {
+      const tds = fields.map((f) => `<td>${escape(f.get(u))}</td>`).join("");
+      return `<tr>${tds}</tr>`;
+    })
+    .join("");
+
+  const htmlDoc = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+</head>
+<body>
+<table border="1">
+<thead><tr>${header}</tr></thead>
+<tbody>${body}</tbody>
+</table>
+</body>
+</html>`;
+
+  const blob = new Blob([htmlDoc], { type: "application/vnd.ms-excel;charset=utf-8" });
+  downloadBlob(blob, `customers-${stamp()}.xls`);
+}
+
+
 function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -227,7 +332,7 @@ function LoginIpsTable({
           </div>
           <div className="flex items-center gap-2">
             <div className="flex flex-col items-end">
-            <button
+              <button
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={!canPrev}
@@ -262,10 +367,8 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((s) => {
-        const u = s?.user;
-        const email = (u?.email || "").toString();
-        const name = (u?.name || "").toString();
-        const username = email ? email.split("@")[0] : (name ? name.split(" ")[0] : "");
+        const email = (s?.user?.email || "").toString();
+        const username = email ? email.split("@")[0] : "";
         setLoggedInAs(username);
       })
       .catch(() => {});
@@ -443,10 +546,10 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
             >
               Sign out
             </button>
-            {loggedInAs ? (
-              <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
-            ) : null}
-          </div>
+              {loggedInAs ? (
+                <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
@@ -465,16 +568,17 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
           >
           Dashboard
           </Link>
-          <Link
-          href="/admin/accounts"
-          className={
-          "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800" +
-          (isAccounts ? " ring-2 ring-neutral-900/20" : "")
-          }
-          >
-          Accounts
-          </Link>
-          <Link
+          
+                <Link
+                  href="/admin/accounts"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isAccounts ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Accounts
+                </Link>
+<Link
           href="/admin/library"
           className={
           "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800" +
@@ -519,15 +623,15 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
             </button>
             );
             })}
-                      <button
-                        onClick={() => void loadMetrics(period)}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                        disabled={metricsLoading}
-                        title="Refresh metrics"
-                      >
-                        Refresh
-                      </button>
-                    </div>
+            <button
+            onClick={() => void loadMetrics(period)}
+            className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+            disabled={metricsLoading}
+            title="Refresh chart & table"
+            >
+            Refresh
+            </button>
+            </div>
             </div>
             
             <div className="mt-3">
@@ -576,6 +680,20 @@ export default function AdminUsersPage(props: InferGetServerSidePropsType<typeof
             >
             Refresh
             </button>
+            <button
+              onClick={() => exportUsersCsv(filtered)}
+              className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={() => exportUsersXls(filtered)}
+              className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+              title="Downloads an Excel-readable .xls file"
+            >
+              Export XLS
+            </button>
+
             </div>
             
             <div className="text-sm text-neutral-500">
