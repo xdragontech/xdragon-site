@@ -95,7 +95,7 @@ function MiniLineChart({ points }: { points: MetricsPoint[] }) {
         {/* subtle grid */}
         {[...Array(5)].map((_, i) => {
           const y = (h * (i + 1)) / 6;
-          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(220,38,38,0.08)" strokeWidth="1" />;
+          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(0,0,0,0.06)" strokeWidth="1" />;
         })}
 
         {hasData ? (
@@ -419,10 +419,10 @@ function sumByRegion(countries: CountryCount[]) {
 }
 
 function heatFill(value: number, max: number) {
-  // Neutral -> red scale without specifying custom palettes.
-  if (!max || max <= 0) return "rgba(0,0,0,0.05)";
+  // White background with red shading; keep a visible minimum so regions always render.
+  if (!max || max <= 0) return "rgba(220, 38, 38, 0.10)";
   const t = Math.max(0, Math.min(1, value / max));
-  const a = 0.12 + t * 0.68; // 0.12..0.80
+  const a = 0.10 + t * 0.55; // 0.10..0.65
   return `rgba(220, 38, 38, ${a.toFixed(3)})`;
 }
 
@@ -494,46 +494,72 @@ function WorldHeatMapCard({
               <svg viewBox="0 0 1000 420" className="h-[240px] w-full rounded-xl border border-neutral-200 bg-white">
                 {/* Ocean grid */}
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <line key={`h${i}`} x1={0} y1={i * 42} x2={1000} y2={i * 42} stroke="rgba(220,38,38,0.08)" />
+                  <line key={`h${i}`} x1={0} y1={i * 42} x2={1000} y2={i * 42} stroke="rgba(0,0,0,0.06)" />
                 ))}
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <line key={`v${i}`} x1={i * 100} y1={0} x2={i * 100} y2={420} stroke="rgba(220,38,38,0.06)" />
+                  <line key={`v${i}`} x1={i * 100} y1={0} x2={i * 100} y2={420} stroke="rgba(0,0,0,0.05)" />
                 ))}
 
                 {/* Continents (very simplified shapes) */}
                 <path
                   d="M110,110 C140,80 240,70 305,95 C360,115 410,160 380,205 C350,250 280,250 240,235 C200,220 170,250 140,235 C110,220 70,160 110,110 Z"
                   fill={heatFill(regions.NA, maxRegion)}
-                  stroke="rgba(220,38,38,0.45)"
+                  stroke="rgba(0,0,0,0.55)"
                 />
                 <path
                   d="M300,235 C345,220 380,250 370,295 C360,345 330,370 300,385 C270,400 245,370 255,330 C265,290 265,260 300,235 Z"
                   fill={heatFill(regions.SA, maxRegion)}
-                  stroke="rgba(220,38,38,0.45)"
+                  stroke="rgba(0,0,0,0.55)"
                 />
                 <path
                   d="M470,105 C510,80 575,80 615,95 C650,110 660,145 630,160 C595,175 545,160 520,175 C495,190 450,155 470,105 Z"
                   fill={heatFill(regions.EU, maxRegion)}
-                  stroke="rgba(220,38,38,0.45)"
+                  stroke="rgba(0,0,0,0.55)"
                 />
                 <path
                   d="M505,175 C545,165 595,180 625,205 C660,235 665,285 635,315 C600,350 545,340 510,315 C480,295 465,245 485,210 C495,190 490,180 505,175 Z"
                   fill={heatFill(regions.AF, maxRegion)}
-                  stroke="rgba(220,38,38,0.45)"
+                  stroke="rgba(0,0,0,0.55)"
                 />
                 <path
                   d="M635,150 C680,120 775,115 855,145 C910,165 940,205 900,235 C860,265 800,250 770,270 C735,295 690,285 660,260 C635,235 600,190 635,150 Z"
                   fill={heatFill(regions.AS, maxRegion)}
-                  stroke="rgba(220,38,38,0.45)"
+                  stroke="rgba(0,0,0,0.55)"
                 />
                 <path
                   d="M820,295 C855,275 910,280 935,300 C960,320 945,355 910,365 C875,375 845,360 825,340 C805,320 800,305 820,295 Z"
                   fill={heatFill(regions.OC, maxRegion)}
-                  stroke="rgba(220,38,38,0.45)"
+                  stroke="rgba(0,0,0,0.55)"
                 />
 
+                {/* Stylized country outlines (lightweight borders for visibility) */}
+                <g fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="1">
+                  {/* North America borders */}
+                  <path d="M160,130 C210,120 250,130 295,155" />
+                  <path d="M185,190 C230,175 275,180 320,205" />
+                  <path d="M245,110 C255,145 260,175 250,210" />
+                  {/* South America borders */}
+                  <path d="M290,255 C320,270 335,295 330,325" />
+                  <path d="M280,310 C305,330 310,355 295,375" />
+                  {/* Europe borders */}
+                  <path d="M505,125 C535,120 560,125 590,140" />
+                  <path d="M530,150 C550,155 570,160 600,155" />
+                  {/* Africa borders */}
+                  <path d="M520,205 C555,210 585,230 605,255" />
+                  <path d="M545,275 C565,290 585,305 610,300" />
+                  <path d="M560,215 C555,245 555,275 565,310" />
+                  {/* Asia borders */}
+                  <path d="M690,165 C735,160 780,170 825,190" />
+                  <path d="M705,205 C745,210 790,220 835,210" />
+                  <path d="M770,150 C770,185 760,215 740,245" />
+                  <path d="M820,220 C800,240 780,255 760,270" />
+                  {/* Oceania borders */}
+                  <path d="M845,315 C870,305 900,310 925,325" />
+                  <path d="M875,340 C895,345 915,350 930,340" />
+                </g>
+
                 {/* Legend label */}
-                <text x="18" y="28" fill="rgba(220,38,38,0.85)" fontSize="14" fontFamily="ui-sans-serif, system-ui">
+                <text x="18" y="28" fill="rgba(0,0,0,0.75)" fontSize="14" fontFamily="ui-sans-serif, system-ui">
                   {mode === "signups" ? "New signups" : "Logins"} by region
                 </text>
               </svg>
