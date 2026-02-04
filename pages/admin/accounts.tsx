@@ -7,6 +7,8 @@ import { signOut } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { authOptions } from "../api/auth/[...nextauth]";
+import AdminHeader from "../../components/admin/AdminHeader";
+import AdminSidebar from "../../components/admin/AdminSidebar";
 
 type UserRow = {
   id: string;

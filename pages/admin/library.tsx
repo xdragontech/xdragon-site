@@ -7,6 +7,8 @@ import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { authOptions } from "../api/auth/[...nextauth]";
+import AdminHeader from "../../components/admin/AdminHeader";
+import AdminSidebar from "../../components/admin/AdminSidebar";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
