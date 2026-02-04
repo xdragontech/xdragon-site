@@ -18,6 +18,7 @@ type MetricsOk = {
   logins: number[];
   totals: { signups: number; logins: number };
   ipGroups: IpGroup[];
+  signupCountries: { country: string | null; count: number }[];
 };
 
 type MetricsErr = { ok: false; error: string };
@@ -181,7 +182,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     // eslint-disable-next-line no-await-in-loop
     const country = await countryForIp(ip);
     ipGroups.push({ ip, country, count });
-  }
+
+  // Countries for signups (best-effort):
+  // We attempt to read a signup IP from the User table, then resolve to country using the same IP resolver.
+  // If the schema doesn't store a signup IP, we return an empty array and the dashboard will show a friendly message.
+  let signupCountries: { country: string | null; count: number }[] = [];
+  try {
+    // Try common column names (createdIp, signupIp, ip). This is intentionally loose to avoid coupling.
+    const candidateCols = ["createdIp", "signupIp", "ip"];
+    let rows: Array<{ ip: string | null }> = [];
+
+    for (const col of candidateCols) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        rows = (await (prisma as any).user.findMany({
+          where: { createdAt: { gte: start, lte: end } },
+          select: { [col]: true },
+        })) as any;
+
+        // If we got a non-empty array and at least one row has the column, accept it.
+        const anyIp = (rows || []).some((r) => typeof (r as any)?.[col] === "string" && String((r as any)[col]).trim());
+        if (anyIp) {
+          rows = (rows || []).map((r) => ({ ip: String((r as any)[col] || "").trim() || null }));
+          break;
+        }
+      } catch {
+        // ignore and try next candidate
+      }
+    }
+
+    if (rows && rows.length) {
+      const counts = new Map<string, number>();
+      for (const r of rows) {
+        const ip = (r.ip || "").trim();
+        if (!ip || isPrivateIp(ip)) continue;
+        counts.set(ip, (counts.get(ip) || 0) + 1);
+      }
+
+      const byCountry = new Map<string, number>();
+      for (const [ip, count] of Array.from(counts.entries())) {
+        // eslint-disable-next-line no-await-in-loop
+        const country = await countryForIp(ip);
+        const key = (country || "Unknown").toString();
+        byCountry.set(key, (byCountry.get(key) || 0) + count);
+      }
+
+      signupCountries = Array.from(byCountry.entries())
+        .map(([country, count]) => ({ country, count }))
+        .sort((a, b) => b.count - a.count);
+    }
+  } catch {
+    signupCountries = [];
+  }  }
 
   return res.status(200).json({
     ok: true,
@@ -193,5 +245,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     logins,
     totals,
     ipGroups,
+    signupCountries,
   });
 }

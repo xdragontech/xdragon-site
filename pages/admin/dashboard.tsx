@@ -82,7 +82,7 @@ function MiniLineChart({ points }: { points: MetricsPoint[] }) {
   const loginsPath = hasData ? buildLinePath(points, "logins", w, h) : "";
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-950/40">
+    <div className="w-full overflow-hidden rounded-xl border border-neutral-200 bg-white/40">
       <svg viewBox={`0 0 ${w} ${h}`} className="h-[180px] w-full">
         <defs>
           <linearGradient id="xdragonGrid" x1="0" y1="0" x2="0" y2="1">
@@ -95,7 +95,7 @@ function MiniLineChart({ points }: { points: MetricsPoint[] }) {
         {/* subtle grid */}
         {[...Array(5)].map((_, i) => {
           const y = (h * (i + 1)) / 6;
-          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />;
+          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(220,38,38,0.08)" strokeWidth="1" />;
         })}
 
         {hasData ? (
@@ -491,49 +491,49 @@ function WorldHeatMapCard({
           <div className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-9">
               {/* Stylized world map (continent regions) */}
-              <svg viewBox="0 0 1000 420" className="h-[240px] w-full rounded-xl border border-neutral-200 bg-neutral-950">
+              <svg viewBox="0 0 1000 420" className="h-[240px] w-full rounded-xl border border-neutral-200 bg-white">
                 {/* Ocean grid */}
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <line key={`h${i}`} x1={0} y1={i * 42} x2={1000} y2={i * 42} stroke="rgba(255,255,255,0.06)" />
+                  <line key={`h${i}`} x1={0} y1={i * 42} x2={1000} y2={i * 42} stroke="rgba(220,38,38,0.08)" />
                 ))}
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <line key={`v${i}`} x1={i * 100} y1={0} x2={i * 100} y2={420} stroke="rgba(255,255,255,0.05)" />
+                  <line key={`v${i}`} x1={i * 100} y1={0} x2={i * 100} y2={420} stroke="rgba(220,38,38,0.06)" />
                 ))}
 
                 {/* Continents (very simplified shapes) */}
                 <path
                   d="M110,110 C140,80 240,70 305,95 C360,115 410,160 380,205 C350,250 280,250 240,235 C200,220 170,250 140,235 C110,220 70,160 110,110 Z"
                   fill={heatFill(regions.NA, maxRegion)}
-                  stroke="rgba(255,255,255,0.18)"
+                  stroke="rgba(220,38,38,0.45)"
                 />
                 <path
                   d="M300,235 C345,220 380,250 370,295 C360,345 330,370 300,385 C270,400 245,370 255,330 C265,290 265,260 300,235 Z"
                   fill={heatFill(regions.SA, maxRegion)}
-                  stroke="rgba(255,255,255,0.18)"
+                  stroke="rgba(220,38,38,0.45)"
                 />
                 <path
                   d="M470,105 C510,80 575,80 615,95 C650,110 660,145 630,160 C595,175 545,160 520,175 C495,190 450,155 470,105 Z"
                   fill={heatFill(regions.EU, maxRegion)}
-                  stroke="rgba(255,255,255,0.18)"
+                  stroke="rgba(220,38,38,0.45)"
                 />
                 <path
                   d="M505,175 C545,165 595,180 625,205 C660,235 665,285 635,315 C600,350 545,340 510,315 C480,295 465,245 485,210 C495,190 490,180 505,175 Z"
                   fill={heatFill(regions.AF, maxRegion)}
-                  stroke="rgba(255,255,255,0.18)"
+                  stroke="rgba(220,38,38,0.45)"
                 />
                 <path
                   d="M635,150 C680,120 775,115 855,145 C910,165 940,205 900,235 C860,265 800,250 770,270 C735,295 690,285 660,260 C635,235 600,190 635,150 Z"
                   fill={heatFill(regions.AS, maxRegion)}
-                  stroke="rgba(255,255,255,0.18)"
+                  stroke="rgba(220,38,38,0.45)"
                 />
                 <path
                   d="M820,295 C855,275 910,280 935,300 C960,320 945,355 910,365 C875,375 845,360 825,340 C805,320 800,305 820,295 Z"
                   fill={heatFill(regions.OC, maxRegion)}
-                  stroke="rgba(255,255,255,0.18)"
+                  stroke="rgba(220,38,38,0.45)"
                 />
 
                 {/* Legend label */}
-                <text x="18" y="28" fill="rgba(255,255,255,0.75)" fontSize="14" fontFamily="ui-sans-serif, system-ui">
+                <text x="18" y="28" fill="rgba(220,38,38,0.85)" fontSize="14" fontFamily="ui-sans-serif, system-ui">
                   {mode === "signups" ? "New signups" : "Logins"} by region
                 </text>
               </svg>
