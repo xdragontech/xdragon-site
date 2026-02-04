@@ -183,16 +183,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const country = await countryForIp(ip);
     ipGroups.push({ ip, country, count });
 
-  // Countries for signups (deterministic based on schema):
-  // The User model does not store a signup IP. We approximate signup geo using the earliest LoginEvent IP
-  // for users created within the selected window. This yields a usable heatmap for "new signups" as long
-  // as users log in at least once after signing up.
-  let signupCountries: { country: string | null; count: number }[] = [];
+  // Countries for signups:
+  // User model doesn't store a signup IP, so we approximate using the earliest LoginEvent IP
+  // for users created within the selected window.
+  const signupCountriesMap = new Map<string, number>();
   try {
-    const userIds = users.map((u) => (u as any)?.id).filter(Boolean) as string[];
+    const userIds = (users as any[]).map((u) => u?.id).filter(Boolean) as string[];
     const firstIpByUser = new Map<string, string>();
 
-    // Chunk to avoid very large IN clauses
     const chunkSize = 500;
     for (let i = 0; i < userIds.length; i += chunkSize) {
       const chunk = userIds.slice(i, i + chunkSize);
@@ -212,20 +210,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     }
 
-    const byCountry = new Map<string, number>();
     for (const ip of Array.from(firstIpByUser.values())) {
       // eslint-disable-next-line no-await-in-loop
       const country = await countryForIp(ip);
       const key = (country || "Unknown").toString();
-      byCountry.set(key, (byCountry.get(key) || 0) + 1);
+      signupCountriesMap.set(key, (signupCountriesMap.get(key) || 0) + 1);
     }
-
-    signupCountries = Array.from(byCountry.entries())
-      .map(([country, count]) => ({ country, count }))
-      .sort((a, b) => b.count - a.count);
   } catch {
-    signupCountries = [];
-  }  }
+    // ignore; will return empty
+  }
+
+  const signupCountries = Array.from(signupCountriesMap.entries())
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count);
+
+  }
 
   return res.status(200).json({
     ok: true,
