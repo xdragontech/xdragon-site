@@ -143,9 +143,9 @@ export default function ChatWidget() {
   const leadEmailTrim = useMemo(() => leadEmail.trim(), [leadEmail]);
   const leadEmailValid = useMemo(() => (leadEmailTrim ? isValidEmail(leadEmailTrim) : false), [leadEmailTrim]);
   const leadEmailError = useMemo(() => {
-    if (!showLeadPrompt) return \"\";
-    if (!leadEmailTrim) return \"\";
-    return leadEmailValid ? \"\" : \"Please enter a valid email (e.g. name@domain.com).\";
+    if (!showLeadPrompt) return "";
+    if (!leadEmailTrim) return "";
+    return leadEmailValid ? "" : "Please enter a valid email (e.g. name@domain.com).";
   }, [showLeadPrompt, leadEmailTrim, leadEmailValid]);
 
   async function sendToApi(nextMessages: ChatMessage[], nextLead: Lead) {
