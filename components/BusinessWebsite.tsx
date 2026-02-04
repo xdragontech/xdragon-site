@@ -196,12 +196,14 @@ export default function BusinessWebsite() {
 
             <button
               onClick={() => setOpen(!open)}
-              className="md:hidden inline-flex items-center justify-center rounded-xl border border-neutral-300 p-2"
+              className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-300 bg-white p-2 hover:bg-neutral-50"
               aria-label="Toggle menu"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-                <path d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <span className="flex flex-col gap-1.5" aria-hidden="true">
+                <span className="block h-1.5 w-6 rounded bg-neutral-900" />
+                <span className="block h-1.5 w-6 rounded bg-neutral-900" />
+                <span className="block h-1.5 w-6 rounded bg-neutral-900" />
+              </span>
             </button>
           </div>
         </div>
