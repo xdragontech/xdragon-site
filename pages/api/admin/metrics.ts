@@ -142,7 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const [users, events] = await Promise.all([
     prisma.user.findMany({
       where: { createdAt: { gte: start, lte: end } },
-      select: { createdAt: true },
+      select: { id: true, createdAt: true },
     }),
     prisma.loginEvent.findMany({
       where: { createdAt: { gte: start, lte: end } },
@@ -183,54 +183,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const country = await countryForIp(ip);
     ipGroups.push({ ip, country, count });
 
-  // Countries for signups (best-effort):
-  // We attempt to read a signup IP from the User table, then resolve to country using the same IP resolver.
-  // If the schema doesn't store a signup IP, we return an empty array and the dashboard will show a friendly message.
+  // Countries for signups (deterministic based on schema):
+  // The User model does not store a signup IP. We approximate signup geo using the earliest LoginEvent IP
+  // for users created within the selected window. This yields a usable heatmap for "new signups" as long
+  // as users log in at least once after signing up.
   let signupCountries: { country: string | null; count: number }[] = [];
   try {
-    // Try common column names (createdIp, signupIp, ip). This is intentionally loose to avoid coupling.
-    const candidateCols = ["createdIp", "signupIp", "ip"];
-    let rows: Array<{ ip: string | null }> = [];
+    const userIds = users.map((u) => (u as any)?.id).filter(Boolean) as string[];
+    const firstIpByUser = new Map<string, string>();
 
-    for (const col of candidateCols) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        rows = (await (prisma as any).user.findMany({
-          where: { createdAt: { gte: start, lte: end } },
-          select: { [col]: true },
-        })) as any;
+    // Chunk to avoid very large IN clauses
+    const chunkSize = 500;
+    for (let i = 0; i < userIds.length; i += chunkSize) {
+      const chunk = userIds.slice(i, i + chunkSize);
 
-        // If we got a non-empty array and at least one row has the column, accept it.
-        const anyIp = (rows || []).some((r) => typeof (r as any)?.[col] === "string" && String((r as any)[col]).trim());
-        if (anyIp) {
-          rows = (rows || []).map((r) => ({ ip: String((r as any)[col] || "").trim() || null }));
-          break;
+      // eslint-disable-next-line no-await-in-loop
+      const loginRows = await prisma.loginEvent.findMany({
+        where: { userId: { in: chunk } },
+        select: { userId: true, ip: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      for (const r of loginRows) {
+        if (!firstIpByUser.has(r.userId)) {
+          const ip = (r.ip || "").trim();
+          if (ip && !isPrivateIp(ip)) firstIpByUser.set(r.userId, ip);
         }
-      } catch {
-        // ignore and try next candidate
       }
     }
 
-    if (rows && rows.length) {
-      const counts = new Map<string, number>();
-      for (const r of rows) {
-        const ip = (r.ip || "").trim();
-        if (!ip || isPrivateIp(ip)) continue;
-        counts.set(ip, (counts.get(ip) || 0) + 1);
-      }
-
-      const byCountry = new Map<string, number>();
-      for (const [ip, count] of Array.from(counts.entries())) {
-        // eslint-disable-next-line no-await-in-loop
-        const country = await countryForIp(ip);
-        const key = (country || "Unknown").toString();
-        byCountry.set(key, (byCountry.get(key) || 0) + count);
-      }
-
-      signupCountries = Array.from(byCountry.entries())
-        .map(([country, count]) => ({ country, count }))
-        .sort((a, b) => b.count - a.count);
+    const byCountry = new Map<string, number>();
+    for (const ip of Array.from(firstIpByUser.values())) {
+      // eslint-disable-next-line no-await-in-loop
+      const country = await countryForIp(ip);
+      const key = (country || "Unknown").toString();
+      byCountry.set(key, (byCountry.get(key) || 0) + 1);
     }
+
+    signupCountries = Array.from(byCountry.entries())
+      .map(([country, count]) => ({ country, count }))
+      .sort((a, b) => b.count - a.count);
   } catch {
     signupCountries = [];
   }  }
