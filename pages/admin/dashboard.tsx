@@ -2,23 +2,11 @@
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
 import { getServerSession } from "next-auth/next";
-import { signOut } from "next-auth/react";
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 import { authOptions } from "../api/auth/[...nextauth]";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSidebar from "../../components/admin/AdminSidebar";
 
-type UserRow = {
-  id: string;
-  email: string | null;
-  name: string | null;
-  role: "USER" | "ADMIN";
-  status: "ACTIVE" | "BLOCKED";
-  createdAt?: string | null;
-  lastLoginAt?: string | null;
-};
 
 
 type MetricsPeriod = "today" | "7d" | "month";
@@ -237,16 +225,6 @@ function exportUsersXls(rows: any[]) {
 }
 
 
-function cn(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
-}
-
-function parseProtectedAdmins(): string[] {
-  return (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 type DashboardProps = {
   ok: true;
@@ -375,9 +353,7 @@ function LoginIpsTable({
   );
 }
 
-export default function AdminDashboardPage(_props: DashboardProps) {
-  const router = useRouter();
-
+export default function AdminDashboardPage(props: DashboardProps) {
   const [loggedInAs, setLoggedInAs] = useState<string>("");
 
   useEffect(() => {
@@ -391,44 +367,10 @@ export default function AdminDashboardPage(_props: DashboardProps) {
       .catch(() => {});
   }, []);
 
-  const isDashboard = router.pathname === "/admin/dashboard";
-  const isAccounts = router.pathname === "/admin/accounts";
-  const isLibrary = router.pathname === "/admin/library";
-
-  const me = (props as any).me as { id?: string | null; email?: string | null } | undefined;
-  const myId = (me?.id || null) as string | null;
-  const myEmailLower = (me?.email ? String(me.email).toLowerCase() : null) as string | null;
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
   const [period, setPeriod] = useState<MetricsPeriod>("7d");
   const [metrics, setMetrics] = useState<MetricsOk>(() => emptyMetrics("today"));
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
-
-
-  const protectedAdmins = useMemo(() => parseProtectedAdmins(), []);
-
-  async function load() {
-    setErr(null);
-    setMsg(null);
-    setLoading(true);
-    try {
-      const r = await fetch("/api/admin/users");
-      const j = await r.json();
-      if (!r.ok || !j?.ok) throw new Error(j?.error || "Failed to load users");
-      setUsers(j.users || []);
-    } catch (e: any) {
-      setErr(e?.message || "Failed to load users");
-    } finally {
-      setLoading(false);
-    }
-  }
-
 
   async function loadMetrics(nextPeriod: MetricsPeriod) {
     setMetricsLoading(true);
@@ -446,7 +388,15 @@ export default function AdminDashboardPage(_props: DashboardProps) {
       const data = (await res.json()) as MetricsResponse;
 
       if (data && (data as any).ok === true) {
-        const ok = data as any as { ok: true; period: MetricsPeriod; labels?: unknown; signups?: unknown; logins?: unknown; ipGroups?: unknown };
+        const ok = data as any as {
+          ok: true;
+          period: MetricsPeriod;
+          labels?: unknown;
+          signups?: unknown;
+          logins?: unknown;
+          ipGroups?: unknown;
+        };
+
         const labels = Array.isArray(ok.labels) ? (ok.labels as string[]) : [];
         const signups = Array.isArray(ok.signups) ? (ok.signups as number[]) : [];
         const logins = Array.isArray(ok.logins) ? (ok.logins as number[]) : [];
@@ -486,50 +436,10 @@ export default function AdminDashboardPage(_props: DashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return users;
-    return users.filter((u) => {
-      const hay = `${u.email || ""} ${u.name || ""} ${u.role} ${u.status}`.toLowerCase();
-      return hay.includes(s);
-    });
-  }, [q, users]);
-
-  async function act(userId: string, action: "block" | "unblock" | "delete") {
-    setErr(null);
-    setMsg(null);
-    setBusyId(userId);
-    try {
-      const url = `/api/admin/users/${encodeURIComponent(userId)}`;
-      const r =
-        action === "delete"
-          ? await fetch(url, { method: "DELETE" })
-          : await fetch(url, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action }),
-            });
-
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j?.ok) throw new Error(j?.error || "Request failed");
-
-      setMsg(action === "delete" ? "User deleted." : "User updated.");
-      await load();
-    } catch (e: any) {
-      setErr(e?.message || "Request failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <Head>
-        <title>Admin • Users</title>
+        <title>Admin • Dashboard</title>
         {/* Orbitron for the "Command" mark */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -539,407 +449,100 @@ export default function AdminDashboardPage(_props: DashboardProps) {
         />
       </Head>
 
-      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="flex flex-col items-start">
-                <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
-                <div
-                  className="mt-1 font-semibold leading-none text-neutral-900"
-                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
-                >
-                  Command
-                </div>
-              </div>
-
-              <div className="flex h-11 items-center">
-                <div className="text-sm text-neutral-600">Dashboard</div>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-end">
-              <button
-                onClick={() => signOut({ callbackUrl: "/admin/signin" })}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-              >
-                Sign out
-              </button>
-              {loggedInAs ? (
-                <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </header>
+      <AdminHeader sectionLabel="Dashboard" loggedInAs={loggedInAs} />
 
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-6 lg:grid-cols-12">
-          <aside className="lg:col-span-2">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
-          <nav className="space-y-2">
-          <Link
-          href="/admin/dashboard"
-          className={
-          "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800" +
-          (isDashboard ? " ring-2 ring-neutral-900/20" : "")
-          }
-          >
-          Dashboard
-          </Link>
-          
-                <Link
-                  href="/admin/accounts"
-                  className={
-                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
-                    (isAccounts ? " ring-2 ring-neutral-900/20" : "")
-                  }
-                >
-                  Accounts
-                </Link>
-<Link
-          href="/admin/library"
-          className={
-          "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800" +
-          (isLibrary ? " ring-2 ring-neutral-900/20" : "")
-          }
-          >
-          Library
-          </Link>
-          </nav>
-          </div>
-          </aside>
+          <AdminSidebar active="dashboard" />
+
           <section className="lg:col-span-10">
             {/* Activity chart (signups + logins) */}
             <div className="mb-4 grid gap-4 lg:grid-cols-10">
-            <div className="lg:col-span-7">
-            <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-            <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
-            <div className="mt-1 text-xs text-neutral-500">
-            Signups in <span className="font-medium text-red-600">red</span>, logins in <span className="font-medium text-neutral-700">white</span>
-            </div>
-            </div>
-            <div className="flex items-center gap-2">
-            {([
-            { key: "today" as const, label: "Today" },
-            { key: "7d" as const, label: "Last 7 days" },
-            { key: "month" as const, label: "This month" },
-            ] as const).map((p) => {
-            const active = period === p.key;
-            return (
-            <button
-            key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className={
-            active
-            ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
-            : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-            }
-            >
-            {p.label}
-            </button>
-            );
-            })}
-            <button
-            onClick={() => void loadMetrics(period)}
-            className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-            disabled={metricsLoading}
-            title="Refresh chart & table"
-            >
-            Refresh
-            </button>
-            </div>
-            </div>
-            
-            <div className="mt-3">
-            {metricsLoading ? (
-            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
-            ) : metricsError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
-            ) : (
-            <>
-            <MiniLineChart points={metrics ? metrics.labels.map((label, i) => ({ label, signups: metrics.signups[i] ?? 0, logins: metrics.logins[i] ?? 0 })) : []} />
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-            <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-            <span className="text-neutral-500">Signups:</span> <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
-            </div>
-            <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-            <span className="text-neutral-500">Logins:</span> <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
-            </div>
-            </div>
-            </>
-            )}
-            </div>
-            </div>
-            </div>
-            <div className="lg:col-span-3">
-            <LoginIpsTable
-            loading={metricsLoading}
-            error={metricsError}
-            groups={metrics?.ok ? metrics.ipGroups : []}
-            />
-            </div>
-            </div>
-            
-            
-            
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-            <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by email, name, role, status…"
-            className="w-full sm:w-[420px] rounded-xl bg-white border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-            />
-            <button
-            onClick={() => void load()}
-            className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 text-white px-3 py-2 text-sm hover:bg-neutral-800"
-            >
-            Refresh
-            </button>
-            <button
-              onClick={() => exportUsersCsv(filtered)}
-              className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-            >
-              Export CSV
-            </button>
-            <button
-              onClick={() => exportUsersXls(filtered)}
-              className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-              title="Downloads an Excel-readable .xls file"
-            >
-              Export XLS
-            </button>
+              <div className="lg:col-span-7">
+                <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
+                      <div className="mt-1 text-xs text-neutral-500">
+                        Signups in <span className="font-medium text-red-600">red</span>, logins in{" "}
+                        <span className="font-medium text-neutral-700">white</span>
+                      </div>
+                    </div>
 
-            </div>
-            
-            <div className="text-sm text-neutral-500">
-            {loading ? "Loading…" : `${filtered.length} user${filtered.length === 1 ? "" : "s"}`}
-            </div>
-            </div>
-            
-            {(err || msg) && (
-            <div className="mt-4 space-y-2">
-            {err && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {err}
-            </div>
-            )}
-            {msg && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            {msg}
-            </div>
-            )}
-            </div>
-            )}
-            
-            {/* Desktop table */}
-            <div className="mt-6 hidden md:block overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-            <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-600">
-            <tr className="text-left">
-            <th className="px-4 py-3 font-medium">User</th>
-            <th className="px-4 py-3 font-medium">Role</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Created</th>
-            <th className="px-4 py-3 font-medium">Last login</th>
-            <th className="px-4 py-3 font-medium text-right">Actions</th>
-            </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-200">
-            {loading ? (
-            <tr>
-            <td className="px-4 py-6 text-neutral-500" colSpan={6}>
-            Loading…
-            </td>
-            </tr>
-            ) : filtered.length === 0 ? (
-            <tr>
-            <td className="px-4 py-6 text-neutral-500" colSpan={6}>
-            No users found.
-            </td>
-            </tr>
-            ) : (
-            filtered.map((u) => {
-            const email = u.email || "(no email)";
-            // Use the real email for comparisons; keep a separate display fallback.
-            const emailLower = (u.email || "").toLowerCase();
-            const isProtected = !!emailLower && protectedAdmins.includes(emailLower);
-            const isAdmin = u.role === "ADMIN";
-            const isBlocked = u.status === "BLOCKED";
-            const busy = busyId === u.id;
-            const isSelf = (!!myId && u.id === myId) || (!!myEmailLower && emailLower === myEmailLower);
-            
-            return (
-            <tr key={u.id} className="hover:bg-neutral-50">
-            <td className="px-4 py-3">
-            <div className="font-medium text-neutral-900">{u.name || "—"}</div>
-            <div className="text-neutral-500">{email}</div>
-            </td>
-            
-            <td className="px-4 py-3">
-            <span
-            className={cn(
-            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-            isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700"
-            )}
-            >
-            {u.role}
-            </span>
-            </td>
-            
-            <td className="px-4 py-3">
-            <span
-            className={cn(
-            "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-            isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"
-            )}
-            >
-            {u.status}
-            </span>
-            {isProtected && (
-            <div className="mt-1 text-xs text-neutral-500">Protected admin</div>
-            )}
-            {isSelf && (
-            <div className="mt-1 text-xs text-neutral-500">This is you</div>
-            )}
-            </td>
-            
-            <td className="px-4 py-3 text-neutral-700">{fmtDate(u.createdAt)}</td>
-            <td className="px-4 py-3 text-neutral-700">{fmtDate(u.lastLoginAt)}</td>
-            
-            <td className="px-4 py-3">
-            <div className="flex justify-end gap-2">
-            <button
-            disabled={busy || isProtected || isSelf}
-            onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
-            className={cn(
-            "rounded-xl px-3 py-1.5 text-xs border transition-colors",
-            busy || isProtected || isSelf
-            ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-            : isBlocked
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-            : "border-red-200 bg-red-50 text-red-800 hover:border-red-700"
-            )}
-            title={isAdmin ? "Blocking admins is disabled" : isProtected ? "Protected admin" : undefined}
-            >
-            {isBlocked ? "Unblock" : "Block"}
-            </button>
-            
-            <button
-            disabled={busy || isProtected || isSelf}
-            onClick={() => {
-            if (!confirm("Delete this user? This cannot be undone.")) return;
-            void act(u.id, "delete");
-            }}
-            className={cn(
-            "rounded-xl px-3 py-1.5 text-xs border transition-colors",
-            busy || isProtected || isSelf
-            ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-            : "border-neutral-200 bg-white text-neutral-700 hover:border-red-300"
-            )}
-            title={isAdmin ? "Deleting admins is disabled" : isProtected ? "Protected admin" : undefined}
-            >
-            Delete
-            </button>
-            </div>
-            </td>
-            </tr>
-            );
-            })
-            )}
-            </tbody>
-            </table>
-            </div>
-            
-            {/* Mobile cards */}
-            <div className="mt-6 grid gap-3 md:hidden">
-            {loading ? (
-            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">Loading…</div>
-            ) : filtered.length === 0 ? (
-            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4 text-neutral-500">No users found.</div>
-            ) : (
-            filtered.map((u) => {
-            const emailLower = (u.email || "").toLowerCase();
-            const emailDisplay = (u.email || "(no email)").toLowerCase();
-            const isProtected = !!emailLower && protectedAdmins.includes(emailLower);
-            const isAdmin = u.role === "ADMIN";
-            const isBlocked = u.status === "BLOCKED";
-            const busy = busyId === u.id;
-            const isSelf = Boolean((myId && u.id === myId) || (myEmailLower && emailLower === myEmailLower));
-            
-            return (
-            <div key={u.id} className="rounded-2xl border border-neutral-200 bg-white shadow-sm px-4 py-4">
-            <div className="flex items-start justify-between gap-3">
-            <div>
-            <div className="font-medium">{u.name || "—"}</div>
-            <div className="text-sm text-neutral-500">{emailDisplay}</div>
-            </div>
-            <div className="flex gap-2">
-            <span className={cn("rounded-full border px-2 py-0.5 text-xs", isAdmin ? "border-amber-200 bg-amber-50 text-amber-800" : "border-neutral-200 bg-white text-neutral-700")}>
-            {u.role}
-            </span>
-            <span className={cn("rounded-full border px-2 py-0.5 text-xs", isBlocked ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800")}>
-            {u.status}
-            </span>
-            </div>
-            </div>
-            
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-neutral-700">
-            <div>
-            <div className="text-neutral-500">Created</div>
-            <div>{fmtDate(u.createdAt)}</div>
-            </div>
-            <div>
-            <div className="text-neutral-500">Last login</div>
-            <div>{fmtDate(u.lastLoginAt)}</div>
-            </div>
-            </div>
-            
-            {isProtected && <div className="mt-2 text-xs text-neutral-500">Protected admin</div>}
-            
-            <div className="mt-4 flex gap-2">
-            <button
-            disabled={busy || isProtected || isSelf}
-            onClick={() => void act(u.id, isBlocked ? "unblock" : "block")}
-            className={cn(
-            "flex-1 rounded-xl px-3 py-2 text-xs border",
-            busy || isProtected || isSelf
-            ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-            : isBlocked
-            ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-200"
-            : "border-red-200 bg-red-50 text-red-800"
-            )}
-            >
-            {isBlocked ? "Unblock" : "Block"}
-            </button>
-            <button
-            disabled={busy || isProtected || isSelf}
-            onClick={() => {
-            if (!confirm("Delete this user? This cannot be undone.")) return;
-            void act(u.id, "delete");
-            }}
-            className={cn(
-            "flex-1 rounded-xl px-3 py-2 text-xs border",
-            busy || isProtected || isSelf
-            ? "border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed"
-            : "border-neutral-200 bg-white text-neutral-700"
-            )}
-            >
-            Delete
-            </button>
-            </div>
-            </div>
-            );
-            })
-            )}
-            </div>
-            
-            <div className="mt-8 text-xs text-neutral-500">
-            Tip: set <code className="rounded bg-neutral-100 px-1 py-0.5 border border-neutral-200">NEXT_PUBLIC_ADMIN_EMAILS</code> (comma-separated) to label “protected”
-            admin accounts in the UI. Server-side protection still uses <code className="rounded bg-neutral-100 px-1 py-0.5 border border-neutral-200">ADMIN_EMAILS</code>.
+                    <div className="flex items-center gap-2">
+                      {([
+                        { key: "today" as const, label: "Today" },
+                        { key: "7d" as const, label: "Last 7 days" },
+                        { key: "month" as const, label: "This month" },
+                      ] as const).map((p) => {
+                        const active = period === p.key;
+                        return (
+                          <button
+                            key={p.key}
+                            onClick={() => setPeriod(p.key)}
+                            className={
+                              active
+                                ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
+                                : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                            }
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        onClick={() => void loadMetrics(period)}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                        disabled={metricsLoading}
+                        title="Refresh chart & table"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    {metricsLoading ? (
+                      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+                        Loading…
+                      </div>
+                    ) : metricsError ? (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                        {metricsError}
+                      </div>
+                    ) : (
+                      <>
+                        <MiniLineChart
+                          points={
+                            metrics
+                              ? metrics.labels.map((label, i) => ({
+                                  label,
+                                  signups: metrics.signups[i] ?? 0,
+                                  logins: metrics.logins[i] ?? 0,
+                                }))
+                              : []
+                          }
+                        />
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                            <span className="text-neutral-500">Signups:</span>{" "}
+                            <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
+                          </div>
+                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                            <span className="text-neutral-500">Logins:</span>{" "}
+                            <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-3">
+                <LoginIpsTable loading={metricsLoading} error={metricsError} groups={metrics?.ok ? metrics.ipGroups : []} />
+              </div>
             </div>
           </section>
         </div>
@@ -947,3 +550,4 @@ export default function AdminDashboardPage(_props: DashboardProps) {
     </div>
   );
 }
+
