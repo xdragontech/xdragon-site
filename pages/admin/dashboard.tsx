@@ -95,7 +95,7 @@ function MiniLineChart({ points }: { points: MetricsPoint[] }) {
         {/* subtle grid */}
         {[...Array(5)].map((_, i) => {
           const y = (h * (i + 1)) / 6;
-          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(0,0,0,0.06)" strokeWidth="1" />;
+          return <line key={i} x1="0" y1={y} x2={w} y2={y} stroke="rgba(220,38,38,0.08)" strokeWidth="1" />;
         })}
 
         {hasData ? (
@@ -382,48 +382,153 @@ function aggregateCountries(rows: Array<{ country?: string | null; count?: numbe
 }
 
 // Very lightweight "continent-ish" bucketing (not perfect, but stable and dependency-free).
-function bucketToRegion(country: string): "NA" | "SA" | "EU" | "AF" | "AS" | "OC" | "UN" {
-  const c = country.toLowerCase();
-  // North America
-  if (
-    ["canada", "united states", "mexico", "guatemala", "honduras", "el salvador", "nicaragua", "costa rica", "panama", "jamaica", "haiti", "dominican", "cuba", "bahamas"].some((k) => c.includes(k))
-  ) return "NA";
-  // South America
-  if (
-    ["brazil", "argentina", "chile", "colombia", "peru", "venezuela", "ecuador", "bolivia", "paraguay", "uruguay", "guyana", "suriname"].some((k) => c.includes(k))
-  ) return "SA";
-  // Europe
-  if (
-    ["united kingdom", "ireland", "france", "germany", "spain", "portugal", "italy", "netherlands", "belgium", "switzerland", "austria", "sweden", "norway", "denmark", "finland", "poland", "czech", "slovakia", "hungary", "romania", "bulgaria", "greece", "ukraine", "russia"].some((k) => c.includes(k))
-  ) return "EU";
-  // Africa
-  if (
-    ["south africa", "nigeria", "kenya", "egypt", "morocco", "algeria", "tunisia", "ghana", "ethiopia", "uganda", "tanzania", "angola"].some((k) => c.includes(k))
-  ) return "AF";
-  // Oceania
-  if (["australia", "new zealand", "papua", "fiji"].some((k) => c.includes(k))) return "OC";
-  // Asia (fallback for common)
-  if (
-    ["india", "china", "japan", "korea", "singapore", "indonesia", "malaysia", "philippines", "thailand", "vietnam", "pakistan", "bangladesh", "sri lanka", "israel", "saudi", "turkey", "uae", "united arab emirates"].some((k) => c.includes(k))
-  ) return "AS";
-  return "UN";
-}
-
-function sumByRegion(countries: CountryCount[]) {
-  const sums = { NA: 0, SA: 0, EU: 0, AF: 0, AS: 0, OC: 0, UN: 0 };
-  for (const row of countries) {
-    const r = bucketToRegion(row.country);
-    sums[r] += row.count;
-  }
-  return sums;
-}
 
 function heatFill(value: number, max: number) {
-  // White background with red shading; keep a visible minimum so regions always render.
-  if (!max || max <= 0) return "rgba(220, 38, 38, 0.10)";
+  // Neutral -> red scale without specifying custom palettes.
+  if (!max || max <= 0) return "rgba(0,0,0,0.05)";
   const t = Math.max(0, Math.min(1, value / max));
-  const a = 0.10 + t * 0.55; // 0.10..0.65
+  const a = 0.12 + t * 0.68; // 0.12..0.80
   return `rgba(220, 38, 38, ${a.toFixed(3)})`;
+}
+
+type CountryMapDatum = { name: string; count: number };
+
+function normalizeKey(name: string) {
+  return (name || "").toString().trim().toLowerCase();
+}
+
+function parseTsv(text: string): Array<Record<string, string>> {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return [];
+  const headers = lines[0].split("\t").map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const cols = line.split("\t");
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => (row[h] = (cols[i] ?? "").trim()));
+    return row;
+  });
+}
+
+function CountryWorldMap({
+  data,
+  title,
+}: {
+  data: CountryMapDatum[];
+  title: string;
+}) {
+  const [paths, setPaths] = useState<Array<{ d: string; name: string; value: number }>>([]);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setMapError(null);
+
+        // Load libs lazily to avoid SSR issues
+        const [{ geoMercator, geoPath }, topojson] = await Promise.all([
+          import("d3-geo"),
+          import("topojson-client"),
+        ]);
+
+        // Use world-atlas topojson + country name mapping (TSV)
+        const [topoRes, namesRes] = await Promise.all([
+          fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"),
+          fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/country-names.tsv"),
+        ]);
+
+        if (!topoRes.ok) throw new Error(`World map fetch failed (${topoRes.status})`);
+        if (!namesRes.ok) throw new Error(`Country names fetch failed (${namesRes.status})`);
+
+        const topo = await topoRes.json();
+        const namesTsv = await namesRes.text();
+        const namesRows = parseTsv(namesTsv);
+
+        const idToName = new Map<string, string>();
+        for (const r of namesRows) {
+          const id = (r["id"] || r["ISO_N3"] || "").toString();
+          const name = (r["name"] || r["NAME"] || r["country"] || "").toString();
+          if (id && name) idToName.set(id, name);
+        }
+
+        const countriesObj = (topo as any)?.objects?.countries;
+        if (!countriesObj) throw new Error("Invalid world-atlas payload (countries missing)");
+
+        const features = (topojson as any).feature(topo, countriesObj)?.features || [];
+
+        // Map incoming data by normalized country name
+        const valueByName = new Map<string, number>();
+        for (const row of data || []) {
+          const k = normalizeKey(row.name);
+          if (!k) continue;
+          valueByName.set(k, (valueByName.get(k) || 0) + (Number(row.count) || 0));
+        }
+
+        const values = Array.from(valueByName.values());
+        const maxVal = Math.max(1, ...(values.length ? values : [1]));
+
+        // Build projection and SVG paths
+        const width = 920;
+        const height = 240;
+        const projection = geoMercator().fitSize([width, height], { type: "FeatureCollection", features });
+        const pathGen = geoPath(projection);
+
+        const out: Array<{ d: string; name: string; value: number }> = [];
+        for (const f of features) {
+          const id = String((f as any)?.id ?? "");
+          const name = (f as any)?.properties?.name || idToName.get(id) || "Unknown";
+          const key = normalizeKey(name);
+          const value = valueByName.get(key) || 0;
+          const d = pathGen(f);
+          if (d) out.push({ d, name, value });
+        }
+
+        if (!cancelled) {
+          // Store max in closure by encoding value into fill later
+          (out as any).__maxVal = maxVal;
+          setPaths(out);
+        }
+      } catch (e: any) {
+        if (!cancelled) setMapError(e?.message || "Failed to load world map");
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
+  const maxVal = (paths as any).__maxVal ? Number((paths as any).__maxVal) : Math.max(1, ...paths.map((p) => p.value));
+
+  return (
+    <div className="w-full">
+      {mapError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{mapError}</div>
+      ) : (
+        <svg viewBox="0 0 920 240" className="h-[240px] w-full rounded-xl border border-neutral-200 bg-white">
+          <text x="14" y="22" fill="rgba(0,0,0,0.65)" fontSize="12" fontFamily="ui-sans-serif, system-ui">
+            {title}
+          </text>
+
+          {paths.map((p) => (
+            <path
+              key={`${p.name}-${p.d.slice(0, 12)}`}
+              d={p.d}
+              fill={heatFill(p.value, maxVal)}
+              stroke="rgba(0,0,0,0.80)"
+              strokeWidth="0.6"
+            >
+              <title>
+                {p.name}: {p.value}
+              </title>
+            </path>
+          ))}
+        </svg>
+      )}
+    </div>
+  );
 }
 
 function WorldHeatMapCard({
@@ -442,8 +547,6 @@ function WorldHeatMapCard({
   error: string | null;
 }) {
   const top = countries.slice(0, 6);
-  const regions = sumByRegion(countries);
-  const maxRegion = Math.max(1, regions.NA, regions.SA, regions.EU, regions.AF, regions.AS, regions.OC, regions.UN);
 
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-4">
@@ -491,78 +594,10 @@ function WorldHeatMapCard({
           <div className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-9">
               {/* Stylized world map (continent regions) */}
-              <svg viewBox="0 0 1000 420" className="h-[240px] w-full rounded-xl border border-neutral-200 bg-white">
-                {/* Ocean grid */}
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <line key={`h${i}`} x1={0} y1={i * 42} x2={1000} y2={i * 42} stroke="rgba(0,0,0,0.06)" />
-                ))}
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <line key={`v${i}`} x1={i * 100} y1={0} x2={i * 100} y2={420} stroke="rgba(0,0,0,0.05)" />
-                ))}
-
-                {/* Continents (very simplified shapes) */}
-                <path
-                  d="M110,110 C140,80 240,70 305,95 C360,115 410,160 380,205 C350,250 280,250 240,235 C200,220 170,250 140,235 C110,220 70,160 110,110 Z"
-                  fill={heatFill(regions.NA, maxRegion)}
-                  stroke="rgba(0,0,0,0.55)"
+              <CountryWorldMap
+                  title={mode === "signups" ? "New signups by country" : "Logins by country"}
+                  data={(countries || []).map((c) => ({ name: c.country, count: c.count }))}
                 />
-                <path
-                  d="M300,235 C345,220 380,250 370,295 C360,345 330,370 300,385 C270,400 245,370 255,330 C265,290 265,260 300,235 Z"
-                  fill={heatFill(regions.SA, maxRegion)}
-                  stroke="rgba(0,0,0,0.55)"
-                />
-                <path
-                  d="M470,105 C510,80 575,80 615,95 C650,110 660,145 630,160 C595,175 545,160 520,175 C495,190 450,155 470,105 Z"
-                  fill={heatFill(regions.EU, maxRegion)}
-                  stroke="rgba(0,0,0,0.55)"
-                />
-                <path
-                  d="M505,175 C545,165 595,180 625,205 C660,235 665,285 635,315 C600,350 545,340 510,315 C480,295 465,245 485,210 C495,190 490,180 505,175 Z"
-                  fill={heatFill(regions.AF, maxRegion)}
-                  stroke="rgba(0,0,0,0.55)"
-                />
-                <path
-                  d="M635,150 C680,120 775,115 855,145 C910,165 940,205 900,235 C860,265 800,250 770,270 C735,295 690,285 660,260 C635,235 600,190 635,150 Z"
-                  fill={heatFill(regions.AS, maxRegion)}
-                  stroke="rgba(0,0,0,0.55)"
-                />
-                <path
-                  d="M820,295 C855,275 910,280 935,300 C960,320 945,355 910,365 C875,375 845,360 825,340 C805,320 800,305 820,295 Z"
-                  fill={heatFill(regions.OC, maxRegion)}
-                  stroke="rgba(0,0,0,0.55)"
-                />
-
-                {/* Stylized country outlines (lightweight borders for visibility) */}
-                <g fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="1">
-                  {/* North America borders */}
-                  <path d="M160,130 C210,120 250,130 295,155" />
-                  <path d="M185,190 C230,175 275,180 320,205" />
-                  <path d="M245,110 C255,145 260,175 250,210" />
-                  {/* South America borders */}
-                  <path d="M290,255 C320,270 335,295 330,325" />
-                  <path d="M280,310 C305,330 310,355 295,375" />
-                  {/* Europe borders */}
-                  <path d="M505,125 C535,120 560,125 590,140" />
-                  <path d="M530,150 C550,155 570,160 600,155" />
-                  {/* Africa borders */}
-                  <path d="M520,205 C555,210 585,230 605,255" />
-                  <path d="M545,275 C565,290 585,305 610,300" />
-                  <path d="M560,215 C555,245 555,275 565,310" />
-                  {/* Asia borders */}
-                  <path d="M690,165 C735,160 780,170 825,190" />
-                  <path d="M705,205 C745,210 790,220 835,210" />
-                  <path d="M770,150 C770,185 760,215 740,245" />
-                  <path d="M820,220 C800,240 780,255 760,270" />
-                  {/* Oceania borders */}
-                  <path d="M845,315 C870,305 900,310 925,325" />
-                  <path d="M875,340 C895,345 915,350 930,340" />
-                </g>
-
-                {/* Legend label */}
-                <text x="18" y="28" fill="rgba(0,0,0,0.75)" fontSize="14" fontFamily="ui-sans-serif, system-ui">
-                  {mode === "signups" ? "New signups" : "Logins"} by region
-                </text>
-              </svg>
             </div>
 
             <div className="lg:col-span-3">
