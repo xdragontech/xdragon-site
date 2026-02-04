@@ -14,7 +14,7 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
     <aside className="lg:col-span-2">
       <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
         <nav className="space-y-2">
-          <Link href="/admin/users" className={itemClass("dashboard")}>
+          <Link href="/admin/dashboard" className={itemClass("dashboard")}>
             Dashboard
           </Link>
           <Link href="/admin/accounts" className={itemClass("accounts")}>

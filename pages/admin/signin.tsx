@@ -1,6 +1,6 @@
 function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  const fallback = "/admin/users";
+  const fallback = "/admin/dashboard";
   if (!v) return fallback;
 
   // Only allow same-site relative paths, or absolute URLs that point to xdragon.* domains.
@@ -48,7 +48,7 @@ export default function AdminCommandSignIn() {
   const router = useRouter();
   
 const callbackUrl = useMemo(() => {
-  if (typeof window === "undefined") return "/admin/users";
+  if (typeof window === "undefined") return "/admin/dashboard";
   return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin);
 }, [router.query.callbackUrl]);
 
@@ -197,7 +197,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   if (session?.user) {
     return {
       redirect: {
-        destination: "/admin/users",
+        destination: "/admin/dashboard",
         permanent: false,
       },
     };
