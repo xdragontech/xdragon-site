@@ -49,6 +49,12 @@ function coerceMessages(v: any): ChatMessage[] | null {
   return out.length ? out : null;
 }
 
+function isValidEmail(email: string) {
+  const e = (email || "").trim();
+  if (e.length < 6 || e.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(e);
+}
+
 function makeConversationId() {
   return "conv_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -134,6 +140,14 @@ export default function ChatWidget() {
 
   const canSubmit = useMemo(() => input.trim().length > 0 && status !== "thinking", [input, status]);
 
+  const leadEmailTrim = useMemo(() => leadEmail.trim(), [leadEmail]);
+  const leadEmailValid = useMemo(() => (leadEmailTrim ? isValidEmail(leadEmailTrim) : false), [leadEmailTrim]);
+  const leadEmailError = useMemo(() => {
+    if (!showLeadPrompt) return \"\";
+    if (!leadEmailTrim) return \"\";
+    return leadEmailValid ? \"\" : \"Please enter a valid email (e.g. name@domain.com).\";
+  }, [showLeadPrompt, leadEmailTrim, leadEmailValid]);
+
   async function sendToApi(nextMessages: ChatMessage[], nextLead: Lead) {
     setStatus("thinking");
     setErrorText("");
@@ -197,8 +211,12 @@ export default function ChatWidget() {
 
   async function submitLeadCapture() {
     const name = leadName.trim();
-    const email = leadEmail.trim();
+    const email = leadEmail.trim().toLowerCase();
     if (!name || !email) return;
+    if (!isValidEmail(email)) {
+      setErrorText("Please enter a valid email address.");
+      return;
+    }
 
     const nextLead: Lead = { ...lead, name, email };
     setLead(nextLead);
@@ -347,10 +365,14 @@ export default function ChatWidget() {
                         onChange={(e) => setLeadEmail(e.target.value)}
                         placeholder="Email"
                         type="email"
-                        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black {leadEmailError ? "border-red-400 focus:ring-red-200" : ""}"
                       />
 
-                      <div className="flex gap-2">
+                      
+                      {leadEmailError ? (
+                        <div className="text-xs text-red-600">{leadEmailError}</div>
+                      ) : null}
+<div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => setShowLeadPrompt(false)}
@@ -362,7 +384,7 @@ export default function ChatWidget() {
                           type="button"
                           onClick={submitLeadCapture}
                           className="flex-1 rounded-xl bg-black text-white px-3 py-2 text-sm font-semibold disabled:opacity-60"
-                          disabled={!leadName.trim() || !leadEmail.trim() || status === "thinking"}
+                          disabled={!leadName.trim() || !leadEmail.trim() || !leadEmailValid || status === "thinking"}
                         >
                           Send
                         </button>

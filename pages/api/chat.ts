@@ -30,6 +30,13 @@ type ChatOutput = {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+function isValidEmail(email: string | null | undefined): boolean {
+  const e = (email || "").trim();
+  if (!e) return false;
+  if (e.length < 6 || e.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(e);
+}
+
 function normalizeLead(input?: Partial<Lead> | null): Lead {
   const pc = input?.preferred_contact ?? null;
   const preferred_contact: PreferredContact | null =
@@ -37,7 +44,7 @@ function normalizeLead(input?: Partial<Lead> | null): Lead {
 
   return {
     name: input?.name ?? null,
-    email: input?.email ?? null,
+    email: (typeof input?.email === "string" ? input.email.trim().toLowerCase() : input?.email ?? null),
     phone: input?.phone ?? null,
     company: input?.company ?? null,
     website: input?.website ?? null,
@@ -162,20 +169,21 @@ async function maybeEmailLeadSummary(args: {
 
   if (!RESEND_API_KEY || !RESEND_FROM) return false;
 
-  // Only email when we have SOME contact path
-  if (!args.lead.email && !args.lead.phone) return false;
+  // We can still notify our inbox even if contact info is incomplete/invalid.
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Resend } = require("resend") as typeof import("resend");
   const resend = new Resend(RESEND_API_KEY);
 
   const who = args.lead.name || "New lead";
+  const emailOk = isValidEmail(args.lead.email);
+  const emailDisplay = args.lead.email ? (emailOk ? args.lead.email : `${args.lead.email} (invalid)`) : "n/a";
   const where =
     args.lead.preferred_contact
       ? `${methodLabel(args.lead.preferred_contact)}: ${
-          args.lead.preferred_contact === "email" ? args.lead.email || "n/a" : (formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a")
+          args.lead.preferred_contact === "email" ? emailDisplay : (formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a")
         }`
-      : `email: ${args.lead.email || "n/a"} / phone: ${args.lead.phone || "n/a"}`;
+      : `email: ${emailDisplay} / phone: ${formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a"}`;
 
   const subject = `X Dragon chat lead: ${who} (${where})`;
 
@@ -186,7 +194,7 @@ async function maybeEmailLeadSummary(args: {
     "Lead",
     `- Name: ${args.lead.name || "n/a"}`,
     `- Preferred contact: ${args.lead.preferred_contact || "n/a"}`,
-    `- Email: ${args.lead.email || "n/a"}`,
+    `- Email: ${emailDisplay}`,
     `- Phone: ${formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a"}`,
     `- Company: ${args.lead.company || "n/a"}`,
     `- Website: ${args.lead.website || "n/a"}`,
@@ -204,7 +212,7 @@ async function maybeEmailLeadSummary(args: {
     subject,
     text: lines.join("\n"),
   };
-  if (args.lead.email) payload.replyTo = args.lead.email;
+  if (emailOk) payload.replyTo = args.lead.email;
 
   await resend.emails.send(payload);
 
@@ -410,11 +418,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let emailed = false;
     const alreadyEmailed = !!emailedIn;
     if (!alreadyEmailed && wants_follow_up) {
-      // Only email when we have enough to reach user according to preferred method
+      // Notify our inbox even if the user typed an invalid email (don’t let replyTo break the send).
       const ready =
-        (mergedLead.preferred_contact === "email" && !!mergedLead.email) ||
-        ((mergedLead.preferred_contact === "phone" || mergedLead.preferred_contact === "text") && !!mergedLead.phone) ||
-        (!mergedLead.preferred_contact && (!!mergedLead.email || !!mergedLead.phone));
+        !!(mergedLead.name || mergedLead.email || mergedLead.phone || mergedLead.company || mergedLead.website);
 
       if (ready) {
         try {
@@ -426,7 +432,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             returnId,
           });
         } catch (e) {
-          // Surface errors in Vercel function logs for debugging.
           console.error("Resend send failed", e);
           emailed = false;
         }
