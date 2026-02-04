@@ -52,6 +52,28 @@ async function getUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 }
 
+
+function getXdAdminIdentity() {
+  const username = (process.env.XDADMIN_USERNAME || "xdadmin").trim().toLowerCase();
+  const email = (process.env.XDADMIN_EMAIL || "xdadmin@xdragon.tech").trim().toLowerCase();
+  const password = process.env.XDADMIN_PASSWORD || "";
+  return { username, email, password };
+}
+
+function isEnvAdminEmail(email: string | null | undefined): boolean {
+  const e = (email || "").trim().toLowerCase();
+  if (!e) return false;
+  const raw = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL_LIST || process.env.ADMIN_USERS || "";
+  if (!raw.trim()) return false;
+  const set = new Set(
+    raw
+      .split(/[,\s]+/)
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  return set.has(e);
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
 
@@ -106,10 +128,29 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, req) {
-        const email = credentials?.email?.trim().toLowerCase();
+        const emailRaw = credentials?.email?.trim() || "";
+        const email = emailRaw.toLowerCase();
         const password = credentials?.password ?? "";
 
         if (!email || !password) return null;
+
+        // Built-in super-admin (no DB dependency). Username is accepted in the email field.
+        const xd = getXdAdminIdentity();
+        if (email === xd.username || email === xd.email) {
+          if (!xd.password) return null;
+          if (password !== xd.password) return null;
+
+          // Best-effort login telemetry (never block auth if this fails)
+          try {
+            const ip = getClientIp(req);
+            const userAgent = getUserAgent(req);
+            await prisma.loginEvent.create({ data: { userId: "xdadmin", ip, userAgent } });
+          } catch (err) {
+            console.warn("xdadmin LoginEvent write failed:", err);
+          }
+
+          return { id: "xdadmin", email: xd.email, name: "xdadmin" };
+        }
 
         const user = await getUserByEmail(email);
         if (!user) return null;
@@ -149,6 +190,15 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
       }
 
+      // Super-admin is always ADMIN/ACTIVE (no DB record required).
+      const xd = getXdAdminIdentity();
+      const tokenEmail = token.email ? String(token.email).toLowerCase() : "";
+      if (tokenEmail && tokenEmail === xd.email) {
+        (token as any).role = "ADMIN";
+        (token as any).status = "ACTIVE";
+        return token;
+      }
+
       // Pull role/status from DB (keeps token accurate if you block/unblock).
       if (token.email) {
         const dbUser = await prisma.user.findUnique({
@@ -159,6 +209,18 @@ export const authOptions: NextAuthOptions = {
           (token as any).role = dbUser.role;
           (token as any).status = dbUser.status;
         }
+
+        // If an email is configured as admin via Vercel env, reflect that in the session token.
+        // This fixes the UI showing USER even when the account is effectively an admin.
+        if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
+          (token as any).role = "ADMIN";
+        }
+
+      }
+
+      // Fallback env-admin role when there's no DB user record (or before roles are backfilled).
+      if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
+        (token as any).role = "ADMIN";
       }
 
       return token;
