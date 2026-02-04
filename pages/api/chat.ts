@@ -183,7 +183,7 @@ async function maybeEmailLeadSummary(args: {
       ? `${methodLabel(args.lead.preferred_contact)}: ${
           args.lead.preferred_contact === "email" ? emailDisplay : (formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a")
         }`
-      : `email: ${emailDisplay} / phone: ${formatPhoneDisplay(args.lead.phone) || args.lead.phone || "n/a"}`;
+      : `email: ${args.lead.email || "n/a"} / phone: ${args.lead.phone || "n/a"}`;
 
   const subject = `X Dragon chat lead: ${who} (${where})`;
 
@@ -212,7 +212,7 @@ async function maybeEmailLeadSummary(args: {
     subject,
     text: lines.join("\n"),
   };
-  if (emailOk) payload.replyTo = args.lead.email;
+  if (args.lead.email) if (emailOk) payload.replyTo = args.lead.email;
 
   await resend.emails.send(payload);
 
@@ -361,6 +361,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       preferred_contact: out.lead.preferred_contact ?? leadIn.preferred_contact,
     };
 
+    // If the user typed an incomplete/invalid email, treat it as missing so we ask again.
+    // Keep the raw value for notifying our inbox (without using it as replyTo).
+    const invalidEmailAttempt =
+      mergedLead.email && !isValidEmail(mergedLead.email) ? mergedLead.email : null;
+    if (invalidEmailAttempt) mergedLead.email = null;
+
     // Normalize phone numbers to E.164-ish format for storage + emailing.
     mergedLead.phone = normalizePhone(mergedLead.phone, internationalHint);
 
@@ -385,7 +391,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       // Step 3: Collect the needed detail based on method
       else if (mergedLead.preferred_contact === "email" && !mergedLead.email) {
-        reply = `Great — what’s the best email to reach you at, ${mergedLead.name}?`;
+        reply = invalidEmailAttempt
+          ? `That email address looks incomplete (${invalidEmailAttempt}). What’s the full email to reach you at, ${mergedLead.name}?`
+          : `Great — what’s the best email to reach you at, ${mergedLead.name}?`;
         next_question = "What’s the best email to reach you at?";
       } else if ((mergedLead.preferred_contact === "phone" || mergedLead.preferred_contact === "text") && !mergedLead.phone) {
         reply = `Perfect — what phone number should we use for ${methodLabel(mergedLead.preferred_contact)}?`;
@@ -418,11 +426,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let emailed = false;
     const alreadyEmailed = !!emailedIn;
     if (!alreadyEmailed && wants_follow_up) {
-      // Notify our inbox even if the user typed an invalid email (don’t let replyTo break the send).
-      const ready =
-        !!(mergedLead.name || mergedLead.email || mergedLead.phone || mergedLead.company || mergedLead.website);
+      const hasInvalidEmailAttempt = !!invalidEmailAttempt;
+      const validReady =
+        (mergedLead.preferred_contact === "email" && isValidEmail(mergedLead.email)) ||
+        ((mergedLead.preferred_contact === "phone" || mergedLead.preferred_contact === "text") && !!mergedLead.phone) ||
+        (!mergedLead.preferred_contact && (isValidEmail(mergedLead.email) || !!mergedLead.phone));
 
-      if (ready) {
+      // If user attempted an email but it is invalid, notify our inbox (but keep `emailed` false so we can email again once valid).
+      if (hasInvalidEmailAttempt && mergedLead.preferred_contact === "email" && !mergedLead.phone) {
+        try {
+          await maybeEmailLeadSummary({
+            lead: { ...mergedLead, email: invalidEmailAttempt },
+            conversationId,
+            lastUserMessage: lastUser,
+            reply,
+            returnId,
+          });
+        } catch (e) {
+          console.error("Resend send failed (invalid email attempt)", e);
+        }
+      }
+
+      // Only email when we have enough to reach user according to preferred method
+      if (validReady) {
         try {
           emailed = await maybeEmailLeadSummary({
             lead: mergedLead,
@@ -432,6 +458,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             returnId,
           });
         } catch (e) {
+          // Surface errors in Vercel function logs for debugging.
           console.error("Resend send failed", e);
           emailed = false;
         }
