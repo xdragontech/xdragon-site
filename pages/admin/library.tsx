@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 import { authOptions } from "../api/auth/[...nextauth]";
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -30,24 +31,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
 export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
-
-  const [loggedInAs, setLoggedInAs] = useState<string>("");
-
-  useEffect(() => {
-    fetch("/api/auth/session")
-      .then((r) => r.json())
-      .then((s) => {
-        const u = s?.user;
-        const email = (u?.email || "").toString();
-        const name = (u?.name || "").toString();
-        const username = email ? email.split("@")[0] : (name ? name.split(" ")[0] : "");
-        setLoggedInAs(username);
-      })
-      .catch(() => {});
-  }, []);
-
   const isDashboard = router.pathname === "/admin/users";
-  const isAccounts = router.pathname === "/admin/accounts";
   const isLibrary = router.pathname === "/admin/library";
 
   return (
@@ -76,17 +60,12 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
             <div className="text-sm text-neutral-600">Library</div>
           </div>
 
-          <div className="flex flex-col items-end">
-            <button
+          <button
             onClick={() => void signOut({ callbackUrl: "/admin/signin" })}
-            className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
           >
             Sign out
           </button>
-            {loggedInAs ? (
-              <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
-            ) : null}
-          </div>
         </div>
       </header>
 
@@ -105,15 +84,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                   Dashboard
                 </Link>
                 <Link
-          href="/admin/accounts"
-          className={
-          "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800" +
-          (isAccounts ? " ring-2 ring-neutral-900/20" : "")
-          }
-          >
-          Accounts
-          </Link>
-          <Link
                   href="/admin/library"
                   className={
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
