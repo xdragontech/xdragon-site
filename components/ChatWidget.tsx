@@ -365,7 +365,7 @@ export default function ChatWidget() {
                         onChange={(e) => setLeadEmail(e.target.value)}
                         placeholder="Email"
                         type="email"
-                        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black {leadEmailError ? "border-red-400 focus:ring-red-200" : ""}"
+                        className={`${"w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"} ${leadEmailError ? "border-red-400 focus:ring-red-200" : ""}`}
                       />
 
                       
