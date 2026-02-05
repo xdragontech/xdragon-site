@@ -405,8 +405,8 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   }, [categories]);
 
   return (
-    <AdminLayout title="Admin • Prompts" sectionLabel="Library" active="library" loggedInAs={loggedInAs}>
-            {(err || msg) && (
+    <AdminLayout title="Admin • Prompts" sectionLabel="Library" active="library" loggedInAs={ loggedInAs }>
+{(err || msg) && (
               <div className="mb-4 space-y-2">
                 {err && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>}
                 {msg && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div>}
@@ -622,146 +622,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 </div>
               </div>
             </div>
-          
     </AdminLayout>
-  );
-setEditing(null);
-        }}
-      >
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <div className="text-xs font-semibold text-neutral-700">Title</div>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-                placeholder="e.g., Cold outreach email generator"
-              />
-            </label>
-
-            <label className="block">
-              <div className="text-xs font-semibold text-neutral-700">Status</div>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PromptStatus)}
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-              >
-                <option value="DRAFT">DRAFT</option>
-                <option value="PUBLISHED">PUBLISHED</option>
-                <option value="ARCHIVED">ARCHIVED</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <div className="text-xs font-semibold text-neutral-700">Category</div>
-              <select
-                value={promptCategoryId}
-                onChange={(e) => setPromptCategoryId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-              >
-                <option value="">Uncategorized</option>
-                {categoryOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-1 text-[11px] text-neutral-500">Create categories on the left panel.</div>
-            </label>
-
-            <label className="block">
-              <div className="text-xs font-semibold text-neutral-700">Description (optional)</div>
-              <input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-                placeholder="One-liner shown in the list"
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <div className="text-xs font-semibold text-neutral-700">Content</div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="mt-1 h-56 w-full resize-y rounded-xl border border-neutral-300 bg-white px-3 py-2 font-mono text-xs outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-              placeholder="Paste the prompt text here…"
-            />
-          </label>
-
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPromptModalOpen(false);
-                setEditing(null);
-              }}
-              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-              disabled={busy}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void savePrompt()}
-              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-              disabled={busy}
-            >
-              {busy ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Category modal */}
-      <SmallModal
-        open={catModalOpen}
-        title={catEditing ? "Edit category" : "New category"}
-        onClose={() => {
-          if (busy) return;
-          setCatModalOpen(false);
-          setCatEditing(null);
-        }}
-      >
-        <div className="space-y-4">
-          <label className="block">
-            <div className="text-xs font-semibold text-neutral-700">Name</div>
-            <input
-              value={catName}
-              onChange={(e) => setCatName(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-              placeholder="e.g., Marketing"
-            />
-            <div className="mt-1 text-[11px] text-neutral-500">Slug is generated automatically.</div>
-          </label>
-
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setCatModalOpen(false);
-                setCatEditing(null);
-              }}
-              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-              disabled={busy}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveCategory()}
-              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-              disabled={busy}
-            >
-              {busy ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      </SmallModal>
-    </div>
   );
 }
