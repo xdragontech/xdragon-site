@@ -6,6 +6,10 @@ import { authOptions } from "../../api/auth/[...nextauth]";
 import AdminHeader from "../../../components/admin/AdminHeader";
 import AdminSidebar from "../../../components/admin/AdminSidebar";
 
+type LibraryIndexProps = {
+  loggedInAs: string | null;
+};
+
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
 
@@ -22,17 +26,13 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     };
   }
 
-  return {
-    props: {
-      loggedInAs: (session as any)?.user?.email ?? null,
-    },
-  };
+  return { props: {} };
 };
 
-export default function \1({ loggedInAs }: { loggedInAs: string | null }) {
+export default function AdminLibraryIndex() {
   return (
     <div className="min-h-screen bg-neutral-50">
-      <AdminHeader sectionLabel="Library" loggedInAs={loggedInAs} />
+      <AdminHeader sectionLabel="Library" />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-6 lg:grid-cols-12">
           <AdminSidebar active="library" />
