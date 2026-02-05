@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { authOptions } from "../api/auth/[...nextauth]";
+import { authOptions } from "../../api/auth/[...nextauth]";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSidebar from "../../components/admin/AdminSidebar";
 
@@ -142,7 +142,7 @@ function SmallModal({
   );
 }
 
-export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function AdminLibraryPromptsPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
 
   const [loggedInAs, setLoggedInAs] = useState<string>("");
@@ -160,7 +160,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
 
   const isDashboard = router.pathname === "/admin/dashboard";
   const isAccounts = router.pathname === "/admin/accounts";
-  const isLibrary = router.pathname === "/admin/library/prompts" || router.pathname === "/admin/library";
+  const isLibrary = router.pathname.startsWith("/admin/library");
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -436,7 +436,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               </div>
 
               <div className="flex h-11 items-center">
-                <div className="text-sm text-neutral-600">Prompts</div>
+                <div className="text-sm text-neutral-600">Library</div>
               </div>
             </div>
 
@@ -488,16 +488,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 >
                   Library
                 </Link>
-
-                <Link
-                  href="/admin/library/articles"
-                  className={
-                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors"
-                  }
-                >
-                  Articles
-                </Link>
-
               </nav>
             </div>
           </aside>
