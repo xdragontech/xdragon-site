@@ -22,13 +22,17 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     };
   }
 
-  return { props: {} };
+  return {
+    props: {
+      loggedInAs: (session as any)?.user?.email ?? null,
+    },
+  };
 };
 
-export default function AdminLibraryIndex() {
+export default function \1({ loggedInAs }: { loggedInAs: string | null }) {
   return (
     <div className="min-h-screen bg-neutral-50">
-      <AdminHeader sectionLabel="Library" />
+      <AdminHeader sectionLabel="Library" loggedInAs={loggedInAs} />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-6 lg:grid-cols-12">
           <AdminSidebar active="library" />
