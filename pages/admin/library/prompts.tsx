@@ -1,14 +1,12 @@
 // pages/admin/library/prompts.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { authOptions } from "../../api/auth/[...nextauth]";
-import AdminHeader from "../../../components/admin/AdminHeader";
-import AdminSidebar from "../../../components/admin/AdminSidebar";
+import AdminLayout from "../../../components/admin/AdminLayout";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
@@ -407,56 +405,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   }, [categories]);
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <Head>
-        <title>X Dragon Command — Library</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </Head>
-
-      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="flex flex-col items-start">
-                <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
-                <div
-                  className="mt-1 font-semibold leading-none text-neutral-900"
-                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
-                >
-                  Command
-                </div>
-              </div>
-
-              <div className="flex h-11 items-center">
-                <div className="text-sm text-neutral-600">Library</div>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-end">
-              <button
-                onClick={() => signOut({ callbackUrl: "/admin/signin" })}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-              >
-                Sign out
-              </button>
-              {loggedInAs ? (
-                <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="grid gap-6 lg:grid-cols-12">
-          <AdminSidebar active="library" />
-
-          <section className="lg:col-span-10">
+    <AdminLayout title="Admin • Prompts" sectionLabel="Library" active="library" loggedInAs={loggedInAs}>
             {(err || msg) && (
               <div className="mb-4 space-y-2">
                 {err && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>}
@@ -673,18 +622,10 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 </div>
               </div>
             </div>
-          </section>
-        </div>
-      </main>
-
-      {/* Prompt modal */}
-      <Modal
-        open={promptModalOpen}
-        title={editing ? "Edit prompt" : "New prompt"}
-        onClose={() => {
-          if (busy) return;
-          setPromptModalOpen(false);
-          setEditing(null);
+          
+    </AdminLayout>
+  );
+setEditing(null);
         }}
       >
         <div className="space-y-4">

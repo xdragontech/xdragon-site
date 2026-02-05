@@ -1,11 +1,9 @@
 // pages/admin/dashboard.tsx
 import type { GetServerSideProps } from "next";
-import Head from "next/head";
 import { getServerSession } from "next-auth/next";
 import { useEffect, useRef, useState } from "react";
 import { authOptions } from "../api/auth/[...nextauth]";
-import AdminHeader from "../../components/admin/AdminHeader";
-import AdminSidebar from "../../components/admin/AdminSidebar";
+import AdminLayout from "../../components/admin/AdminLayout";
 
 type DashboardProps = {
   ok: true;
@@ -584,21 +582,7 @@ export default function AdminDashboardPage(_props: DashboardProps) {
   const signupCountries = aggregateCountries(metrics.signupCountries as any);
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <Head>
-        <title>Admin • Dashboard</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet" />
-      </Head>
-
-      <AdminHeader sectionLabel="Dashboard" loggedInAs={loggedInAs} />
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="grid gap-6 lg:grid-cols-12">
-          <AdminSidebar active="dashboard" />
-
-          <section className="lg:col-span-10">
+    <AdminLayout title="Admin • Dashboard" sectionLabel="Dashboard" active="dashboard" loggedInAs={loggedInAs}>
             <div className="mb-4 grid gap-4 lg:grid-cols-10">
               <div className="lg:col-span-7">
                 <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
@@ -632,6 +616,60 @@ export default function AdminDashboardPage(_props: DashboardProps) {
                           </button>
                         );
                       })}
+
+                      <button
+                        onClick={() => void loadMetrics(period)}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                        disabled={metricsLoading}
+                        title="Refresh chart & table"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    {metricsLoading ? (
+                      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
+                    ) : metricsError ? (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
+                    ) : (
+                      <>
+                        <MiniLineChart points={points} />
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                            <span className="text-neutral-500">Signups:</span>{" "}
+                            <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
+                          </div>
+                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                            <span className="text-neutral-500">Logins:</span>{" "}
+                            <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Heatmap below chart */}
+                <WorldHeatMapCard
+                  mode={geoMode}
+                  onModeChange={setGeoMode}
+                  periodLabel={period === "today" ? "today" : period === "7d" ? "the last 7 days" : "this month"}
+                  countries={geoMode === "logins" ? loginCountries : signupCountries}
+                  loading={metricsLoading}
+                  error={metricsError}
+                />
+              </div>
+
+              <div className="lg:col-span-3">
+                <LoginIpsTable loading={metricsLoading} error={metricsError} groups={metrics.ok ? metrics.ipGroups : []} />
+              </div>
+            </div>
+          
+    </AdminLayout>
+  );
+})}
 
                       <button
                         onClick={() => void loadMetrics(period)}
