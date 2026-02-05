@@ -7,8 +7,8 @@ import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { authOptions } from "../../api/auth/[...nextauth]";
-import AdminHeader from "../../components/admin/AdminHeader";
-import AdminSidebar from "../../components/admin/AdminSidebar";
+import AdminHeader from "../../../components/admin/AdminHeader";
+import AdminSidebar from "../../../components/admin/AdminSidebar";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
@@ -142,7 +142,7 @@ function SmallModal({
   );
 }
 
-export default function AdminLibraryPromptsPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
 
   const [loggedInAs, setLoggedInAs] = useState<string>("");
