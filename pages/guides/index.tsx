@@ -82,40 +82,10 @@ export default function GuidesIndexPage(_props: InferGetServerSidePropsType<type
   return (
     <div className="min-h-screen bg-neutral-50">
       <Head>
-        <title>Guides • X Dragon</title>
+        <title>Guides — X Dragon</title>
       </Head>
 
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-4xl px-4 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-lg font-semibold text-neutral-900">Guides</div>
-              <div className="mt-1 text-sm text-neutral-600">Search how-to and educational articles.</div>
-            </div>
-            <Link
-              href="/"
-              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-            >
-              Home
-            </Link>
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search guides…"
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-            />
-            <button
-              onClick={() => void load()}
-              className="rounded-xl border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-            >
-              Search
-            </button>
-          </div>
-        </div>
-      </header>
+      <ResourcesHeader sectionLabel="Tools & guides" loggedInAs={email} />
 
       <main className="mx-auto max-w-4xl px-4 py-6">
         {err ? (
