@@ -5,7 +5,7 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { PrismaClient } from "@prisma/client";
-import { requireUser } from "../lib/requireUser";
+import { requireUser } from "../../lib/requireUser";
 
 type PromptItem = {
   id: string;
