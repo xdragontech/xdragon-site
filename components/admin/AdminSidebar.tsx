@@ -16,7 +16,7 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
 
   // Sub-nav styling: matches the same button look, just slightly smaller + indented
   const subBase =
-    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-neutral-800";
+    "block w-full rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-500";
 
   const isOnLibraryRoute = router.pathname.startsWith("/admin/library");
   const subItemClass = (href: string) =>
