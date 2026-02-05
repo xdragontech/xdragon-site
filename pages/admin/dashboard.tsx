@@ -73,75 +73,95 @@ function arraysToPoints(m: MetricsOk): MetricsPoint[] {
 }
 
 function normalizeKey(name: string) {
-  return (name || "")
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .replace(/[’'"]/g, "")
-    .replace(/\(.*?\)/g, "")
-    .trim();
-}
+  
+return (
+    <AdminLayout title="Admin • Dashboard" sectionLabel="Dashboard" active="dashboard" loggedInAs={loggedInAs}>
+<div className="mb-4 grid gap-4 lg:grid-cols-10">
+              <div className="lg:col-span-7">
+                <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">New signups & logins</div>
+                      <div className="mt-1 text-xs text-neutral-500">
+                        Signups in <span className="font-medium text-red-600">red</span>, logins in{" "}
+                        <span className="font-medium text-neutral-700">white</span>
+                      </div>
+                    </div>
 
-function canonicalCountryKey(name: string) {
-  const k = normalizeKey(name);
-  const aliases: Record<string, string> = {
-    usa: "united states of america",
-    us: "united states of america",
-    "united states": "united states of america",
-    uk: "united kingdom",
-    russia: "russian federation",
-    vietnam: "viet nam",
-    iran: "iran, islamic republic of",
-    syria: "syrian arab republic",
-    laos: "lao peoples democratic republic",
-    bolivia: "bolivia, plurinational state of",
-    tanzania: "tanzania, united republic of",
-    venezuela: "venezuela, bolivarian republic of",
-    "czech republic": "czechia",
-    "south korea": "korea, republic of",
-    "north korea": "korea, democratic peoples republic of",
-    "ivory coast": "côte divoire",
-    "cote divoire": "côte divoire",
-  };
-  return aliases[k] || k;
-}
+                    <div className="flex items-center gap-2">
+                      {([
+                        { key: "today" as const, label: "Today" },
+                        { key: "7d" as const, label: "Last 7 days" },
+                        { key: "month" as const, label: "This month" },
+                      ] as const).map((p) => {
+                        const active = period === p.key;
+                        return (
+                          <button
+                            key={p.key}
+                            onClick={() => setPeriod(p.key)}
+                            className={
+                              active
+                                ? "rounded-xl bg-neutral-900 px-3 py-2 text-xs font-semibold text-white"
+                                : "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                            }
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
 
-function heatFill(value: number, max: number) {
-  // White background with red shading. Gamma curve makes differences visible.
-  if (!max || max <= 0) return "rgba(220, 38, 38, 0.00)";
-  const raw = Math.max(0, Math.min(1, value / max));
-  const t = Math.pow(raw, 0.55);
-  const a = value <= 0 ? 0.0 : 0.08 + t * 0.77; // 0.08..0.85
-  return `rgba(220, 38, 38, ${a.toFixed(3)})`;
-}
+                      <button
+                        onClick={() => void loadMetrics(period)}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                        disabled={metricsLoading}
+                        title="Refresh chart & table"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
 
-function aggregateCountries(rows: Array<{ country?: string | null; count?: number | null }>): CountryCount[] {
-  const map = new Map<string, number>();
-  for (const r of rows || []) {
-    const name = (r?.country || "Unknown").toString();
-    const count = Number(r?.count || 0) || 0;
-    map.set(name, (map.get(name) || 0) + count);
-  }
-  return Array.from(map.entries())
-    .map(([country, count]) => ({ country, count }))
-    .sort((a, b) => b.count - a.count);
-}
+                  <div className="mt-3">
+                    {metricsLoading ? (
+                      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
+                    ) : metricsError ? (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
+                    ) : (
+                      <>
+                        <MiniLineChart points={points} />
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                            <span className="text-neutral-500">Signups:</span>{" "}
+                            <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
+                          </div>
+                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
+                            <span className="text-neutral-500">Logins:</span>{" "}
+                            <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-function MiniLineChart({ points }: { points: MetricsPoint[] }) {
-  const w = 600;
-  const h = 170;
-  const signupsPath = buildLinePath(points, "signups", w, h);
-  const loginsPath = buildLinePath(points, "logins", w, h);
+                {/* Heatmap below chart */}
+                <WorldHeatMapCard
+                  mode={geoMode}
+                  onModeChange={setGeoMode}
+                  periodLabel={period === "today" ? "today" : period === "7d" ? "the last 7 days" : "this month"}
+                  countries={geoMode === "logins" ? loginCountries : signupCountries}
+                  loading={metricsLoading}
+                  error={metricsError}
+                />
+              </div>
 
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-[170px] w-full rounded-xl border border-neutral-200 bg-neutral-900">
-      <path d={loginsPath} fill="none" stroke="rgba(255,255,255,0.90)" strokeWidth="3" />
-      <path d={signupsPath} fill="none" stroke="rgba(220,38,38,0.95)" strokeWidth="3" />
-    </svg>
+              <div className="lg:col-span-3">
+                <LoginIpsTable loading={metricsLoading} error={metricsError} groups={metrics.ok ? metrics.ipGroups : []} />
+              </div>
+            </div>
+    </AdminLayout>
   );
-}
+
 
 function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: string | null; groups: LoginIpGroup[] }) {
   const top = (groups || []).slice(0, 10);
@@ -582,7 +602,21 @@ export default function AdminDashboardPage(_props: DashboardProps) {
   const signupCountries = aggregateCountries(metrics.signupCountries as any);
 
   return (
-    <AdminLayout title="Admin • Dashboard" sectionLabel="Dashboard" active="dashboard" loggedInAs={loggedInAs}>
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <Head>
+        <title>Admin • Dashboard</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet" />
+      </Head>
+
+      <AdminHeader sectionLabel="Dashboard" loggedInAs={loggedInAs} />
+
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid gap-6 lg:grid-cols-12">
+          <AdminSidebar active="dashboard" />
+
+          <section className="lg:col-span-10">
             <div className="mb-4 grid gap-4 lg:grid-cols-10">
               <div className="lg:col-span-7">
                 <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
@@ -616,60 +650,6 @@ export default function AdminDashboardPage(_props: DashboardProps) {
                           </button>
                         );
                       })}
-
-                      <button
-                        onClick={() => void loadMetrics(period)}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                        disabled={metricsLoading}
-                        title="Refresh chart & table"
-                      >
-                        Refresh
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    {metricsLoading ? (
-                      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">Loading…</div>
-                    ) : metricsError ? (
-                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metricsError}</div>
-                    ) : (
-                      <>
-                        <MiniLineChart points={points} />
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-                            <span className="text-neutral-500">Signups:</span>{" "}
-                            <span className="font-semibold">{metrics?.totals.signups ?? 0}</span>
-                          </div>
-                          <div className="rounded-xl bg-neutral-50 px-3 py-2 text-neutral-900">
-                            <span className="text-neutral-500">Logins:</span>{" "}
-                            <span className="font-semibold">{metrics?.totals.logins ?? 0}</span>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Heatmap below chart */}
-                <WorldHeatMapCard
-                  mode={geoMode}
-                  onModeChange={setGeoMode}
-                  periodLabel={period === "today" ? "today" : period === "7d" ? "the last 7 days" : "this month"}
-                  countries={geoMode === "logins" ? loginCountries : signupCountries}
-                  loading={metricsLoading}
-                  error={metricsError}
-                />
-              </div>
-
-              <div className="lg:col-span-3">
-                <LoginIpsTable loading={metricsLoading} error={metricsError} groups={metrics.ok ? metrics.ipGroups : []} />
-              </div>
-            </div>
-          
-    </AdminLayout>
-  );
-})}
 
                       <button
                         onClick={() => void loadMetrics(period)}
