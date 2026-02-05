@@ -524,7 +524,7 @@ export const getServerSideProps: GetServerSideProps<DashboardProps> = async (ctx
 };
 
 export default function AdminDashboardPage(_props: DashboardProps) {
-  const loggedInAs = (_props.me.email ?? "").toString().split("@")[0];
+  const loggedInAs = (_props.me?.email ?? "").toString().split("@")[0];
 
   const [loggedInAs, setLoggedInAs] = useState<string>("");
 
