@@ -1,11 +1,9 @@
 // pages/guides/index.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
-import Head from "next/head";
 import Link from "next/link";
-import { getServerSession } from "next-auth/next";
 import { useEffect, useMemo, useState } from "react";
-import { authOptions } from "../api/auth/[...nextauth]";
-import ResourcesHeader from "../../components/resources/ResourcesHeader";
+import ResourcesLayout from "../../components/resources/ResourcesLayout";
+import { requireUser } from "../../lib/requireUser";
 
 type Article = {
   id: string;
@@ -21,16 +19,15 @@ type ApiOk = { ok: true; articles: Article[] };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-  const status = (session as any)?.status as string | undefined;
-
-  if (!session?.user || status === "BLOCKED") {
+  const { session, user, redirectTo } = await requireUser(ctx);
+  if (redirectTo || !session?.user || !user || user.status === "BLOCKED") {
     const callbackUrl = encodeURIComponent("/guides");
     return {
-      redirect: { destination: `/signin?callbackUrl=${callbackUrl}`, permanent: false },
+      redirect: { destination: `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
     };
   }
-  return { props: {} };
+
+  return { props: { email: session.user.email ?? null } };
 };
 
 function fmtDate(iso?: string | null) {
@@ -81,43 +78,7 @@ export default function GuidesIndexPage(_props: InferGetServerSidePropsType<type
   }, [articles, q]);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <Head>
-        <title>Guides • X Dragon</title>
-      </Head>
-
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-4xl px-4 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-lg font-semibold text-neutral-900">Guides</div>
-              <div className="mt-1 text-sm text-neutral-600">Search how-to and educational articles.</div>
-            </div>
-            <Link
-              href="/"
-              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-            >
-              Home
-            </Link>
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search guides…"
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-            />
-            <button
-              onClick={() => void load()}
-              className="rounded-xl border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-            >
-              Search
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <ResourcesLayout title="Guides — X Dragon" sectionLabel="Tools & guides" loggedInAs={(_props as any).email ?? null} active="guides">
       <main className="mx-auto max-w-4xl px-4 py-6">
         {err ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
@@ -151,6 +112,6 @@ export default function GuidesIndexPage(_props: InferGetServerSidePropsType<type
           </div>
         )}
       </main>
-    </div>
+    </ResourcesLayout>
   );
 }

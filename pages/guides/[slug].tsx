@@ -1,11 +1,10 @@
 // pages/guides/[slug].tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
-import Head from "next/head";
+import { requireUser } from "../../lib/requireUser";
 import Link from "next/link";
-import { getServerSession } from "next-auth/next";
+import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { authOptions } from "../api/auth/[...nextauth]";
 
 type Article = {
   id: string;
@@ -22,11 +21,15 @@ type ApiOk = { ok: true; article: Article };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-  const status = (session as any)?.status as string | undefined;
+  const { session, user, redirectTo } = await requireUser(ctx);
+  if (redirectTo || !session?.user || !user || user.status === "BLOCKED") {
+    const callbackUrl = encodeURIComponent(`/guides/${slug}`);
+    return {
+      redirect: { destination: `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
+    };
+  }
 
-  if (!session?.user || status === "BLOCKED") {
-    const callbackUrl = encodeURIComponent(`/guides/${ctx.params?.slug || ""}`);
+`);
     return { redirect: { destination: `/signin?callbackUrl=${callbackUrl}`, permanent: false } };
   }
 
@@ -54,30 +57,7 @@ export default function GuidePage(_props: InferGetServerSidePropsType<typeof get
   }, [slug]);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <Head>
-        <title>{article?.title ? `${article.title} • Guides` : "Guide • X Dragon"}</title>
-      </Head>
-
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-5">
-          <Link href="/guides" className="text-sm font-semibold text-neutral-800 hover:underline">
-            ← Back to Guides
-          </Link>
-
-          {err ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div> : null}
-
-          {article ? (
-            <>
-              <div className="mt-3 text-xl font-semibold text-neutral-900">{article.title}</div>
-              <div className="mt-2 text-sm text-neutral-600">{article.summary}</div>
-            </>
-          ) : !err ? (
-            <div className="mt-4 text-sm text-neutral-600">Loading…</div>
-          ) : null}
-        </div>
-      </header>
-
+    <ResourcesLayout title={`${(_props as any).item?.title ?? "Guide"} — X Dragon`} sectionLabel="Tools & guides" loggedInAs={(_props as any).email ?? null} active="guides">
       <main className="mx-auto max-w-3xl px-4 py-6">
         {article ? (
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -85,6 +65,6 @@ export default function GuidePage(_props: InferGetServerSidePropsType<typeof get
           </div>
         ) : null}
       </main>
-    </div>
+    </ResourcesLayout>
   );
 }
