@@ -1,14 +1,15 @@
 import Link from "next/link";
 
 type AdminSidebarProps = {
-  active: "dashboard" | "accounts" | "library" | "articles";
+  active: "dashboard" | "accounts" | "library";
 };
 
 export default function AdminSidebar({ active }: AdminSidebarProps) {
   const base =
     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800";
 
-  const itemClass = (key: AdminSidebarProps["active"]) => base + (active === key ? " ring-2 ring-neutral-900/20" : "");
+  const itemClass = (key: AdminSidebarProps["active"]) =>
+    base + (active === key ? " ring-2 ring-neutral-900/20" : "");
 
   return (
     <aside className="lg:col-span-2">
@@ -22,9 +23,6 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
           </Link>
           <Link href="/admin/library" className={itemClass("library")}>
             Library
-          </Link>
-          <Link href="/admin/library/articles" className={itemClass("articles")}>
-            Articles
           </Link>
         </nav>
       </div>
