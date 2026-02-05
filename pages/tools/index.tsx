@@ -1,9 +1,8 @@
 // pages/tools/index.tsx
 import type { GetServerSideProps } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { PrismaClient } from "@prisma/client";
-import ResourcesHeader from "../../components/resources/ResourcesHeader";
+import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { requireUser } from "../../lib/requireUser";
 
 type Props = {
@@ -16,15 +15,8 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export default function ResourcesIndex({ email }: Props) {
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <Head>
-        <title>Resources — X Dragon</title>
-      </Head>
-
-      <ResourcesHeader sectionLabel="Tools & guides" loggedInAs={email} />
-
-<main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+    <ResourcesLayout title="Resources — X Dragon" sectionLabel="Tools & guides" loggedInAs={email} active="resources">
+<div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-semibold text-neutral-900">Choose a resource</h1>
           <p className="mt-1 text-sm text-neutral-600">
             Select what you want to browse. Prompts are ready-to-use templates; Guides are how-to and educational articles.
@@ -50,8 +42,7 @@ export default function ResourcesIndex({ email }: Props) {
             </Link>
           </div>
         </div>
-      </main>
-    </div>
+    </ResourcesLayout>
   );
 }
 
