@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PrismaClient } from "@prisma/client";
 import { requireUser } from "../../lib/requireUser";
+import ResourcesLayout from "../../components/resources/ResourcesLayout";
 
 type PromptItem = {
   id: string;
