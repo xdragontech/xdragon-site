@@ -139,3 +139,38 @@ model Prompt {
   @@index([categoryId])
   @@index([title])
 }
+
+
+// --- Articles (separate from Prompt Library) ---
+
+model ArticleCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  articles  Article[]
+}
+
+model Article {
+  id         String       @id @default(cuid())
+  title      String
+  slug       String       @unique
+  summary    String
+  content    String
+  status     PromptStatus @default(DRAFT)
+
+  categoryId String?
+  category   ArticleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Optional tags (Postgres text[])
+  tags       String[]     @default([])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([title])
+}
