@@ -8,8 +8,7 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
   const base =
     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800";
 
-  const itemClass = (key: AdminSidebarProps["active"]) =>
-    base + (active === key ? " ring-2 ring-neutral-900/20" : "");
+  const itemClass = (key: AdminSidebarProps["active"]) => base + (active === key ? " ring-2 ring-neutral-900/20" : "");
 
   return (
     <aside className="lg:col-span-2">
