@@ -1,15 +1,26 @@
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 type AdminSidebarProps = {
   active: "dashboard" | "accounts" | "library";
 };
 
 export default function AdminSidebar({ active }: AdminSidebarProps) {
+  const router = useRouter();
+
   const base =
     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800";
 
   const itemClass = (key: AdminSidebarProps["active"]) =>
     base + (active === key ? " ring-2 ring-neutral-900/20" : "");
+
+  // Sub-nav styling: matches the same button look, just slightly smaller + indented
+  const subBase =
+    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-neutral-800";
+  const subItemClass = (href: string) =>
+    subBase + (router.pathname === href ? " ring-2 ring-neutral-900/20" : "");
+
+  const showLibraryTree = active === "library";
 
   return (
     <aside className="lg:col-span-2">
@@ -18,12 +29,27 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
           <Link href="/admin/dashboard" className={itemClass("dashboard")}>
             Dashboard
           </Link>
+
           <Link href="/admin/accounts" className={itemClass("accounts")}>
             Accounts
           </Link>
-          <Link href="/admin/library" className={itemClass("library")}>
-            Library
-          </Link>
+
+          <div className="space-y-2">
+            <Link href="/admin/library" className={itemClass("library")}>
+              Library
+            </Link>
+
+            {showLibraryTree && (
+              <div className="space-y-2 pl-3">
+                <Link href="/admin/library/prompts" className={subItemClass("/admin/library/prompts")}>
+                  Prompts
+                </Link>
+                <Link href="/admin/library/articles" className={subItemClass("/admin/library/articles")}>
+                  Articles
+                </Link>
+              </div>
+            )}
+          </div>
         </nav>
       </div>
     </aside>
