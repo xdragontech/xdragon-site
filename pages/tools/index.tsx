@@ -73,7 +73,7 @@ export default function ResourcesIndex({ email }: Props) {
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <Link
-              href="/tools/prompts"
+              href="/prompts"
               className="group rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:bg-neutral-50"
             >
               <div className="text-base font-semibold text-neutral-900">Prompts</div>
