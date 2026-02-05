@@ -21,7 +21,9 @@ type ApiOk = { ok: true; article: Article };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const slug = String(ctx.params?.slug ?? "");
   const { session, user, redirectTo } = await requireUser(ctx);
+
   if (redirectTo || !session?.user || !user || user.status === "BLOCKED") {
     const callbackUrl = encodeURIComponent(`/guides/${slug}`);
     return {
@@ -29,11 +31,27 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     };
   }
 
-`);
-    return { redirect: { destination: `/signin?callbackUrl=${callbackUrl}`, permanent: false } };
-  }
+  // Existing guide fetch logic
+  try {
+    const res = await fetch(`${process.env.NEXTAUTH_URL ?? ""}/api/guides/${encodeURIComponent(slug)}`, {
+      headers: { cookie: ctx.req.headers.cookie ?? "" },
+    });
 
-  return { props: {} };
+    if (!res.ok) {
+      return { notFound: true };
+    }
+
+    const data = await res.json();
+    const article = (data as any).item ?? (data as any);
+
+    if (!article) {
+      return { notFound: true };
+    }
+
+    return { props: { item: article, email: session.user.email ?? null } };
+  } catch (_err) {
+    return { notFound: true };
+  }
 };
 
 export default function GuidePage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
