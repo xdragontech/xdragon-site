@@ -163,7 +163,7 @@ function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: st
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">IP</th>
                   <th className="px-3 py-2 text-left font-semibold">CTRY</th>
-                  <th className="px-3 py-2 text-right font-semibold">Count</th>
+                  <th className="px-3 py-2 text-right font-semibold">Cnt</th>
                 </tr>
               </thead>
               <tbody>
