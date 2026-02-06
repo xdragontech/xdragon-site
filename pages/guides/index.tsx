@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { requireUser } from "../../lib/requireUser";
 
-type Article = {
+type Guide = {
   id: string;
   title: string;
   slug: string;
@@ -15,7 +15,7 @@ type Article = {
   tags?: string[] | null;
 };
 
-type ApiOk = { ok: true; articles: Article[] };
+type ApiOk = { ok: true; articles: Guide[] };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -41,7 +41,7 @@ export default function GuidesIndexPage(_props: InferGetServerSidePropsType<type
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<Guide[]>([]);
 
   async function load() {
     setLoading(true);
