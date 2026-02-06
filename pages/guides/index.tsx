@@ -15,7 +15,7 @@ type Guide = {
   tags?: string[] | null;
 };
 
-type ApiOk = { ok: true; articles: Guide[] };
+type ApiOk = { ok: true; guides: Guide[] };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -51,7 +51,7 @@ export default function GuidesIndexPage(_props: InferGetServerSidePropsType<type
       const res = await fetch(url);
       const data = (await res.json()) as ApiOk | ApiErr;
       if (!res.ok || !data.ok) throw new Error((data as ApiErr).error || "Request failed");
-      setArticles((data as ApiOk).articles);
+      setArticles((data as ApiOk).guides);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load guides");
     } finally {
