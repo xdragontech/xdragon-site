@@ -511,7 +511,7 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
                 </div>
               </div>
 
-              {/* Articles */}
+              {/* Guides */}
               <div className="lg:col-span-8">
                 <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
