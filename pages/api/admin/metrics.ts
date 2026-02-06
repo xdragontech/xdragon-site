@@ -56,7 +56,7 @@ async function countryForIp(ip: string): Promise<string | null> {
       headers: { "User-Agent": "xdragon-admin-metrics" },
     });
     const j: any = await r.json().catch(() => null);
-    const c = j && j.success ? (j.country_code || j.country || null) : null;
+    const c = j && j.success ? (j.country || j.country_code || null) : null;
     geoCache.set(ip, c);
     return c;
   } catch {
