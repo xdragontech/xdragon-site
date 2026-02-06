@@ -32,9 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       include: { category: true },
     });
 
-    if (!article || article.status !== "PUBLISHED") return res.status(404).json({ ok: false, error: "Not found" });
+    if (!guide || guide.status !== "PUBLISHED") return res.status(404).json({ ok: false, error: "Not found" });
 
-    return res.status(200).json({ ok: true, article });
+    return res.status(200).json({ ok: true, item: guide });
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "Server error";
     return res.status(500).json({ ok: false, error: msg });
