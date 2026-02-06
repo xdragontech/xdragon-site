@@ -39,14 +39,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         : { status: "PUBLISHED" };
 
-    const articles = await (prisma as any).article.findMany({
+    const guides = await (prisma as any).guide.findMany({
       where,
       include: { category: true },
       orderBy: [{ updatedAt: "desc" }],
       take: 200,
     });
 
-    return res.status(200).json({ ok: true, articles });
+    return res.status(200).json({ ok: true, guides });
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "Server error";
     return res.status(500).json({ ok: false, error: msg });

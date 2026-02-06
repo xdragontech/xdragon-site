@@ -61,7 +61,7 @@ export default function AdminLibraryIndex({ loggedInAs }: LibraryIndexProps): JS
                 </Link>
 
                 <Link
-                  href="/admin/library/articles"
+                  href="/admin/library/guides"
                   className="block w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-neutral-50"
                 >
                   Articles

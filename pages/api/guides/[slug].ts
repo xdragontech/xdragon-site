@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ ok: false, error: "Method not allowed" });
     }
 
-    const article = await (prisma as any).article.findUnique({
+    const guide = await (prisma as any).guide.findUnique({
       where: { slug },
       include: { category: true },
     });

@@ -143,17 +143,21 @@ model Prompt {
 
 // --- Articles (separate from Prompt Library) ---
 
-model ArticleCategory {
+model GuideCategory {
+
   id        String   @id @default(cuid())
   name      String   @unique
   slug      String   @unique
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  articles  Article[]
+  guides    Guide[]
+
+  @@map("ArticleCategory")
 }
 
-model Article {
+model Guide {
+
   id         String       @id @default(cuid())
   title      String
   slug       String       @unique
@@ -162,7 +166,7 @@ model Article {
   status     PromptStatus @default(DRAFT)
 
   categoryId String?
-  category   ArticleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category   GuideCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   // Optional tags (Postgres text[])
   tags       String[]     @default([])
@@ -173,4 +177,6 @@ model Article {
   @@index([status])
   @@index([categoryId])
   @@index([title])
+
+  @@map("Article")
 }
