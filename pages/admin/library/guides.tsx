@@ -11,7 +11,7 @@ import AdminSidebar from "../../../components/admin/AdminSidebar";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
-type ArticleCategoryRow = {
+type GuideCategoryRow = {
   id: string;
   name: string;
   slug: string;
@@ -30,11 +30,11 @@ type GuideRow = {
   createdAt?: string | null;
   updatedAt?: string | null;
   categoryId?: string | null;
-  category?: ArticleCategoryRow | null;
+  category?: GuideCategoryRow | null;
 };
 
 type ApiOkGuides = { ok: true; guides: GuideRow[] };
-type ApiOkCats = { ok: true; categories: ArticleCategoryRow[] };
+type ApiOkCats = { ok: true; categories: GuideCategoryRow[] };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -171,7 +171,7 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
   const [statusFilter, setStatusFilter] = useState<"ALL" | PromptStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL"); // categoryId
 
-  const [categories, setCategories] = useState<ArticleCategoryRow[]>([]);
+  const [categories, setCategories] = useState<GuideCategoryRow[]>([]);
   const [guides, setGuides] = useState<GuideRow[]>([]);
 
   // Article modal state
@@ -187,7 +187,7 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
 
   // Category modal state
   const [catModalOpen, setCatModalOpen] = useState(false);
-  const [catEditing, setCatEditing] = useState<ArticleCategoryRow | null>(null);
+  const [catEditing, setCatEditing] = useState<GuideCategoryRow | null>(null);
   const [catName, setCatName] = useState("");
 
   const categoryOptions = useMemo(() => categories.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")), [categories]);
@@ -259,7 +259,7 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
     setCatModalOpen(true);
   }
 
-  function openEditCategory(c: ArticleCategoryRow) {
+  function openEditCategory(c: GuideCategoryRow) {
     setCatEditing(c);
     setCatName(c.name);
     setCatModalOpen(true);
@@ -300,7 +300,7 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
     }
   }
 
-  async function deleteCategory(c: ArticleCategoryRow) {
+  async function deleteCategory(c: GuideCategoryRow) {
     if (!confirm(`Delete category "${c.name}"?`)) return;
     setBusy(true);
     setErr(null);
@@ -449,12 +449,12 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
             )}
 
             <div className="grid gap-6 lg:grid-cols-12">
-              {/* Article Categories */}
+              {/* Guide Categories */}
               <div className="lg:col-span-4">
                 <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-neutral-900">Article Categories</div>
+                      <div className="text-sm font-semibold text-neutral-900">Guide Categories</div>
                       <div className="mt-1 text-xs text-neutral-500">Separate categories for guides.</div>
                     </div>
                     <button
@@ -511,7 +511,7 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
                 </div>
               </div>
 
-              {/* Guides */}
+              {/* Articles */}
               <div className="lg:col-span-8">
                 <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
