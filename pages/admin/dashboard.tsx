@@ -170,7 +170,7 @@ function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: st
                 {top.map((r) => (
                   <tr key={r.ip} className="border-t border-neutral-200">
                     <td className="px-3 py-2 font-mono text-xs text-neutral-800">{r.ip}</td>
-                    <td className="px-3 py-2 text-neutral-700">{(r as any).countryIso3 || r.country || "—"}</td>
+                    <td className="px-3 py-2 text-neutral-700">{r.country || "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold text-neutral-900">{r.count}</td>
                   </tr>
                 ))}
