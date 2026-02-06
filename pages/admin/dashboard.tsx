@@ -1,9 +1,11 @@
 // pages/admin/dashboard.tsx
 import type { GetServerSideProps } from "next";
+import Head from "next/head";
 import { getServerSession } from "next-auth/next";
 import { useEffect, useRef, useState } from "react";
 import { authOptions } from "../api/auth/[...nextauth]";
-import AdminLayout from "../../components/admin/AdminLayout";
+import AdminHeader from "../../components/admin/AdminHeader";
+import AdminSidebar from "../../components/admin/AdminSidebar";
 
 type DashboardProps = {
   ok: true;
@@ -160,7 +162,7 @@ function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: st
               <thead className="bg-neutral-50 text-neutral-600">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">IP</th>
-                  <th className="px-3 py-2 text-left font-semibold">Country</th>
+                  <th className="px-3 py-2 text-left font-semibold">CTRY</th>
                   <th className="px-3 py-2 text-right font-semibold">Count</th>
                 </tr>
               </thead>
@@ -582,8 +584,22 @@ export default function AdminDashboardPage(_props: DashboardProps) {
   const signupCountries = aggregateCountries(metrics.signupCountries as any);
 
   return (
-    <AdminLayout title="Admin • Dashboard" sectionLabel="Dashboard" active="dashboard" loggedInAs={loggedInAs}>
-<div className="mb-4 grid gap-4 lg:grid-cols-10">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <Head>
+        <title>Admin • Dashboard</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet" />
+      </Head>
+
+      <AdminHeader sectionLabel="Dashboard" loggedInAs={loggedInAs} />
+
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid gap-6 lg:grid-cols-12">
+          <AdminSidebar active="dashboard" />
+
+          <section className="lg:col-span-10">
+            <div className="mb-4 grid gap-4 lg:grid-cols-10">
               <div className="lg:col-span-7">
                 <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -666,6 +682,9 @@ export default function AdminDashboardPage(_props: DashboardProps) {
                 <LoginIpsTable loading={metricsLoading} error={metricsError} groups={metrics.ok ? metrics.ipGroups : []} />
               </div>
             </div>
-    </AdminLayout>
+          </section>
+        </div>
+      </main>
+    </div>
   );
 }
