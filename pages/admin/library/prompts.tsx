@@ -419,7 +419,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-neutral-900">Categories</div>
+                      <div className="text-sm font-semibold text-neutral-900">Prompt Categories</div>
                       <div className="mt-1 text-xs text-neutral-500">Manage categories used by /tools.</div>
                     </div>
                     <button
