@@ -513,21 +513,29 @@ export default function AdminGuidesPage(_props: InferGetServerSidePropsType<type
 
               {/* Articles */}
               <div className="lg:col-span-8">
-                <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-neutral-900">Guides</div>
-                      <div className="mt-1 text-xs text-neutral-500">Add, edit, delete, and set status.</div>
+                      <h1 className="text-lg font-semibold">Guides Library</h1>
+                      <p className="mt-1 text-sm text-neutral-600">Create, edit, and delete guides shown in the gated /guides library.</p>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={openNewArticle}
-                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
+                        onClick={() => void loadAll()}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
                         disabled={busy}
                       >
-                        New
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openNewArticle}
+                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+                        disabled={busy}
+                      >
+                        New guide
                       </button>
                     </div>
                   </div>
