@@ -19,7 +19,7 @@ type ArticleCategoryRow = {
   createdAt?: string | null;
 };
 
-type ArticleRow = {
+type GuideRow = {
   id: string;
   title: string;
   slug: string;
@@ -33,7 +33,7 @@ type ArticleRow = {
   category?: ArticleCategoryRow | null;
 };
 
-type ApiOkArticles = { ok: true; articles: ArticleRow[] };
+type ApiOkGuides = { ok: true; guides: GuideRow[] };
 type ApiOkCats = { ok: true; categories: ArticleCategoryRow[] };
 type ApiErr = { ok: false; error: string };
 
@@ -44,7 +44,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const status = (session as any)?.status as string | undefined;
 
   if (!session?.user || role !== "ADMIN" || status === "BLOCKED") {
-    const callbackUrl = encodeURIComponent("/admin/library/articles");
+    const callbackUrl = encodeURIComponent("/admin/library/guides");
     return {
       redirect: {
         destination: `/admin/signin?callbackUrl=${callbackUrl}`,
@@ -142,7 +142,7 @@ function SmallModal({
   );
 }
 
-export default function AdminArticlesPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function AdminGuidesPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
 
   const [loggedInAs, setLoggedInAs] = useState<string>("");
@@ -172,11 +172,11 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL"); // categoryId
 
   const [categories, setCategories] = useState<ArticleCategoryRow[]>([]);
-  const [articles, setArticles] = useState<ArticleRow[]>([]);
+  const [guides, setGuides] = useState<GuideRow[]>([]);
 
   // Article modal state
   const [articleModalOpen, setArticleModalOpen] = useState(false);
-  const [editing, setEditing] = useState<ArticleRow | null>(null);
+  const [editing, setEditing] = useState<GuideRow | null>(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [summary, setSummary] = useState("");
@@ -192,10 +192,10 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
 
   const categoryOptions = useMemo(() => categories.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")), [categories]);
 
-  const filteredArticles = useMemo(() => {
+  const filteredGuides = useMemo(() => {
     const s = q.trim().toLowerCase();
 
-    return articles.filter((a) => {
+    return guides.filter((a) => {
       const inQ =
         !s ||
         a.title.toLowerCase().includes(s) ||
@@ -211,7 +211,7 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
 
       return inQ && inStatus && inCat;
     });
-  }, [articles, categoryFilter, q, statusFilter]);
+  }, [guides, categoryFilter, q, statusFilter]);
 
   async function fetchJson<T>(url: string, init?: RequestInit) {
     const res = await fetch(url, {
@@ -236,11 +236,11 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
     try {
       const [cats, arts] = await Promise.all([
         fetchJson<ApiOkCats>("/api/admin/library/guide-categories"),
-        fetchJson<ApiOkArticles>(q.trim() ? `/api/admin/library/guides?q=${encodeURIComponent(q.trim())}` : "/api/admin/library/guides"),
+        fetchJson<ApiOkGuides>(q.trim() ? `/api/admin/library/guides?q=${encodeURIComponent(q.trim())}` : "/api/admin/library/guides"),
       ]);
 
       setCategories(cats.categories || []);
-      setArticles(arts.articles || []);
+      setGuides(arts.guides || []);
     } catch (e: any) {
       setErr(e?.message || "Failed to load");
     } finally {
@@ -328,7 +328,7 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
     setArticleModalOpen(true);
   }
 
-  function openEditArticle(a: ArticleRow) {
+  function openEditArticle(a: GuideRow) {
     setEditing(a);
     setTitle(a.title);
     setSlug(a.slug);
@@ -390,7 +390,7 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
     }
   }
 
-  async function deleteArticle(a: ArticleRow) {
+  async function deleteArticle(a: GuideRow) {
     if (!confirm(`Delete article "${a.title}"?`)) return;
     setBusy(true);
     setErr(null);
@@ -406,7 +406,7 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
     }
   }
 
-  async function setArticleStatus(a: ArticleRow, next: PromptStatus) {
+  async function setArticleStatus(a: GuideRow, next: PromptStatus) {
     if (a.status === next) return;
     setBusy(true);
     setErr(null);
@@ -455,7 +455,7 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold text-neutral-900">Article Categories</div>
-                      <div className="mt-1 text-xs text-neutral-500">Separate categories for articles.</div>
+                      <div className="mt-1 text-xs text-neutral-500">Separate categories for guides.</div>
                     </div>
                     <button
                       type="button"
@@ -580,11 +580,11 @@ export default function AdminArticlesPage(_props: InferGetServerSidePropsType<ty
                   <div className="mt-4">
                     {loading ? (
                       <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600">Loading…</div>
-                    ) : filteredArticles.length === 0 ? (
-                      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600">No articles.</div>
+                    ) : filteredGuides.length === 0 ? (
+                      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600">No guides.</div>
                     ) : (
                       <div className="space-y-2">
-                        {filteredArticles.map((a) => (
+                        {filteredGuides.map((a) => (
                           <div
                             key={a.id}
                             className="rounded-2xl border border-neutral-200 bg-white p-4"

@@ -88,7 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         include: { category: true },
       });
 
-      return res.status(200).json({ ok: true, article: created });
+      return res.status(200).json({ ok: true, guide: created });
     }
 
     res.setHeader("Allow", "GET,POST");

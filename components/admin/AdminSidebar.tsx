@@ -47,8 +47,8 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
                 <Link href="/admin/library/prompts" className={subItemClass("/admin/library/prompts")}>
                   Prompts
                 </Link>
-                <Link href="/admin/library/guides" className={subItemClass("/admin/library/articles")}>
-                  Articles
+                <Link href="/admin/library/guides" className={subItemClass("/admin/library/guides")}>
+            Guides
                 </Link>
               </div>
             )}
