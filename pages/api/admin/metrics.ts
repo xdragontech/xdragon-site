@@ -6,7 +6,7 @@ import { prisma } from "../../../lib/prisma";
 
 export type MetricsPeriod = "today" | "7d" | "month";
 
-type IpGroup = { ip: string; country: string | null; count: number };
+type IpGroup = { ip: string; countryName: string | null; countryIso3: string | null; count: number };
 
 type MetricsOk = {
   ok: true;
@@ -43,10 +43,271 @@ function isPrivateIp(ip: string) {
 const geoCache: Map<string, string | null> =
   (global as any).__xdragonGeoCache || ((global as any).__xdragonGeoCache = new Map<string, string | null>());
 
-async function countryForIp(ip: string): Promise<string | null> {
-  if (!ip) return null;
-  if (isPrivateIp(ip)) return "Private";
-  if (geoCache.has(ip)) return geoCache.get(ip) ?? null;
+
+const ISO2_TO_ISO3: Record<string, string> = {
+  "AD": "AND",
+  "AE": "ARE",
+  "AF": "AFG",
+  "AG": "ATG",
+  "AI": "AIA",
+  "AL": "ALB",
+  "AM": "ARM",
+  "AO": "AGO",
+  "AQ": "ATA",
+  "AR": "ARG",
+  "AS": "ASM",
+  "AT": "AUT",
+  "AU": "AUS",
+  "AW": "ABW",
+  "AX": "ALA",
+  "AZ": "AZE",
+  "BA": "BIH",
+  "BB": "BRB",
+  "BD": "BGD",
+  "BE": "BEL",
+  "BF": "BFA",
+  "BG": "BGR",
+  "BH": "BHR",
+  "BI": "BDI",
+  "BJ": "BEN",
+  "BL": "BLM",
+  "BM": "BMU",
+  "BN": "BRN",
+  "BO": "BOL",
+  "BQ": "BES",
+  "BR": "BRA",
+  "BS": "BHS",
+  "BT": "BTN",
+  "BV": "BVT",
+  "BW": "BWA",
+  "BY": "BLR",
+  "BZ": "BLZ",
+  "CA": "CAN",
+  "CC": "CCK",
+  "CD": "COD",
+  "CF": "CAF",
+  "CG": "COG",
+  "CH": "CHE",
+  "CI": "CIV",
+  "CK": "COK",
+  "CL": "CHL",
+  "CM": "CMR",
+  "CN": "CHN",
+  "CO": "COL",
+  "CR": "CRI",
+  "CU": "CUB",
+  "CV": "CPV",
+  "CW": "CUW",
+  "CX": "CXR",
+  "CY": "CYP",
+  "CZ": "CZE",
+  "DE": "DEU",
+  "DJ": "DJI",
+  "DK": "DNK",
+  "DM": "DMA",
+  "DO": "DOM",
+  "DZ": "DZA",
+  "EC": "ECU",
+  "EE": "EST",
+  "EG": "EGY",
+  "EH": "ESH",
+  "ER": "ERI",
+  "ES": "ESP",
+  "ET": "ETH",
+  "FI": "FIN",
+  "FJ": "FJI",
+  "FK": "FLK",
+  "FM": "FSM",
+  "FO": "FRO",
+  "FR": "FRA",
+  "GA": "GAB",
+  "GB": "GBR",
+  "GD": "GRD",
+  "GE": "GEO",
+  "GF": "GUF",
+  "GG": "GGY",
+  "GH": "GHA",
+  "GI": "GIB",
+  "GL": "GRL",
+  "GM": "GMB",
+  "GN": "GIN",
+  "GP": "GLP",
+  "GQ": "GNQ",
+  "GR": "GRC",
+  "GS": "SGS",
+  "GT": "GTM",
+  "GU": "GUM",
+  "GW": "GNB",
+  "GY": "GUY",
+  "HK": "HKG",
+  "HM": "HMD",
+  "HN": "HND",
+  "HR": "HRV",
+  "HT": "HTI",
+  "HU": "HUN",
+  "ID": "IDN",
+  "IE": "IRL",
+  "IL": "ISR",
+  "IM": "IMN",
+  "IN": "IND",
+  "IO": "IOT",
+  "IQ": "IRQ",
+  "IR": "IRN",
+  "IS": "ISL",
+  "IT": "ITA",
+  "JE": "JEY",
+  "JM": "JAM",
+  "JO": "JOR",
+  "JP": "JPN",
+  "KE": "KEN",
+  "KG": "KGZ",
+  "KH": "KHM",
+  "KI": "KIR",
+  "KM": "COM",
+  "KN": "KNA",
+  "KP": "PRK",
+  "KR": "KOR",
+  "KW": "KWT",
+  "KY": "CYM",
+  "KZ": "KAZ",
+  "LA": "LAO",
+  "LB": "LBN",
+  "LC": "LCA",
+  "LI": "LIE",
+  "LK": "LKA",
+  "LR": "LBR",
+  "LS": "LSO",
+  "LT": "LTU",
+  "LU": "LUX",
+  "LV": "LVA",
+  "LY": "LBY",
+  "MA": "MAR",
+  "MC": "MCO",
+  "MD": "MDA",
+  "ME": "MNE",
+  "MF": "MAF",
+  "MG": "MDG",
+  "MH": "MHL",
+  "MK": "MKD",
+  "ML": "MLI",
+  "MM": "MMR",
+  "MN": "MNG",
+  "MO": "MAC",
+  "MP": "MNP",
+  "MQ": "MTQ",
+  "MR": "MRT",
+  "MS": "MSR",
+  "MT": "MLT",
+  "MU": "MUS",
+  "MV": "MDV",
+  "MW": "MWI",
+  "MX": "MEX",
+  "MY": "MYS",
+  "MZ": "MOZ",
+  "NA": "NAM",
+  "NC": "NCL",
+  "NE": "NER",
+  "NF": "NFK",
+  "NG": "NGA",
+  "NI": "NIC",
+  "NL": "NLD",
+  "NO": "NOR",
+  "NP": "NPL",
+  "NR": "NRU",
+  "NU": "NIU",
+  "NZ": "NZL",
+  "OM": "OMN",
+  "PA": "PAN",
+  "PE": "PER",
+  "PF": "PYF",
+  "PG": "PNG",
+  "PH": "PHL",
+  "PK": "PAK",
+  "PL": "POL",
+  "PM": "SPM",
+  "PN": "PCN",
+  "PR": "PRI",
+  "PS": "PSE",
+  "PT": "PRT",
+  "PW": "PLW",
+  "PY": "PRY",
+  "QA": "QAT",
+  "RE": "REU",
+  "RO": "ROU",
+  "RS": "SRB",
+  "RU": "RUS",
+  "RW": "RWA",
+  "SA": "SAU",
+  "SB": "SLB",
+  "SC": "SYC",
+  "SD": "SDN",
+  "SE": "SWE",
+  "SG": "SGP",
+  "SH": "SHN",
+  "SI": "SVN",
+  "SJ": "SJM",
+  "SK": "SVK",
+  "SL": "SLE",
+  "SM": "SMR",
+  "SN": "SEN",
+  "SO": "SOM",
+  "SR": "SUR",
+  "SS": "SSD",
+  "ST": "STP",
+  "SV": "SLV",
+  "SX": "SXM",
+  "SY": "SYR",
+  "SZ": "SWZ",
+  "TC": "TCA",
+  "TD": "TCD",
+  "TF": "ATF",
+  "TG": "TGO",
+  "TH": "THA",
+  "TJ": "TJK",
+  "TK": "TKL",
+  "TL": "TLS",
+  "TM": "TKM",
+  "TN": "TUN",
+  "TO": "TON",
+  "TR": "TUR",
+  "TT": "TTO",
+  "TV": "TUV",
+  "TW": "TWN",
+  "TZ": "TZA",
+  "UA": "UKR",
+  "UG": "UGA",
+  "UM": "UMI",
+  "US": "USA",
+  "UY": "URY",
+  "UZ": "UZB",
+  "VA": "VAT",
+  "VC": "VCT",
+  "VE": "VEN",
+  "VG": "VGB",
+  "VI": "VIR",
+  "VN": "VNM",
+  "VU": "VUT",
+  "WF": "WLF",
+  "WS": "WSM",
+  "YE": "YEM",
+  "YT": "MYT",
+  "ZA": "ZAF",
+  "ZM": "ZMB",
+  "ZW": "ZWE",
+};
+
+type Geo = { name: string | null; iso2: string | null; iso3: string | null };
+
+function iso2ToIso3(iso2: string | null | undefined): string | null {
+  if (!iso2) return null;
+  const k = iso2.toUpperCase();
+  return ISO2_TO_ISO3[k] || null;
+}
+
+async function geoForIp(ip: string): Promise<Geo> {
+  if (!ip) return { name: null, iso2: null, iso3: null };
+  if (isPrivateIp(ip)) return { name: "Private", iso2: null, iso3: null };
+  if (geoCache.has(ip)) return geoCache.get(ip) ?? { name: null, iso2: null, iso3: null };
 
   // Best-effort: do NOT fail the endpoint if geo lookup fails.
   try {
@@ -56,14 +317,21 @@ async function countryForIp(ip: string): Promise<string | null> {
       headers: { "User-Agent": "xdragon-admin-metrics" },
     });
     const j: any = await r.json().catch(() => null);
-    const c = j && j.success ? (j.country || j.country_code || null) : null;
-    geoCache.set(ip, c);
-    return c;
+
+    const iso2 = j && j.success ? (j.country_code || null) : null;
+    const name = j && j.success ? (j.country || null) : null;
+    const iso3 = iso2ToIso3(iso2);
+
+    const geo: Geo = { name: name || iso2 || null, iso2, iso3: iso3 || null };
+    geoCache.set(ip, geo);
+    return geo;
   } catch {
-    geoCache.set(ip, null);
-    return null;
+    const geo: Geo = { name: null, iso2: null, iso3: null };
+    geoCache.set(ip, geo);
+    return geo;
   }
 }
+
 
 function parsePeriod(p: unknown): MetricsPeriod {
   if (p === "today" || p === "7d" || p === "month") return p;
@@ -180,8 +448,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const ipGroups: IpGroup[] = [];
   for (const [ip, count] of topIps) {
     // eslint-disable-next-line no-await-in-loop
-    const country = await countryForIp(ip);
-    ipGroups.push({ ip, country, count });
+    const geo = await geoForIp(ip);
+    ipGroups.push({ ip, countryName: geo.name, countryIso3: geo.iso3, count });
   }
   // Countries for signups:
   // User model doesn't store a signup IP. We approximate using the earliest LoginEvent IP
@@ -212,8 +480,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     for (const ip of Array.from(firstIpByUser.values())) {
       // eslint-disable-next-line no-await-in-loop
-      const country = await countryForIp(ip);
-      const key = (country || "Unknown").toString();
+      const geo = await geoForIp(ip);
+      const key = ((geo.name || "Unknown").toString());
       signupCountriesMap.set(key, (signupCountriesMap.get(key) || 0) + 1);
     }
   } catch {
