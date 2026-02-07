@@ -7,6 +7,21 @@ import { prisma } from "../../../lib/prisma";
 export type MetricsPeriod = "today" | "7d" | "month";
 
 type IpGroup = { ip: string; country: string | null; count: number };
+// ISO-3166 alpha-2 → alpha-3 (CTRY display in Logins-by-IP)
+const ISO2_TO_ISO3: Record<string, string> = {
+  US: "USA", CA: "CAN", MX: "MEX", GB: "GBR", FR: "FRA", DE: "DEU", ES: "ESP", IT: "ITA",
+  NL: "NLD", BE: "BEL", CH: "CHE", AT: "AUT", SE: "SWE", NO: "NOR", DK: "DNK", FI: "FIN",
+  IE: "IRL", PT: "PRT", PL: "POL", CZ: "CZE", SK: "SVK", HU: "HUN", RO: "ROU", BG: "BGR",
+  GR: "GRC", TR: "TUR", UA: "UKR", RU: "RUS", AU: "AUS", NZ: "NZL", JP: "JPN", KR: "KOR",
+  CN: "CHN", TW: "TWN", HK: "HKG", SG: "SGP", IN: "IND", BR: "BRA", AR: "ARG", CL: "CHL",
+  CO: "COL", PE: "PER", ZA: "ZAF", EG: "EGY", MA: "MAR", NG: "NGA", KE: "KEN",
+};
+
+function iso2ToIso3(iso2: string | null | undefined): string | null {
+  if (!iso2) return null;
+  const k = String(iso2).trim().toUpperCase();
+  return ISO2_TO_ISO3[k] ?? null;
+}
 
 type MetricsOk = {
   ok: true;
@@ -158,20 +173,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
   // Aggregate login buckets + ip groups
   const ipCounts = new Map<string, number>();
-  const firstGeoByIp = new Map<string, { name: string | null; iso2: string | null }>();
   for (const ev of events) {
     const idx = bucketIndex(period, start, ev.createdAt);
     if (idx >= 0 && idx < logins.length) logins[idx] += 1;
 
     const ip = (ev.ip || "").trim();
-    if (ip) {
-      ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
-      if (!firstGeoByIp.has(ip)) {
-        const iso2 = ((ev as any).countryIso2 || null) as string | null;
-        const name = ((ev as any).countryName || null) as string | null;
-        firstGeoByIp.set(ip, { name, iso2 });
-      }
-    }
+    if (ip) ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
   }
 
   const totals = {
@@ -188,14 +195,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const ipGroups: IpGroup[] = [];
   for (const [ip, count] of topIps) {
     // eslint-disable-next-line no-await-in-loop
-    const geoStored = firstGeoByIp.get(ip) || { name: null, iso2: null };
-    let country = geoStored.name || null;
-    if (!country) {
-      // eslint-disable-next-line no-await-in-loop
-      country = await countryForIp(ip);
-    }
-    const countryIso3 = iso2ToIso3(geoStored.iso2) || null;
-    ipGroups.push({ ip, country, countryIso3, count });
+    const country = await countryForIp(ip);
+    ipGroups.push({ ip, country, count });
   }
   // Countries for signups:
   // User model doesn't store a signup IP. We approximate using the earliest LoginEvent IP
@@ -212,7 +213,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       // eslint-disable-next-line no-await-in-loop
       const loginRows = await prisma.loginEvent.findMany({
         where: { userId: { in: chunk } },
-        select: { userId: true, ip: true, createdAt: true, countryIso2: true, countryName: true },
+        select: { userId: true, ip: true, createdAt: true },
         orderBy: { createdAt: "asc" },
       });
 
