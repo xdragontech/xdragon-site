@@ -65,7 +65,6 @@ export default function GuidesIndexPage({ email, guides }: Props) {
     <ResourcesLayout title="Guides — X Dragon" sectionLabel="Tools & guides" loggedInAs={email} active="guides">
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
-          {/* Category buttons */}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -97,7 +96,6 @@ export default function GuidesIndexPage({ email, guides }: Props) {
             ))}
           </div>
 
-          {/* Search bar */}
           <div className="mt-4">
             <input
               value={query}
@@ -119,6 +117,7 @@ export default function GuidesIndexPage({ email, guides }: Props) {
                     <h2 className="mt-2 text-lg font-semibold">{g.title}</h2>
                     {g.summary ? <div className="mt-1 text-sm text-neutral-600">{g.summary}</div> : null}
                     <div className="mt-3 text-xs text-neutral-500">Updated: {fmtDate(g.updatedAt)}</div>
+
                     {g.tags && g.tags.length ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {g.tags.map((t) => (
@@ -146,9 +145,7 @@ export default function GuidesIndexPage({ email, guides }: Props) {
         </div>
 
         {filtered.length === 0 && (
-          <div className="mt-10 text-sm text-neutral-600">
-            No guides match your search. Try a different keyword or category.
-          </div>
+          <div className="mt-10 text-sm text-neutral-600">No guides match your search. Try a different keyword or category.</div>
         )}
       </main>
     </ResourcesLayout>
@@ -156,7 +153,6 @@ export default function GuidesIndexPage({ email, guides }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  // Keep login gating exactly as-is (match prompts page behavior)
   const { session, user } = await requireUser(ctx);
   if (!session?.user?.email || !user) {
     return { redirect: { destination: "/auth/signin", permanent: false } };
@@ -165,8 +161,14 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };
   }
 
-  // Source of truth: DB (published guides only)
-  const rows = await (prisma as any).guide.findMany({
+  // IMPORTANT: Your Prisma schema currently uses Article/ArticleCategory as the backing models for Guides.
+  // To avoid runtime failures during renames/migrations, prefer prisma.article and fall back to prisma.guide if it exists.
+  const model = (prisma as any).article ?? (prisma as any).guide;
+  if (!model?.findMany) {
+    throw new Error("Guides model not found on Prisma client (expected prisma.article or prisma.guide).");
+  }
+
+  const rows = await model.findMany({
     where: { status: "PUBLISHED" },
     orderBy: { updatedAt: "desc" },
     include: { category: true },
@@ -178,9 +180,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     slug: r.slug,
     summary: r.summary ?? "",
     updatedAt: r.updatedAt ? String(r.updatedAt) : null,
-    category: r.category
-      ? { id: r.category.id, name: r.category.name, slug: r.category.slug }
-      : null,
+    category: r.category ? { id: r.category.id, name: r.category.name, slug: r.category.slug } : null,
     tags: r.tags ?? null,
   }));
 
