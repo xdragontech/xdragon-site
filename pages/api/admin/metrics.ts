@@ -6,7 +6,7 @@ import { prisma } from "../../../lib/prisma";
 
 export type MetricsPeriod = "today" | "7d" | "month";
 
-type IpGroup = { ip: string; country: string | null; countryIso3: string | null; count: number };
+type IpGroup = { ip: string; country: string | null; count: number };
 
 type MetricsOk = {
   ok: true;
@@ -39,32 +39,14 @@ function isPrivateIp(ip: string) {
   );
 }
 
-// Cache geo lookups within a single serverless instance.
-type Geo = { name: string | null; iso2: string | null; iso3: string | null };
+// Cache country lookups within a single serverless instance.
+const geoCache: Map<string, string | null> =
+  (global as any).__xdragonGeoCache || ((global as any).__xdragonGeoCache = new Map<string, string | null>());
 
-// ISO-3166 alpha-2 → alpha-3 (used for Logins-by-IP CTRY display)
-const ISO2_TO_ISO3: Record<string, string> = {
-  US: "USA", CA: "CAN", MX: "MEX", GB: "GBR", FR: "FRA", DE: "DEU", ES: "ESP", IT: "ITA", NL: "NLD", BE: "BEL",
-  CH: "CHE", AT: "AUT", SE: "SWE", NO: "NOR", DK: "DNK", FI: "FIN", IE: "IRL", PT: "PRT", PL: "POL", CZ: "CZE",
-  SK: "SVK", HU: "HUN", RO: "ROU", BG: "BGR", GR: "GRC", TR: "TUR", UA: "UKR", RU: "RUS",
-  AU: "AUS", NZ: "NZL", JP: "JPN", KR: "KOR", CN: "CHN", TW: "TWN", HK: "HKG", SG: "SGP", IN: "IND",
-  BR: "BRA", AR: "ARG", CL: "CHL", CO: "COL", PE: "PER",
-  ZA: "ZAF", EG: "EGY", MA: "MAR", NG: "NGA", KE: "KEN",
-};
-const iso2ToIso3 = (iso2: string | null): string | null => {
-  if (!iso2) return null;
-  const k = iso2.trim().toUpperCase();
-  return ISO2_TO_ISO3[k] ?? null;
-};
-
-const geoCache: Map<string, Geo> =
-  (global as any).__xdragonGeoCache || ((global as any).__xdragonGeoCache = new Map<string, Geo>());
-
-async function geoForIp(ip: string): Promise<Geo> {
-  const empty: Geo = { name: null, iso2: null, iso3: null };
-  if (!ip) return empty;
-  if (isPrivateIp(ip)) return { name: "Private", iso2: null, iso3: null };
-  if (geoCache.has(ip)) return geoCache.get(ip) ?? empty;
+async function countryForIp(ip: string): Promise<string | null> {
+  if (!ip) return null;
+  if (isPrivateIp(ip)) return "Private";
+  if (geoCache.has(ip)) return geoCache.get(ip) ?? null;
 
   // Best-effort: do NOT fail the endpoint if geo lookup fails.
   try {
@@ -74,16 +56,12 @@ async function geoForIp(ip: string): Promise<Geo> {
       headers: { "User-Agent": "xdragon-admin-metrics" },
     });
     const j: any = await r.json().catch(() => null);
-    const name = j && j.success ? (j.country || null) : null;
-    const iso2 = j && j.success ? ((j.country_code || null) as string | null) : null;
-    const iso3 = iso2ToIso3(iso2);
-
-    const geo: Geo = { name, iso2, iso3 };
-    geoCache.set(ip, geo);
-    return geo;
+    const c = j && j.success ? (j.country_code || j.country || null) : null;
+    geoCache.set(ip, c);
+    return c;
   } catch {
-    geoCache.set(ip, empty);
-    return empty;
+    geoCache.set(ip, null);
+    return null;
   }
 }
 
@@ -180,12 +158,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
   // Aggregate login buckets + ip groups
   const ipCounts = new Map<string, number>();
+  const firstGeoByIp = new Map<string, { name: string | null; iso2: string | null }>();
   for (const ev of events) {
     const idx = bucketIndex(period, start, ev.createdAt);
     if (idx >= 0 && idx < logins.length) logins[idx] += 1;
 
     const ip = (ev.ip || "").trim();
-    if (ip) ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
+    if (ip) {
+      ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
+      if (!firstGeoByIp.has(ip)) {
+        const iso2 = ((ev as any).countryIso2 || null) as string | null;
+        const name = ((ev as any).countryName || null) as string | null;
+        firstGeoByIp.set(ip, { name, iso2 });
+      }
+    }
   }
 
   const totals = {
@@ -202,9 +188,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const ipGroups: IpGroup[] = [];
   for (const [ip, count] of topIps) {
     // eslint-disable-next-line no-await-in-loop
-    const geo = await geoForIp(ip);
-    const country = (geo.name || geo.iso2 || null) as string | null;
-    ipGroups.push({ ip, country, countryIso3: geo.iso3, count });
+    const geoStored = firstGeoByIp.get(ip) || { name: null, iso2: null };
+    let country = geoStored.name || null;
+    if (!country) {
+      // eslint-disable-next-line no-await-in-loop
+      country = await countryForIp(ip);
+    }
+    const countryIso3 = iso2ToIso3(geoStored.iso2) || null;
+    ipGroups.push({ ip, country, countryIso3, count });
   }
   // Countries for signups:
   // User model doesn't store a signup IP. We approximate using the earliest LoginEvent IP
@@ -221,7 +212,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       // eslint-disable-next-line no-await-in-loop
       const loginRows = await prisma.loginEvent.findMany({
         where: { userId: { in: chunk } },
-        select: { userId: true, ip: true, createdAt: true },
+        select: { userId: true, ip: true, createdAt: true, countryIso2: true, countryName: true },
         orderBy: { createdAt: "asc" },
       });
 
@@ -235,8 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     for (const ip of Array.from(firstIpByUser.values())) {
       // eslint-disable-next-line no-await-in-loop
-      const geo = await geoForIp(ip);
-    const country = (geo.name || geo.iso2 || null) as string | null;
+      const country = await countryForIp(ip);
       const key = (country || "Unknown").toString();
       signupCountriesMap.set(key, (signupCountriesMap.get(key) || 0) + 1);
     }

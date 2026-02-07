@@ -97,6 +97,8 @@ model LoginEvent {
   id        String   @id @default(cuid())
   userId    String
   ip        String
+  countryIso2 String?
+  countryName String?
   userAgent String?
   createdAt DateTime @default(now())
 
@@ -143,21 +145,17 @@ model Prompt {
 
 // --- Articles (separate from Prompt Library) ---
 
-model GuideCategory {
-
+model ArticleCategory {
   id        String   @id @default(cuid())
   name      String   @unique
   slug      String   @unique
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  guides    Guide[]
-
-  @@map("ArticleCategory")
+  articles  Article[]
 }
 
-model Guide {
-
+model Article {
   id         String       @id @default(cuid())
   title      String
   slug       String       @unique
@@ -166,7 +164,7 @@ model Guide {
   status     PromptStatus @default(DRAFT)
 
   categoryId String?
-  category   GuideCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category   ArticleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   // Optional tags (Postgres text[])
   tags       String[]     @default([])
@@ -177,6 +175,4 @@ model Guide {
   @@index([status])
   @@index([categoryId])
   @@index([title])
-
-  @@map("Article")
 }

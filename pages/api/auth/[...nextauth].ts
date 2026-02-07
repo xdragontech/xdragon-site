@@ -27,7 +27,11 @@ function getHeader(req: any, name: string): string | undefined {
 }
 
 function getClientIp(req: any): string {
-  // Vercel/Proxies: x-forwarded-for is usually a comma-separated list
+  // Cloudflare (proxied): CF-Connecting-IP is the true client IP.
+  const cfIp = getHeader(req, "cf-connecting-ip");
+  if (cfIp) return cfIp.trim();
+
+  // Vercel/Proxies: x-forwarded-for is usually a comma-separated list.
   const xff = getHeader(req, "x-forwarded-for");
   if (xff) {
     const first = xff.split(",")[0]?.trim();
@@ -43,6 +47,26 @@ function getClientIp(req: any): string {
 
   return "unknown";
 }
+
+function getCfCountryIso2(req: any): string | null {
+  const c = getHeader(req, "cf-ipcountry");
+  if (!c) return null;
+  const v = c.trim().toUpperCase();
+  // Cloudflare uses "XX" for unknown.
+  if (!v || v === "XX") return null;
+  return v;
+}
+
+function iso2ToCountryName(iso2: string | null): string | null {
+  if (!iso2) return null;
+  try {
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    return (dn.of(iso2) as string) || null;
+  } catch {
+    return null;
+  }
+}
+
 
 function getUserAgent(req: any): string {
   return getHeader(req, "user-agent")?.trim() || "";
@@ -143,8 +167,10 @@ export const authOptions: NextAuthOptions = {
           // Best-effort login telemetry (never block auth if this fails)
           try {
             const ip = getClientIp(req);
+      const countryIso2 = getCfCountryIso2(req);
+      const countryName = iso2ToCountryName(countryIso2);
             const userAgent = getUserAgent(req);
-            await prisma.loginEvent.create({ data: { userId: "xdadmin", ip, userAgent } });
+            await prisma.loginEvent.create({ data: { userId: "xdadmin", ip, userAgent, countryIso2, countryName } });
           } catch (err) {
             console.warn("xdadmin LoginEvent write failed:", err);
           }
@@ -168,10 +194,12 @@ export const authOptions: NextAuthOptions = {
         // Record last login + IP (best-effort; never block auth if this fails)
         try {
           const ip = getClientIp(req);
+      const countryIso2 = getCfCountryIso2(req);
+      const countryName = iso2ToCountryName(countryIso2);
           const userAgent = getUserAgent(req);
           await prisma.$transaction([
             prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
-            prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent } }),
+            prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent, countryIso2, countryName } }),
           ]);
         } catch (err) {
           console.warn("LoginEvent write failed:", err);
