@@ -1,33 +1,33 @@
 // pages/guides/[slug].tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
-import { requireUser } from "../../lib/requireUser";
 import Link from "next/link";
-import ResourcesLayout from "../../components/resources/ResourcesLayout";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
 import { PrismaClient } from "@prisma/client";
 
+import ResourcesLayout from "../../components/resources/ResourcesLayout";
+import { requireUser } from "../../lib/requireUser";
 
 // Prisma singleton (prevents hot-reload connection storms in dev)
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-type Article = {
+type GuideItem = {
   id: string;
   title: string;
   slug: string;
   summary: string;
   content: string;
-  updatedAt?: string | null;
-  category?: { id: string; name: string; slug: string } | null;
-  tags?: string[] | null;
+  updatedAt: string | null;
+  category: { id: string; name: string; slug: string } | null;
+  tags: string[] | null;
 };
 
-type ApiOk = { ok: true; article: Article };
-type ApiErr = { ok: false; error: string };
+type Props = {
+  email: string;
+  guide: GuideItem;
+};
 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
+export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const slug = String(ctx.params?.slug ?? "");
   const { session, user, redirectTo } = await requireUser(ctx);
 
@@ -38,52 +38,72 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     };
   }
 
-  // Fetch guide directly (avoid relying on NEXTAUTH_URL + internal API)
   try {
     const model: any = (prisma as any).article ?? (prisma as any).guide;
     if (!model?.findUnique) return { notFound: true };
 
-    const item = await model.findUnique({
-      where: { slug },
-      include: { category: true },
-    });
+    let row: any = null;
+    try {
+      row = await model.findUnique({ where: { slug }, include: { category: true } });
+    } catch {
+      row = await model.findUnique({ where: { slug } });
+    }
 
-    if (!item || item.status !== "PUBLISHED") return { notFound: true };
+    if (!row || row.status !== "PUBLISHED") return { notFound: true };
 
-    return { props: { item, email: session.user.email ?? null } };
-  } catch (_err) {
+    const guide: GuideItem = {
+      id: row.id,
+      title: row.title,
+      slug: row.slug,
+      summary: row.summary ?? "",
+      content: row.content ?? "",
+      updatedAt: row.updatedAt ? String(row.updatedAt) : null,
+      category: row.category ? { id: row.category.id, name: row.category.name, slug: row.category.slug } : null,
+      tags: row.tags ?? null,
+    };
+
+    return { props: { email: session.user.email ?? "", guide } };
+  } catch {
     return { notFound: true };
   }
 };
 
-export default function GuidePage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
-  const router = useRouter();
-  const slug = typeof router.query.slug === "string" ? router.query.slug : "";
-
-  const [article, setArticle] = useState<Article | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!slug) return;
-    setErr(null);
-    setArticle(null);
-    fetch(`/api/guides/${encodeURIComponent(slug)}`)
-      .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
-      .then(({ ok, j }) => {
-        if (!ok || !j.ok) throw new Error((j as ApiErr).error || "Not found");
-        setArticle((j as ApiOk).article);
-      })
-      .catch((e) => setErr(e?.message || "Failed to load"));
-  }, [slug]);
+export default function GuidePage(props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+  const { guide, email } = props as any as Props;
 
   return (
-    <ResourcesLayout title={`${(_props as any).item?.title ?? "Guide"} — X Dragon`} sectionLabel="Tools & guides" loggedInAs={(_props as any).email ?? null} active="guides">
+    <ResourcesLayout title={`${guide.title} — X Dragon`} sectionLabel="Tools & guides" loggedInAs={email} active="guides">
       <main className="mx-auto max-w-3xl px-4 py-6">
-        {article ? (
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <pre className="whitespace-pre-wrap break-words text-sm text-neutral-800">{article.content}</pre>
+        <div className="mb-4">
+          <Link href="/guides" className="text-sm font-semibold text-neutral-700 hover:text-neutral-900">
+            ← Back to Guides
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold text-neutral-900">{guide.title}</h1>
+              {guide.summary ? <p className="mt-2 text-sm text-neutral-600">{guide.summary}</p> : null}
+            </div>
+            <div className="text-right text-xs text-neutral-500">
+              {guide.category ? <div className="font-semibold text-neutral-700">{guide.category.name}</div> : null}
+              {guide.updatedAt ? <div>Updated: {guide.updatedAt}</div> : null}
+            </div>
           </div>
-        ) : null}
+
+          <div className="mt-6 whitespace-pre-wrap break-words text-sm text-neutral-800">{guide.content}</div>
+
+          {guide.tags && guide.tags.length > 0 ? (
+            <div className="mt-6 flex flex-wrap gap-2">
+              {guide.tags.map((t) => (
+                <span key={t} className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-700">
+                  {t}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </main>
     </ResourcesLayout>
   );

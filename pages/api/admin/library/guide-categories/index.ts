@@ -1,4 +1,4 @@
-// pages/api/admin/library/article-categories/index.ts
+// pages/api/admin/library/guide-categories/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
@@ -23,14 +23,17 @@ function slugify(input: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions as any);
   if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
+  // Backing model for Guide Categories is currently ArticleCategory. Fall back to GuideCategory if you rename later.
+  const model: any = (prisma as any).articleCategory ?? (prisma as any).guideCategory;
+  if (!model?.findMany) return res.status(500).json({ ok: false, error: "Guide category model not found" });
+
   try {
     if (req.method === "GET") {
-      const categories = await (prisma as any).guideCategory.findMany({
+      const categories = await model.findMany({
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         take: 500,
       });
@@ -45,12 +48,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const base = slugify(name) || "category";
       let slug = base;
       for (let i = 2; i < 100; i++) {
-        const exists = await (prisma as any).guideCategory.findUnique({ where: { slug } });
+        const exists = await model.findUnique({ where: { slug } });
         if (!exists) break;
         slug = `${base}-${i}`;
       }
 
-      const created = await (prisma as any).guideCategory.create({
+      const created = await model.create({
         data: { name, slug, sortOrder: 0 },
       });
 

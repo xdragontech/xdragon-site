@@ -1,4 +1,4 @@
-// pages/api/admin/library/article-categories/[id].ts
+// pages/api/admin/library/guide-categories/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
@@ -23,7 +23,6 @@ function slugify(input: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions as any);
   if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -31,30 +30,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const id = typeof req.query.id === "string" ? req.query.id : "";
   if (!id) return res.status(400).json({ ok: false, error: "Missing id" });
 
+  // Backing model for Guide Categories is currently ArticleCategory. Fall back to GuideCategory if you rename later.
+  const model: any = (prisma as any).articleCategory ?? (prisma as any).guideCategory;
+  if (!model?.update) return res.status(500).json({ ok: false, error: "Guide category model not found" });
+
   try {
     if (req.method === "PUT") {
       const body = req.body || {};
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!name) return res.status(400).json({ ok: false, error: "Name is required" });
+      const data: any = {};
 
-      const base = slugify(name) || "category";
-      let slug = base;
-      for (let i = 2; i < 100; i++) {
-        const exists = await (prisma as any).guideCategory.findUnique({ where: { slug } });
-        if (!exists || exists.id === id) break;
-        slug = `${base}-${i}`;
+      if (typeof body.name === "string") {
+        const name = body.name.trim();
+        if (!name) return res.status(400).json({ ok: false, error: "Name is required" });
+        data.name = name;
+        // if slug not provided, keep existing slug; if provided, normalize
+        if (typeof body.slug === "string") data.slug = slugify(body.slug);
       }
 
-      const updated = await (prisma as any).guideCategory.update({
-        where: { id },
-        data: { name, slug },
-      });
+      if (typeof body.slug === "string") {
+        const slug = slugify(body.slug);
+        if (!slug) return res.status(400).json({ ok: false, error: "Slug is required" });
+        // Ensure uniqueness
+        const exists = await model.findUnique({ where: { slug } });
+        if (exists && exists.id !== id) return res.status(400).json({ ok: false, error: "Slug already exists" });
+        data.slug = slug;
+      }
 
+      if (typeof body.sortOrder === "number") data.sortOrder = body.sortOrder;
+
+      const updated = await model.update({ where: { id }, data });
       return res.status(200).json({ ok: true, category: updated });
     }
 
     if (req.method === "DELETE") {
-      await (prisma as any).guideCategory.delete({ where: { id } });
+      await model.delete({ where: { id } });
       return res.status(200).json({ ok: true });
     }
 

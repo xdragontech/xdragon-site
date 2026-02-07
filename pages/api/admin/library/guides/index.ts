@@ -1,4 +1,4 @@
-// pages/api/admin/library/articles/index.ts
+// pages/api/admin/library/guides/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
@@ -13,7 +13,6 @@ function isAdminSession(session: any) {
   const status = session?.status ?? session?.user?.status;
   return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
 }
-
 
 function normalizeSlug(input: string) {
   return String(input || "")
@@ -34,6 +33,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = await getServerSession(req, res, authOptions as any);
   if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
+  // Backing model for Guides is currently Article (and ArticleCategory). Fall back to Guide if you rename later.
+  const model: any = (prisma as any).article ?? (prisma as any).guide;
+  if (!model?.findMany) return res.status(500).json({ ok: false, error: "Guides model not found" });
+
   try {
     if (req.method === "GET") {
       const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
@@ -50,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
           : {};
 
-      const guides = await (prisma as any).guide.findMany({
+      const guides = await model.findMany({
         where,
         include: { category: true },
         orderBy: [{ updatedAt: "desc" }],
@@ -75,7 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!summary) return res.status(400).json({ ok: false, error: "Summary is required" });
       if (!content) return res.status(400).json({ ok: false, error: "Content is required" });
 
-      const created = await (prisma as any).guide.create({
+      const created = await model.create({
         data: {
           title,
           slug,

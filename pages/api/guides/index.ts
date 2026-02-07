@@ -39,7 +39,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         : { status: "PUBLISHED" };
 
-    const guides = await (prisma as any).guide.findMany({
+    const model: any = (prisma as any).article ?? (prisma as any).guide;
+
+    if (!model?.findMany) return res.status(500).json({ ok: false, error: "Guides model not found" });
+
+    const guides = await model.findMany({
       where,
       include: { category: true },
       orderBy: [{ updatedAt: "desc" }],

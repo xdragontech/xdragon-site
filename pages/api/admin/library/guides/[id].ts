@@ -1,4 +1,4 @@
-// pages/api/admin/library/articles/[id].ts
+// pages/api/admin/library/guides/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
@@ -13,7 +13,6 @@ function isAdminSession(session: any) {
   const status = session?.status ?? session?.user?.status;
   return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
 }
-
 
 function normalizeSlug(input: string) {
   return String(input || "")
@@ -37,6 +36,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const id = typeof req.query.id === "string" ? req.query.id : "";
   if (!id) return res.status(400).json({ ok: false, error: "Missing id" });
 
+  // Backing model for Guides is currently Article (and ArticleCategory). Fall back to Guide if you rename later.
+  const model: any = (prisma as any).article ?? (prisma as any).guide;
+  if (!model?.update) return res.status(500).json({ ok: false, error: "Guides model not found" });
+
   try {
     if (req.method === "PUT") {
       const body = req.body || {};
@@ -58,17 +61,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if ("summary" in data && !data.summary) return res.status(400).json({ ok: false, error: "Summary is required" });
       if ("content" in data && !data.content) return res.status(400).json({ ok: false, error: "Content is required" });
 
-      const updated = await (prisma as any).guide.update({
-        where: { id },
-        data,
-        include: { category: true },
-      });
+      let updated: any = null;
+      try {
+        updated = await model.update({ where: { id }, data, include: { category: true } });
+      } catch {
+        updated = await model.update({ where: { id }, data });
+      }
 
       return res.status(200).json({ ok: true, guide: updated });
     }
 
     if (req.method === "DELETE") {
-      await (prisma as any).guide.delete({ where: { id } });
+      await model.delete({ where: { id } });
       return res.status(200).json({ ok: true });
     }
 
