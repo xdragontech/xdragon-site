@@ -5,6 +5,13 @@ import Link from "next/link";
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { PrismaClient } from "@prisma/client";
+
+
+// Prisma singleton (prevents hot-reload connection storms in dev)
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 type Article = {
   id: string;
@@ -31,24 +38,19 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     };
   }
 
-  // Existing guide fetch logic
+  // Fetch guide directly (avoid relying on NEXTAUTH_URL + internal API)
   try {
-    const res = await fetch(`${process.env.NEXTAUTH_URL ?? ""}/api/guides/${encodeURIComponent(slug)}`, {
-      headers: { cookie: ctx.req.headers.cookie ?? "" },
+    const model: any = (prisma as any).article ?? (prisma as any).guide;
+    if (!model?.findUnique) return { notFound: true };
+
+    const item = await model.findUnique({
+      where: { slug },
+      include: { category: true },
     });
 
-    if (!res.ok) {
-      return { notFound: true };
-    }
+    if (!item || item.status !== "PUBLISHED") return { notFound: true };
 
-    const data = await res.json();
-    const article = (data as any).item ?? (data as any);
-
-    if (!article) {
-      return { notFound: true };
-    }
-
-    return { props: { item: article, email: session.user.email ?? null } };
+    return { props: { item, email: session.user.email ?? null } };
   } catch (_err) {
     return { notFound: true };
   }

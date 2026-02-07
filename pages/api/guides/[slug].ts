@@ -27,10 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ ok: false, error: "Method not allowed" });
     }
 
-    const guide = await (prisma as any).guide.findUnique({
-      where: { slug },
-      include: { category: true },
-    });
+    const model: any = (prisma as any).article ?? (prisma as any).guide;
+    if (!model?.findUnique) return res.status(500).json({ ok: false, error: "Model not found" });
+
+    let guide: any = null;
+    try {
+      guide = await model.findUnique({ where: { slug }, include: { category: true } });
+    } catch {
+      guide = await model.findUnique({ where: { slug } });
+    }
 
     if (!guide || guide.status !== "PUBLISHED") return res.status(404).json({ ok: false, error: "Not found" });
 
