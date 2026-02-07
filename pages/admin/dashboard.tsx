@@ -157,8 +157,8 @@ function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: st
         ) : error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
         ) : top.length ? (
-          <div className="overflow-hidden rounded-xl border border-neutral-200">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-xl border border-neutral-200">
+            <table className="min-w-[720px] w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-600">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">IP</th>
@@ -169,7 +169,7 @@ function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: st
               <tbody>
                 {top.map((r) => (
                   <tr key={r.ip} className="border-t border-neutral-200">
-                    <td className="px-3 py-2 font-mono text-xs text-neutral-800">{r.ip}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-neutral-800 whitespace-nowrap">{r.ip}</td>
                     <td className="px-3 py-2 text-neutral-700">{(r as any).countryIso3 || r.country || "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold text-neutral-900">{r.count}</td>
                   </tr>
@@ -600,7 +600,7 @@ export default function AdminDashboardPage(_props: DashboardProps) {
 
           <section className="lg:col-span-10">
             <div className="mb-4 grid gap-4 lg:grid-cols-10">
-              <div className="lg:col-span-7">
+              <div className="lg:col-span-10">
                 <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -678,7 +678,8 @@ export default function AdminDashboardPage(_props: DashboardProps) {
                 />
               </div>
 
-              <div className="lg:col-span-3">
+              {/* Logins by IP full-width (IPv6-safe) */}
+              <div className="lg:col-span-10">
                 <LoginIpsTable loading={metricsLoading} error={metricsError} groups={metrics.ok ? metrics.ipGroups : []} />
               </div>
             </div>
