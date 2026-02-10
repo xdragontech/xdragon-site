@@ -96,10 +96,11 @@ function Modal({
       <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div className="text-sm font-semibold text-neutral-900">{title}</div>
-          <button
+                    <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
+          >
             Close
           </button>
         </div>
@@ -130,7 +131,8 @@ function SmallModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
+          >
             Close
           </button>
         </div>
@@ -428,6 +430,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 <div
                   className="mt-1 font-semibold leading-none text-neutral-900"
                   style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+                >
                   Command
                 </div>
               </div>
@@ -441,6 +444,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               <button
                 onClick={() => signOut({ callbackUrl: "/admin/signin" })}
                 className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
                 Sign out
               </button>
               {loggedInAs ? (
@@ -462,6 +466,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
                     (isDashboard ? " ring-2 ring-neutral-900/20" : "")
                   }
+                >
                   Dashboard
                 </Link>
                 
@@ -471,6 +476,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
                     (isAccounts ? " ring-2 ring-neutral-900/20" : "")
                   }
+                >
                   Accounts
                 </Link>
 <Link
@@ -479,6 +485,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
                     (isLibrary ? " ring-2 ring-neutral-900/20" : "")
                   }
+                >
                   Library
                 </Link>
               </nav>
@@ -507,6 +514,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       onClick={openNewCategory}
                       className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
                       disabled={busy}
+                    >
                       New
                     </button>
                   </div>
@@ -524,6 +532,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                           <div
                             key={c.id}
                             className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-2"
+                          >
                             <div className="min-w-0">
                               <div className="truncate text-sm font-semibold text-neutral-900">{c.name}</div>
                               <div className="truncate font-mono text-[11px] text-neutral-500">{c.slug}</div>
@@ -534,6 +543,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                 onClick={() => openEditCategory(c)}
                                 className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
                                 disabled={busy}
+                              >
                                 Edit
                               </button>
                               <button
@@ -541,6 +551,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                 onClick={() => void deleteCategory(c)}
                                 className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100"
                                 disabled={busy}
+                              >
                                 Delete
                               </button>
                             </div>
@@ -571,6 +582,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         onClick={() => void loadAll()}
                         className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
                         disabled={busy}
+                      >
                         Refresh
                       </button>
                       <button
@@ -578,6 +590,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         onClick={openNewPrompt}
                         className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
                         disabled={busy}
+                      >
                         New prompt
                       </button>
                     </div>
@@ -598,6 +611,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value as any)}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                      >
                         <option value="ALL">All statuses</option>
                         <option value="DRAFT">DRAFT</option>
                         <option value="PUBLISHED">PUBLISHED</option>
@@ -610,6 +624,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                      >
                         <option value="ALL">All categories</option>
                         <option value="NONE">Uncategorized</option>
                         {categoryOptions.map((c) => (
@@ -668,6 +683,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                     onClick={() => openEditPrompt(p)}
                                     className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
                                     disabled={busy}
+                                  >
                                     Edit
                                   </button>
                                   <button
@@ -675,6 +691,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                     onClick={() => void deletePrompt(p)}
                                     className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100"
                                     disabled={busy}
+                                  >
                                     Delete
                                   </button>
                                 </div>
@@ -705,6 +722,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           setPromptModalOpen(false);
           setEditing(null);
         }}
+      >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
@@ -723,6 +741,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 value={status}
                 onChange={(e) => setStatus(e.target.value as PromptStatus)}
                 className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              >
                 <option value="DRAFT">DRAFT</option>
                 <option value="PUBLISHED">PUBLISHED</option>
                 <option value="ARCHIVED">ARCHIVED</option>
@@ -737,6 +756,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 value={promptCategoryId}
                 onChange={(e) => setPromptCategoryId(e.target.value)}
                 className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              >
                 <option value="">Uncategorized</option>
                 {categoryOptions.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -777,6 +797,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               }}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
               disabled={busy}
+            >
               Cancel
             </button>
             <button
@@ -784,6 +805,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               onClick={() => void savePrompt()}
               className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
               disabled={busy}
+            >
               {busy ? "Saving…" : "Save"}
             </button>
           </div>
@@ -799,6 +821,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           setCatModalOpen(false);
           setCatEditing(null);
         }}
+      >
         <div className="space-y-4">
           <label className="block">
             <div className="text-xs font-semibold text-neutral-700">Name</div>
@@ -820,6 +843,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               }}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
               disabled={busy}
+            >
               Cancel
             </button>
             <button
@@ -827,6 +851,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               onClick={() => void saveCategory()}
               className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
               disabled={busy}
+            >
               {busy ? "Saving…" : "Save"}
             </button>
           </div>
