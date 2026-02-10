@@ -493,7 +493,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
                 <div
                   className="mt-1 font-semibold leading-none text-neutral-900"
-                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}>
                   Command
                 </div>
               </div>
@@ -528,7 +528,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                   className={
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
                     (isDashboard ? " ring-2 ring-neutral-900/20" : "")
-                  }
+                  }>
                   Dashboard
                 </Link>
                 
@@ -537,7 +537,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                   className={
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
                     (isAccounts ? " ring-2 ring-neutral-900/20" : "")
-                  }
+                  }>
                   Accounts
                 </Link>
 <Link
@@ -545,7 +545,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                   className={
                     "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
                     (isLibrary ? " ring-2 ring-neutral-900/20" : "")
-                  }
+                  }>
                   Library
                 </Link>
               </nav>
