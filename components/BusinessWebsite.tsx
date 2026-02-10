@@ -21,7 +21,6 @@ export default function BusinessWebsite() {
   const [formStatus, setFormStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [formError, setFormError] = useState<string>("");
   const { toast: pushToast } = useToast();
-  const { toast: pushToast } = useToast();
 
   const navItems = [
     { label: "Home", href: "#home" },
