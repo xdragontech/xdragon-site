@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const prompts = await (prisma as any).prompt.findMany({
         where,
         include: { category: true },
-        orderBy: [{ updatedAt: "desc" }],
+        orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }],
         take: 500,
       });
 

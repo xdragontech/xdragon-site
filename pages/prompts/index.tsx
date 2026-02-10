@@ -169,7 +169,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   // Source of truth: DB (published prompts only)
   const rows = await prisma.prompt.findMany({
     where: { status: "PUBLISHED" },
-    orderBy: [{ updatedAt: "desc" }],
+    orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }],
     include: { category: true },
   });
 

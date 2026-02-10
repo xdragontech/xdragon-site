@@ -131,6 +131,10 @@ model Prompt {
   content     String
   status      PromptStatus @default(DRAFT)
 
+  // Ordering + tags
+  sortOrder   Int          @default(0)
+  tags        String[]     @default([])
+
   categoryId  String?
   category    Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
