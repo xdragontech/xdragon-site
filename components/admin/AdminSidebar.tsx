@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 
 type AdminSidebarProps = {
-  active: "dashboard" | "accounts" | "library";
+  active: "dashboard" | "accounts" | "library" | "leads";
 };
 
 export default function AdminSidebar({ active }: AdminSidebarProps) {
@@ -35,6 +35,10 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
 
           <Link href="/admin/accounts" className={itemClass("accounts")}>
             Accounts
+          </Link>
+
+          <Link href="/admin/leads" className={itemClass("leads")}>
+            Leads
           </Link>
 
           <div className="space-y-2">
