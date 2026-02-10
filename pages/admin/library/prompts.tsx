@@ -906,8 +906,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
             </button>
           </div>
         </div>
-      </Modal
-
+      </Modal>
       <Modal
         open={importOpen}
         title="Import prompts"
