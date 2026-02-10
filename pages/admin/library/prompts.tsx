@@ -679,7 +679,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     <button
                       type="button"
                       onClick={openNewCategory}
-                      className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
+                      className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
                       disabled={busy}
                     >
                       New
@@ -744,11 +744,11 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     </div>
 
                     <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => void loadAll()}
-                          className="rounded-xl border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                          className="shrink-0 rounded-xl border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
                           disabled={busy}
                         >
                           Refresh
@@ -757,7 +757,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         <button
                           type="button"
                           onClick={() => setImportOpen(true)}
-                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
                           disabled={busy}
                         >
                           Import
@@ -773,11 +773,11 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         </button>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={exportCsv}
-                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
                           disabled={busy}
                         >
                           Export CSV
@@ -786,7 +786,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         <button
                           type="button"
                           onClick={exportJson}
-                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
                           disabled={busy}
                         >
                           Export JSON
