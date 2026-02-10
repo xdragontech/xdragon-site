@@ -616,7 +616,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 </div>
               </div>
             </div>
-      </div>
+
 
       {/* Prompt modal */}
       <Modal
