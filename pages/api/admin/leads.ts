@@ -45,14 +45,12 @@ function parseLimit(raw: any, fallback: number) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
-  // Auth / admin check (keep consistent with your existing admin endpoints)
   const session = await getServerSession(req, res, authOptions);
   const user = (session as any)?.user;
   if (!user || user.role !== "admin") {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
 
-  // kind=all|chat|contact
   const kindParam = String(req.query.kind || "all");
   const kinds: LeadKind[] =
     kindParam === "chat" ? ["chat"] : kindParam === "contact" ? ["contact"] : ["chat", "contact"];
@@ -60,16 +58,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const limit = parseLimit(req.query.limit, 200);
 
   try {
-    // Read the most recent N items from each list and merge-sort by ts.
-    const lists: { kind: LeadKind; key: string }[] = [
+    // Keep this literal narrow so `kind` stays "chat"|"contact" (LeadKind).
+    const baseLists = [
       { kind: "chat", key: "leadlog:chat" },
       { kind: "contact", key: "leadlog:contact" },
-    ].filter((x) => kinds.includes(x.kind));
+    ] as const satisfies ReadonlyArray<{ kind: LeadKind; key: string }>;
+
+    const lists = baseLists.filter((x) => kinds.includes(x.kind));
 
     const results: LeadEvent[] = [];
 
     for (const list of lists) {
-      // LRANGE 0..limit-1
       const r = await redis<{ result: string[] }>("/lrange", [list.key, 0, limit - 1]);
       const items = Array.isArray(r?.result) ? r.result : [];
       for (const raw of items) {
@@ -88,7 +87,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     results.sort((a, b) => {
       const at = Date.parse(a.ts || "");
       const bt = Date.parse(b.ts || "");
-      // If ts missing/unparseable, treat as 0
       return (bt || 0) - (at || 0);
     });
 
