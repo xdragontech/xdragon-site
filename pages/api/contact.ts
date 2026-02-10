@@ -1,6 +1,95 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
 
+/**
+ * Basic Upstash Redis rate limiting (fixed-window).
+ * - Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in env.
+ * - If env vars are missing, rate limiting is skipped (no-op).
+ */
+function getClientIp(req: NextApiRequest): string {
+  const xf = (req.headers["x-forwarded-for"] || "") as string;
+  const first = xf.split(",")[0]?.trim();
+  const ip =
+    first ||
+    (req.headers["x-real-ip"] as string) ||
+    (req.headers["cf-connecting-ip"] as string) ||
+    (req.socket.remoteAddress as string) ||
+    "unknown";
+  return ip;
+}
+
+async function upstashIncr(key: string): Promise<number | null> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+
+  const resp = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!resp.ok) return null;
+  const data = (await resp.json()) as { result?: number };
+  return typeof data?.result === "number" ? data.result : null;
+}
+
+async function upstashExpire(key: string, ttlSeconds: number): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+
+  await fetch(`${url}/expire/${encodeURIComponent(key)}/${ttlSeconds}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
+
+type RateLimitConfig = {
+  name: string; // route name
+  perMinute: number;
+  perHour: number;
+};
+
+async function enforceRateLimit(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  cfg: RateLimitConfig
+): Promise<boolean> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return true; // no-op if not configured
+
+  const ip = getClientIp(req);
+
+  const now = Date.now();
+  const minuteWindow = Math.floor(now / 60_000);
+  const hourWindow = Math.floor(now / 3_600_000);
+
+  const minuteKey = `rl:${cfg.name}:m:${minuteWindow}:${ip}`;
+  const hourKey = `rl:${cfg.name}:h:${hourWindow}:${ip}`;
+
+  const minuteCount = await upstashIncr(minuteKey);
+  if (minuteCount === 1) await upstashExpire(minuteKey, 60);
+
+  const hourCount = await upstashIncr(hourKey);
+  if (hourCount === 1) await upstashExpire(hourKey, 3600);
+
+  const minuteExceeded = typeof minuteCount === "number" && minuteCount > cfg.perMinute;
+  const hourExceeded = typeof hourCount === "number" && hourCount > cfg.perHour;
+
+  if (minuteExceeded || hourExceeded) {
+    const retryAfter = minuteExceeded ? 60 : 3600;
+    res.setHeader("Retry-After", String(retryAfter));
+    return res.status(429).json({
+      ok: false,
+      error: "Rate limit exceeded. Please try again shortly.",
+    } as any);
+  }
+
+  return true;
+}
+
+
 type Data =
   | { ok: true; id?: string }
   | { ok: false; error: string; details?: unknown };
@@ -38,6 +127,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
+
+  const _rlOk = await enforceRateLimit(req, res, { name: "contact", perMinute: 5, perHour: 40 });
+  if (!_rlOk) return;
 
   const { RESEND_API_KEY, FROM, TO } = getEnv();
 
