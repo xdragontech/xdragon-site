@@ -1,12 +1,14 @@
 // pages/admin/library/prompts.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
+import Head from "next/head";
 import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { authOptions } from "../../api/auth/[...nextauth]";
-import AdminLayout from "../../../components/admin/AdminLayout";
+import AdminHeader from "../../../components/admin/AdminHeader";
+import AdminSidebar from "../../../components/admin/AdminSidebar";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
@@ -156,6 +158,9 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
       .catch(() => {});
   }, []);
 
+  const isDashboard = router.pathname === "/admin/dashboard";
+  const isAccounts = router.pathname === "/admin/accounts";
+  const isLibrary = router.pathname.startsWith("/admin/library");
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -165,6 +170,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | PromptStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL"); // categoryId
+  const [importOpen, setImportOpen] = useState(false);
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [prompts, setPrompts] = useState<PromptRow[]>([]);
@@ -405,8 +411,90 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   }, [categories]);
 
   return (
-    <AdminLayout title="Admin • Prompts" sectionLabel="Library" active="library" loggedInAs={ loggedInAs }>
-{(err || msg) && (
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <Head>
+        <title>X Dragon Command — Library</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
+
+      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="flex flex-col items-start">
+                <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
+                <div
+                  className="mt-1 font-semibold leading-none text-neutral-900"
+                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+                >
+                  Command
+                </div>
+              </div>
+
+              <div className="flex h-11 items-center">
+                <div className="text-sm text-neutral-600">Library</div>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end">
+              <button
+                onClick={() => signOut({ callbackUrl: "/admin/signin" })}
+                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
+                Sign out
+              </button>
+              {loggedInAs ? (
+                <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid gap-6 lg:grid-cols-12">
+          <aside className="lg:col-span-2">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+              <nav className="space-y-2">
+                <Link
+                  href="/admin/dashboard"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isDashboard ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Dashboard
+                </Link>
+                
+                <Link
+                  href="/admin/accounts"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isAccounts ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Accounts
+                </Link>
+<Link
+                  href="/admin/library"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isLibrary ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Library
+                </Link>
+              </nav>
+            </div>
+          </aside>
+
+          <section className="lg:col-span-10">
+            {(err || msg) && (
               <div className="mb-4 space-y-2">
                 {err && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>}
                 {msg && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div>}
@@ -489,56 +577,25 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       <p className="mt-1 text-sm text-neutral-600">Create, edit, and delete prompts shown in the gated /tools library.</p>
                     </div>
 
-                    <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => void loadAll()}
-                          className="shrink-0 rounded-xl border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
-                          disabled={busy}
-                        >
-                          Refresh
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setImportOpen(true)}
-                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                          disabled={busy}
-                        >
-                          Import
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={openNewPrompt}
-                          className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
-                          disabled={busy}
-                        >
-                          New
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={exportCsv}
-                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                          disabled={busy}
-                        >
-                          Export CSV
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={exportJson}
-                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                          disabled={busy}
-                        >
-                          Export JSON
-                        </button>
-                      </div>
-                    </div></div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void loadAll()}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                        disabled={busy}
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openNewPrompt}
+                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+                        disabled={busy}
+                      >
+                        New prompt
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="mt-4 grid gap-3 lg:grid-cols-12">
                     <div className="lg:col-span-6">
@@ -584,15 +641,15 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     {loading ? "Loading…" : `${filteredPrompts.length} prompt${filteredPrompts.length === 1 ? "" : "s"}`}
                   </div>
 
-                  <div className="relative mt-4 overflow-x-auto rounded-2xl border border-neutral-200">
-                    <table className="min-w-[960px] w-full text-sm">
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200">
+                    <table className="w-full text-sm">
                       <thead className="bg-neutral-50 text-neutral-600">
                         <tr className="text-left">
                           <th className="px-4 py-3 font-medium">Title</th>
                           <th className="px-4 py-3 font-medium">Category</th>
                           <th className="px-4 py-3 font-medium">Status</th>
                           <th className="px-4 py-3 font-medium">Updated</th>
-                          <th className="sticky right-0 z-10 bg-neutral-50 px-4 py-3 font-medium text-right border-l border-neutral-200">Actions</th>
+                          <th className="px-4 py-3 font-medium text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-200">
@@ -620,7 +677,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                 <StatusPill status={p.status} />
                               </td>
                               <td className="px-4 py-3 text-neutral-700">{fmtDate(p.updatedAt)}</td>
-                              <td className="sticky right-0 z-10 bg-white px-4 py-3 border-l border-neutral-200">
+                              <td className="px-4 py-3">
                                 <div className="flex justify-end gap-2">
                                   <button
                                     type="button"
@@ -653,6 +710,154 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 </div>
               </div>
             </div>
-    </AdminLayout>
+          </section>
+        </div>
+      </main>
+
+      {/* Prompt modal */}
+      <Modal
+        open={promptModalOpen}
+        title={editing ? "Edit prompt" : "New prompt"}
+        onClose={() => {
+          if (busy) return;
+          setPromptModalOpen(false);
+          setEditing(null);
+        }}
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <div className="text-xs font-semibold text-neutral-700">Title</div>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                placeholder="e.g., Cold outreach email generator"
+              />
+            </label>
+
+            <label className="block">
+              <div className="text-xs font-semibold text-neutral-700">Status</div>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as PromptStatus)}
+                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              >
+                <option value="DRAFT">DRAFT</option>
+                <option value="PUBLISHED">PUBLISHED</option>
+                <option value="ARCHIVED">ARCHIVED</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <div className="text-xs font-semibold text-neutral-700">Category</div>
+              <select
+                value={promptCategoryId}
+                onChange={(e) => setPromptCategoryId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              >
+                <option value="">Uncategorized</option>
+                {categoryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1 text-[11px] text-neutral-500">Create categories on the left panel.</div>
+            </label>
+
+            <label className="block">
+              <div className="text-xs font-semibold text-neutral-700">Description (optional)</div>
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                placeholder="One-liner shown in the list"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <div className="text-xs font-semibold text-neutral-700">Content</div>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="mt-1 h-56 w-full resize-y rounded-xl border border-neutral-300 bg-white px-3 py-2 font-mono text-xs outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              placeholder="Paste the prompt text here…"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPromptModalOpen(false);
+                setEditing(null);
+              }}
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void savePrompt()}
+              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+              disabled={busy}
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Category modal */}
+      <SmallModal
+        open={catModalOpen}
+        title={catEditing ? "Edit category" : "New category"}
+        onClose={() => {
+          if (busy) return;
+          setCatModalOpen(false);
+          setCatEditing(null);
+        }}
+      >
+        <div className="space-y-4">
+          <label className="block">
+            <div className="text-xs font-semibold text-neutral-700">Name</div>
+            <input
+              value={catName}
+              onChange={(e) => setCatName(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              placeholder="e.g., Marketing"
+            />
+            <div className="mt-1 text-[11px] text-neutral-500">Slug is generated automatically.</div>
+          </label>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCatModalOpen(false);
+                setCatEditing(null);
+              }}
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveCategory()}
+              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+              disabled={busy}
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </SmallModal>
+    </div>
   );
 }
