@@ -99,7 +99,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
             Close
           </button>
         </div>
