@@ -1,4 +1,4 @@
-// pages/admin/library.tsx
+// pages/admin/library/prompts.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Head from "next/head";
 import Link from "next/link";
