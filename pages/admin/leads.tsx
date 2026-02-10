@@ -59,7 +59,7 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
       setItems(Array.isArray(j?.items) ? j.items : []);
     } catch (e: any) {
       setErr(e?.message || "Failed to load leads");
-      toast({ type: "error", title: "Failed to load leads", message: e?.message || "Please try again." });
+      toast("error", `Failed to load leads: ${e?.message || "Please try again."}`);
     } finally {
       setLoading(false);
     }
@@ -84,7 +84,7 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
     a.download = `leads_${kind}_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ type: "success", title: "Exported JSON", message: "Downloaded leads JSON." });
+    toast("success", "Exported JSON.");
   }
 
   function toCsvRow(obj: any, keys: string[]) {
@@ -115,7 +115,7 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
     a.download = `leads_${kind}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ type: "success", title: "Exported CSV", message: "Downloaded leads CSV." });
+    toast("success", "Exported CSV.");
   }
 
   const topActions = (
@@ -221,7 +221,7 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(JSON.stringify(it, null, 2));
-                          toast({ type: "success", title: "Copied", message: "Lead JSON copied to clipboard." });
+                          toast("success", "Copied.");
                         }}
                         className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
                       >
