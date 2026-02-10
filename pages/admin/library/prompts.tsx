@@ -100,7 +100,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"> >
             Close
           </button>
         </div>
@@ -131,7 +131,7 @@ function SmallModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"> >
             Close
           </button>
         </div>
@@ -504,7 +504,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
             <div className="flex flex-col items-end">
               <button
                 onClick={() => signOut({ callbackUrl: "/admin/signin" })}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"> >
                 Sign out
               </button>
               {loggedInAs ? (
@@ -570,7 +570,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       type="button"
                       onClick={openNewCategory}
                       className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
-                      disabled={busy}
+                      disabled={busy} >
                       New
                     </button>
                   </div>
@@ -597,14 +597,14 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                 type="button"
                                 onClick={() => openEditCategory(c)}
                                 className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
-                                disabled={busy}
+                                disabled={busy} >
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => void deleteCategory(c)}
                                 className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100"
-                                disabled={busy}
+                                disabled={busy} >
                                 Delete
                               </button>
                             </div>
@@ -632,7 +632,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         type="button"
                         onClick={() => void loadAll()}
                         className="shrink-0 rounded-xl border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
-                        disabled={busy}
+                        disabled={busy} >
                         Refresh
                       </button>
 
@@ -640,7 +640,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         type="button"
                         onClick={() => setImportOpen(true)}
                         className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={busy}
+                        disabled={busy} >
                         Import
                       </button>
 
@@ -648,7 +648,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         type="button"
                         onClick={openNewPrompt}
                         className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
-                        disabled={busy}
+                        disabled={busy} >
                         New
                       </button>
                     </>
@@ -659,7 +659,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         type="button"
                         onClick={exportCsv}
                         className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-                        disabled={busy}
+                        disabled={busy} >
                         Export CSV
                       </button>
 
@@ -667,7 +667,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         type="button"
                         onClick={exportJson}
                         className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-                        disabled={busy}
+                        disabled={busy} >
                         Export JSON
                       </button>
                     </>
@@ -759,14 +759,14 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                     type="button"
                                     onClick={() => openEditPrompt(p)}
                                     className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
-                                    disabled={busy}
+                                    disabled={busy} >
                                     Edit
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => void deletePrompt(p)}
                                     className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100"
-                                    disabled={busy}
+                                    disabled={busy} >
                                     Delete
                                   </button>
                                 </div>
@@ -863,7 +863,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => {
+              onClick={() => { >
                 setPromptModalOpen(false);
                 setEditing(null);
               }}
@@ -919,14 +919,14 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               type="button"
               onClick={() => setImportOpen(false)}
               className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-              disabled={busy}
+              disabled={busy} >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void runImport()}
               className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
-              disabled={busy}
+              disabled={busy} >
               Import
             </button>
           </div>
@@ -957,7 +957,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => {
+              onClick={() => { >
                 setCatModalOpen(false);
                 setCatEditing(null);
               }}
