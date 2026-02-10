@@ -171,6 +171,8 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   const [statusFilter, setStatusFilter] = useState<"ALL" | PromptStatus>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL"); // categoryId
   const [importOpen, setImportOpen] = useState(false);
+  const [importFormat, setImportFormat] = useState<"csv" | "json">("csv");
+  const [importText, setImportText] = useState("");
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [prompts, setPrompts] = useState<PromptRow[]>([]);
@@ -285,6 +287,66 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   }
 
   useEffect(() => void loadAll(), []); // initial
+
+
+  async function exportCsv() {
+    try {
+      const res = await fetch("/api/admin/library/prompts/export?format=csv");
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "prompts.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setErr(e?.message || "Export CSV failed");
+    }
+  }
+
+  async function exportJson() {
+    try {
+      const res = await fetch("/api/admin/library/prompts/export?format=json");
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "prompts.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setErr(e?.message || "Export JSON failed");
+    }
+  }
+
+  async function runImport() {
+    setErr(null);
+    setMsg(null);
+    if (!importText.trim()) {
+      setErr("Paste CSV or JSON to import.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/library/prompts/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "import", format: importFormat, data: importText }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Import failed");
+      setMsg(`Imported ${json.imported ?? "items"}.`);
+      setImportOpen(false);
+      setImportText("");
+      await loadAll();
+    } catch (e: any) {
+      setErr(e?.message || "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function savePrompt() {
     setErr(null);
@@ -577,24 +639,57 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       <p className="mt-1 text-sm text-neutral-600">Create, edit, and delete prompts shown in the gated /tools library.</p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void loadAll()}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={busy}
-                      >
-                        Refresh
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openNewPrompt}
-                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-                        disabled={busy}
-                      >
-                        New prompt
-                      </button>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => void loadAll()}
+                          className="shrink-0 rounded-xl border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                          disabled={busy}
+                        >
+                          Refresh
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setImportOpen(true)}
+                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          disabled={busy}
+                        >
+                          Import
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={openNewPrompt}
+                          className="shrink-0 rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
+                          disabled={busy}
+                        >
+                          New
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={exportCsv}
+                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          disabled={busy}
+                        >
+                          Export CSV
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={exportJson}
+                          className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          disabled={busy}
+                        >
+                          Export JSON
+                        </button>
+                      </div>
                     </div>
+
                   </div>
 
                   <div className="mt-4 grid gap-3 lg:grid-cols-12">
@@ -641,15 +736,15 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     {loading ? "Loading…" : `${filteredPrompts.length} prompt${filteredPrompts.length === 1 ? "" : "s"}`}
                   </div>
 
-                  <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200">
-                    <table className="w-full text-sm">
+                  <div className="relative mt-4 overflow-x-auto rounded-2xl border border-neutral-200">
+                    <table className="min-w-[960px] w-full text-sm">
                       <thead className="bg-neutral-50 text-neutral-600">
                         <tr className="text-left">
                           <th className="px-4 py-3 font-medium">Title</th>
                           <th className="px-4 py-3 font-medium">Category</th>
                           <th className="px-4 py-3 font-medium">Status</th>
                           <th className="px-4 py-3 font-medium">Updated</th>
-                          <th className="px-4 py-3 font-medium text-right">Actions</th>
+                          <th className="sticky right-0 z-10 bg-neutral-50 px-4 py-3 font-medium text-right border-l border-neutral-200">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-200">
@@ -677,8 +772,8 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                 <StatusPill status={p.status} />
                               </td>
                               <td className="px-4 py-3 text-neutral-700">{fmtDate(p.updatedAt)}</td>
-                              <td className="px-4 py-3">
-                                <div className="flex justify-end gap-2">
+                              <td className="sticky right-0 z-10 bg-white px-4 py-3 border-l border-neutral-200">
+                            <div className="flex justify-end gap-2">
                                   <button
                                     type="button"
                                     onClick={() => openEditPrompt(p)}
@@ -811,7 +906,64 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
             </button>
           </div>
         </div>
+      </Modal
+
+      <Modal
+        open={importOpen}
+        title="Import prompts"
+        onClose={() => {
+          if (busy) return;
+          setImportOpen(false);
+        }}
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <div className="text-xs font-semibold text-neutral-700">Format</div>
+              <select
+                value={importFormat}
+                onChange={(e) => setImportFormat(e.target.value as "csv" | "json")}
+                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                disabled={busy}
+              >
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="block">
+            <div className="text-xs font-semibold text-neutral-700">Paste data</div>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={importFormat === "csv" ? "title,description,categorySlug,status,content\n..." : '[{ "title": "...", ... }]'}
+              className="mt-1 h-56 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 font-mono text-xs outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              disabled={busy}
+            />
+          </label>
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(false)}
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void runImport()}
+              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+              disabled={busy}
+            >
+              Import
+            </button>
+          </div>
+        </div>
       </Modal>
+>
 
       {/* Category modal */}
       <SmallModal
