@@ -6,9 +6,9 @@ import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { authOptions } from "../api/auth/[...nextauth]";
-import AdminHeader from "../../components/admin/AdminHeader";
-import AdminSidebar from "../../components/admin/AdminSidebar";
+import { authOptions } from "../../api/auth/[...nextauth]";
+import AdminHeader from "../../../components/admin/AdminHeader";
+import AdminSidebar from "../../../components/admin/AdminSidebar";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
@@ -26,8 +26,6 @@ type PromptRow = {
   description?: string | null;
   content: string;
   status: PromptStatus;
-  tags?: string[];
-  sortOrder?: number;
   createdAt?: string | null;
   updatedAt?: string | null;
   categoryId?: string | null;
@@ -185,13 +183,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   const [content, setContent] = useState("");
   const [promptCategoryId, setPromptCategoryId] = useState<string>(""); // "" = uncategorized
 
-  const [tags, setTags] = useState(""); // comma-separated in UI
-  const [sortOrder, setSortOrder] = useState<string>("0");
-
-  // Bulk select
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [bulkStatus, setBulkStatus] = useState<PromptStatus>("DRAFT");
-
   // Category modal state
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [catEditing, setCatEditing] = useState<CategoryRow | null>(null);
@@ -227,8 +218,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
     setStatus("DRAFT");
     setContent("");
     setPromptCategoryId("");
-    setTags("");
-    setSortOrder("0");
     setPromptModalOpen(true);
   }
 
@@ -239,8 +228,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
     setStatus(p.status || "DRAFT");
     setContent(p.content || "");
     setPromptCategoryId(p.categoryId || "");
-    setTags((p.tags || []).join(", "));
-    setSortOrder(String(p.sortOrder ?? 0));
     setPromptModalOpen(true);
   }
 
@@ -315,11 +302,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
         status,
         content: c,
         categoryId: promptCategoryId ? promptCategoryId : null,
-        tags: tags
-          .split(",")
-          .map((x) => x.trim())
-          .filter(Boolean),
-        sortOrder: Number(sortOrder) || 0,
       };
 
       const url = editing ? `/api/admin/library/prompts/${encodeURIComponent(editing.id)}` : "/api/admin/library/prompts";
@@ -603,90 +585,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       >
                         Refresh
                       </button>
-
-                      <a
-                        href="/api/admin/library/prompts/export?format=csv"
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                      >
-                        Export CSV
-                      </a>
-                      <a
-                        href="/api/admin/library/prompts/export?format=json"
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                      >
-                        Export JSON
-                      </a>
-
-                      <label className="cursor-pointer rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50">
-                        Import
-                        <input
-                          type="file"
-                          accept=".csv,application/json,text/csv"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0];
-                            if (!f) return;
-                            try {
-                              const text = await f.text();
-                              let rows: any[] = [];
-                              if (f.name.toLowerCase().endsWith(".json")) {
-                                rows = JSON.parse(text);
-                              } else {
-                                const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-                                const headerLine = lines.shift() || "";
-                                const parseLine = (line: string) => {
-                                  const cols: string[] = [];
-                                  let cur = "";
-                                  let inQ = false;
-                                  for (let i = 0; i < line.length; i++) {
-                                    const ch = line[i];
-                                    if (ch === '"') {
-                                      if (inQ && line[i + 1] === '"') {
-                                        cur += '"';
-                                        i++;
-                                      } else {
-                                        inQ = !inQ;
-                                      }
-                                    } else if (ch === "," && !inQ) {
-                                      cols.push(cur);
-                                      cur = "";
-                                    } else {
-                                      cur += ch;
-                                    }
-                                  }
-                                  cols.push(cur);
-                                  return cols;
-                                };
-                                const headers = parseLine(headerLine).map((h) => h.trim().replace(/^"|"$/g, ""));
-                                rows = lines.map((line) => {
-                                  const cols = parseLine(line);
-                                  const out: any = {};
-                                  headers.forEach((h, idx) => {
-                                    out[h] = (cols[idx] ?? "").trim().replace(/^"|"$/g, "");
-                                  });
-                                  return out;
-                                });
-                              }
-
-                              setBusy(true);
-                              setError(null);
-                              const r = await fetch("/api/admin/library/prompts/bulk", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ action: "import", rows, defaultStatus: "DRAFT" }),
-                              });
-                              const j = (await r.json()) as any;
-                              if (!r.ok || !j?.ok) throw new Error(j?.error || "Import failed");
-                              await loadAll();
-                            } catch (err: any) {
-                              setError(err?.message || "Import failed");
-                            } finally {
-                              setBusy(false);
-                              e.target.value = "";
-                            }
-                          }}
-                        />
-                      </label>
                       <button
                         type="button"
                         onClick={openNewPrompt}
@@ -742,93 +640,27 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     {loading ? "Loading…" : `${filteredPrompts.length} prompt${filteredPrompts.length === 1 ? "" : "s"}`}
                   </div>
 
-                  
-                  {selectedIds.length > 0 ? (
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white p-3">
-                      <div className="text-sm text-neutral-700">
-                        <span className="font-semibold">{selectedIds.length}</span> selected
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          value={bulkStatus}
-                          onChange={(e) => setBulkStatus(e.target.value as PromptStatus)}
-                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-800"
-                          disabled={busy}
-                        >
-                          <option value="DRAFT">DRAFT</option>
-                          <option value="PUBLISHED">PUBLISHED</option>
-                          <option value="ARCHIVED">ARCHIVED</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              setBusy(true);
-                              setError(null);
-                              const r = await fetch("/api/admin/library/prompts/bulk", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ action: "status", ids: selectedIds, status: bulkStatus }),
-                              });
-                              const j = (await r.json()) as any;
-                              if (!r.ok || !j?.ok) throw new Error(j?.error || "Bulk update failed");
-                              await loadAll();
-                            } catch (err: any) {
-                              setError(err?.message || "Bulk update failed");
-                            } finally {
-                              setBusy(false);
-                            }
-                          }}
-                          className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-                          disabled={busy}
-                        >
-                          Apply status
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedIds([])}
-                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                          disabled={busy}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-
-<div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200">
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200">
                     <table className="w-full text-sm">
                       <thead className="bg-neutral-50 text-neutral-600">
                         <tr className="text-left">
-                          <th className="px-4 py-3 font-medium">
-                            <input
-                              type="checkbox"
-                              checked={filteredPrompts.length > 0 && selectedIds.length === filteredPrompts.length}
-                              onChange={(e) => {
-                                if (e.target.checked) setSelectedIds(filteredPrompts.map((x) => x.id));
-                                else setSelectedIds([]);
-                              }}
-                              disabled={busy || filteredPrompts.length === 0}
-                            />
-                          </th>
                           <th className="px-4 py-3 font-medium">Title</th>
                           <th className="px-4 py-3 font-medium">Category</th>
                           <th className="px-4 py-3 font-medium">Status</th>
                           <th className="px-4 py-3 font-medium">Updated</th>
-                          <th className="px-4 py-3 font-medium">Order</th>
                           <th className="px-4 py-3 font-medium text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-200">
                         {loading ? (
                           <tr>
-                            <td className="px-4 py-6 text-neutral-500" colSpan={7}>
+                            <td className="px-4 py-6 text-neutral-500" colSpan={5}>
                               Loading…
                             </td>
                           </tr>
                         ) : filteredPrompts.length === 0 ? (
                           <tr>
-                            <td className="px-4 py-6 text-neutral-500" colSpan={7}>
+                            <td className="px-4 py-6 text-neutral-500" colSpan={5}>
                               No prompts found.
                             </td>
                           </tr>
@@ -836,121 +668,14 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                           filteredPrompts.map((p) => (
                             <tr key={p.id} className="hover:bg-neutral-50">
                               <td className="px-4 py-3">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIds.includes(p.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) setSelectedIds((prev) => Array.from(new Set([...prev, p.id])));
-                                    else setSelectedIds((prev) => prev.filter((id) => id !== p.id));
-                                  }}
-                                  disabled={busy}
-                                />
-                              </td>
-                              <td className="px-4 py-3">
                                 <div className="font-medium text-neutral-900">{p.title}</div>
                                 {p.description ? <div className="mt-0.5 text-xs text-neutral-500">{p.description}</div> : null}
-                                {p.tags && p.tags.length ? (
-                                  <div className="mt-2 flex flex-wrap gap-1">
-                                    {p.tags.slice(0, 6).map((t) => (
-                                      <span
-                                        key={t}
-                                        className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-semibold text-neutral-700"
-                                      >
-                                        {t}
-                                      </span>
-                                    ))}
-                                    {p.tags.length > 6 ? (
-                                      <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-semibold text-neutral-700">
-                                        +{p.tags.length - 6}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-
                               </td>
                               <td className="px-4 py-3 text-neutral-700">{p.category?.name || "Uncategorized"}</td>
                               <td className="px-4 py-3">
                                 <StatusPill status={p.status} />
                               </td>
                               <td className="px-4 py-3 text-neutral-700">{fmtDate(p.updatedAt)}</td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const i = filteredPrompts.findIndex((x) => x.id === p.id);
-                                      if (i <= 0) return;
-                                      const above = filteredPrompts[i - 1];
-                                      const a = p.sortOrder ?? 0;
-                                      const b = above.sortOrder ?? 0;
-                                      try {
-                                        setBusy(true);
-                                        setError(null);
-                                        const r = await fetch("/api/admin/library/prompts/bulk", {
-                                          method: "POST",
-                                          headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({
-                                            action: "reorder",
-                                            items: [
-                                              { id: p.id, sortOrder: b },
-                                              { id: above.id, sortOrder: a },
-                                            ],
-                                          }),
-                                        });
-                                        const j = (await r.json()) as any;
-                                        if (!r.ok || !j?.ok) throw new Error(j?.error || "Reorder failed");
-                                        await loadAll();
-                                      } catch (err: any) {
-                                        setError(err?.message || "Reorder failed");
-                                      } finally {
-                                        setBusy(false);
-                                      }
-                                    }}
-                                    className="rounded-lg border border-neutral-300 bg-white px-2 py-1 text-xs font-semibold text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-                                    disabled={busy || filteredPrompts.findIndex((x) => x.id === p.id) <= 0}
-                                    title="Move up"
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const i = filteredPrompts.findIndex((x) => x.id === p.id);
-                                      if (i < 0 || i >= filteredPrompts.length - 1) return;
-                                      const below = filteredPrompts[i + 1];
-                                      const a = p.sortOrder ?? 0;
-                                      const b = below.sortOrder ?? 0;
-                                      try {
-                                        setBusy(true);
-                                        setError(null);
-                                        const r = await fetch("/api/admin/library/prompts/bulk", {
-                                          method: "POST",
-                                          headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({
-                                            action: "reorder",
-                                            items: [
-                                              { id: p.id, sortOrder: b },
-                                              { id: below.id, sortOrder: a },
-                                            ],
-                                          }),
-                                        });
-                                        const j = (await r.json()) as any;
-                                        if (!r.ok || !j?.ok) throw new Error(j?.error || "Reorder failed");
-                                        await loadAll();
-                                      } catch (err: any) {
-                                        setError(err?.message || "Reorder failed");
-                                      } finally {
-                                        setBusy(false);
-                                      }
-                                    }}
-                                    className="rounded-lg border border-neutral-300 bg-white px-2 py-1 text-xs font-semibold text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-                                    disabled={busy || filteredPrompts.findIndex((x) => x.id === p.id) >= filteredPrompts.length - 1}
-                                    title="Move down"
-                                  >
-                                    ↓
-                                  </button>
-                                </div>
-                              </td>
                               <td className="px-4 py-3">
                                 <div className="flex justify-end gap-2">
                                   <button
@@ -1041,30 +766,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               </select>
               <div className="mt-1 text-[11px] text-neutral-500">Create categories on the left panel.</div>
             </label>
-
-            <label className="block">
-              <div className="text-xs font-semibold text-neutral-700">Tags</div>
-              <input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Comma-separated (e.g. sales, cold-email, seo)"
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-                disabled={busy}
-              />
-            </label>
-
-            <label className="block">
-              <div className="text-xs font-semibold text-neutral-700">Order</div>
-              <input
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-                inputMode="numeric"
-                className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-                disabled={busy}
-              />
-              <div className="mt-1 text-xs text-neutral-500">Higher numbers appear first.</div>
-            </label>
-
 
             <label className="block">
               <div className="text-xs font-semibold text-neutral-700">Description (optional)</div>
