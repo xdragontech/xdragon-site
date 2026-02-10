@@ -962,7 +962,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           </div>
         </div>
       </Modal>
->
 
       {/* Category modal */}
       <SmallModal
