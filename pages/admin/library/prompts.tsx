@@ -100,8 +100,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
-          >
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
             Close
           </button>
         </div>
@@ -132,8 +131,7 @@ function SmallModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
-          >
+            className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50">
             Close
           </button>
         </div>
@@ -506,8 +504,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
             <div className="flex flex-col items-end">
               <button
                 onClick={() => signOut({ callbackUrl: "/admin/signin" })}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-                >
+                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800">
                 Sign out
               </button>
               {loggedInAs ? (
