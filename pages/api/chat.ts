@@ -620,7 +620,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         lead: mergedLead,
         wants_follow_up,
         next_question,
-        lastUserMessage,
+        lastUserMessage: lastUser,
         reply,
         emailed,
       });
