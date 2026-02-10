@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               tags: Array.isArray(r.tags)
                 ? r.tags
                 : typeof r.tags === "string"
-                  ? r.tags.split(",").map((t) => t.trim()).filter(Boolean)
+                  ? r.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
                   : [],
               sortOrder: Number.isFinite(Number(r.sortOrder)) ? Number(r.sortOrder) : 0,
             },
