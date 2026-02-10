@@ -44,6 +44,47 @@ async function upstashExpire(key: string, ttlSeconds: number): Promise<void> {
   }).catch(() => {});
 }
 
+async function upstashLpush(key: string, value: string): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  await fetch(`${url}/lpush/${encodeURIComponent(key)}/${encodeURIComponent(value)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
+
+async function upstashLtrim(key: string, start: number, stop: number): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  await fetch(`${url}/ltrim/${encodeURIComponent(key)}/${start}/${stop}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
+
+/**
+ * Lightweight lead logging (backup trail beyond email).
+ * Stores JSON events in Upstash Redis list keys:
+ * - leadlog:contact
+ * - leadlog:chat
+ *
+ * Keeps the latest 1000 events, TTL 90 days.
+ */
+async function logLeadEvent(kind: "contact" | "chat", payload: Record<string, unknown>): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+
+  const key = `leadlog:${kind}`;
+  const entry = JSON.stringify(payload);
+
+  await upstashLpush(key, entry);
+  await upstashLtrim(key, 0, 999);
+  await upstashExpire(key, 60 * 60 * 24 * 90);
+}
+
 type RateLimitConfig = {
   name: string; // route name
   perMinute: number;
@@ -556,6 +597,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           emailed = false;
         }
       }
+    }
+
+
+    // Backup lead log (only when we have meaningful lead info / follow-up intent).
+    const shouldLogLead =
+      Boolean(wants_follow_up) ||
+      Boolean(mergedLead.email) ||
+      Boolean(mergedLead.phone) ||
+      Boolean(mergedLead.company) ||
+      Boolean(mergedLead.website) ||
+      Boolean(mergedLead.name);
+
+    if (shouldLogLead) {
+      await logLeadEvent("chat", {
+        ts: new Date().toISOString(),
+        ip: getClientIp(req),
+        ua: String(req.headers["user-agent"] || ""),
+        referer: String(req.headers["referer"] || ""),
+        conversationId: req.body?.conversationId || null,
+        returnId,
+        lead: mergedLead,
+        wants_follow_up,
+        next_question,
+        lastUserMessage,
+        reply,
+        emailed,
+      });
     }
 
     return res.status(200).json({
