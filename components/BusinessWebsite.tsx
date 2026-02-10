@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useToast } from "./ui/toast";
 
 /**
  * BusinessWebsite.tsx (Pages Router component)
@@ -19,6 +20,8 @@ export default function BusinessWebsite() {
   const [open, setOpen] = useState(false);
   const [formStatus, setFormStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [formError, setFormError] = useState<string>("");
+  const { toast: pushToast } = useToast();
+  const { toast: pushToast } = useToast();
 
   const navItems = [
     { label: "Home", href: "#home" },
@@ -137,12 +140,15 @@ export default function BusinessWebsite() {
         throw new Error(data?.error || `Contact request failed (${resp.status})`);
       }
 
-      setFormStatus("sent");
+      setFormStatus("idle");
       form.reset();
+      pushToast("success", "Message sent. We’ll follow up within one business day.");
     } catch (err: any) {
       console.error("Contact form submit failed", err);
       setFormStatus("error");
-      setFormError(err?.message || "Something went wrong. Please try again.");
+      const msg = err?.message || "Something went wrong. Please try again.";
+      setFormError(msg);
+      pushToast("error", msg);
     }
   }
 
@@ -525,6 +531,7 @@ export default function BusinessWebsite() {
                     name="name"
                     required
                     type="text"
+                    disabled={formStatus === "sending"}
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                     placeholder="Jane Doe"
                   />
@@ -535,6 +542,7 @@ export default function BusinessWebsite() {
                     name="email"
                     required
                     type="email"
+                    disabled={formStatus === "sending"}
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                     placeholder="you@example.com"
                   />
@@ -545,6 +553,7 @@ export default function BusinessWebsite() {
                 <input
                   name="phone"
                   type="tel"
+                  disabled={formStatus === "sending"}
                   className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   placeholder="+1-604-256-6563"
                 />
@@ -554,6 +563,7 @@ export default function BusinessWebsite() {
                 <textarea
                   name="message"
                   required
+                  disabled={formStatus === "sending"}
                   className="mt-1 w-full rounded-xl border border-neutral-300 p-3 h-32 focus:outline-none focus:ring-2 focus:ring-black"
                   placeholder="What would you like to achieve?"
                 />
@@ -567,11 +577,6 @@ export default function BusinessWebsite() {
                 {formStatus === "sending" ? "Sending..." : "Send Message"}
               </button>
 
-              <div aria-live="polite">
-                {formStatus === "sent" && (
-                  <p className="mt-3 text-sm text-emerald-700">Thanks — we received your message.</p>
-                )}
-              </div>
               {formStatus === "error" && <p className="mt-3 text-sm text-red-700">Error: {formError}</p>}
               <p className="mt-3 text-xs text-neutral-500">By submitting, you agree to our friendly terms.</p>
             </form>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useToast } from "./ui/toast";
 
 type ChatRole = "user" | "assistant";
 
@@ -20,43 +21,6 @@ type ChatResponse = {
   emailed?: boolean;
   error?: string;
 };
-
-
-type ToastKind = "success" | "error" | "info";
-
-type ToastState = {
-  kind: ToastKind;
-  message: string;
-  id: string;
-};
-
-function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
-  const base =
-    "pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg";
-  const styles =
-    toast.kind === "success"
-      ? "border-green-200 bg-green-50 text-green-900"
-      : toast.kind === "error"
-      ? "border-red-200 bg-red-50 text-red-900"
-      : "border-neutral-200 bg-white text-neutral-900";
-
-  return (
-    <div className={`${base} ${styles}`} role="status" aria-live="polite">
-      <div className="mt-0.5">
-        {toast.kind === "success" ? "✅" : toast.kind === "error" ? "⚠️" : "ℹ️"}
-      </div>
-      <div className="flex-1 leading-snug">{toast.message}</div>
-      <button
-        type="button"
-        className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-black/5"
-        onClick={onClose}
-        aria-label="Dismiss notification"
-      >
-        Close
-      </button>
-    </div>
-  );
-}
 
 
 const LS_KEY = "xdragon_chat_state_v2";
@@ -122,22 +86,8 @@ export default function ChatWidget() {
   const [status, setStatus] = useState<"idle" | "thinking" | "error">("idle");
   const [errorText, setErrorText] = useState<string>("");
 
-  // Toast (lightweight, no external deps)
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const toastTimerRef = useRef<number | null>(null);
-
-  function showToast(kind: ToastKind, message: string) {
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    const next: ToastState = { kind, message, id: String(Date.now()) };
-    setToast(next);
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 2600);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    };
-  }, []);
+  // Global toast (mounted once in pages/_app.tsx)
+  const { toast: pushToast } = useToast();
 
   // Lead capture prompt state
   const [showLeadPrompt, setShowLeadPrompt] = useState(false);
@@ -230,12 +180,12 @@ export default function ChatWidget() {
       if (data.emailed) setEmailed(true);
 
       setStatus("idle");
-      if (opts?.toastOnSuccess) showToast("success", "Sent.");
+      if (opts?.toastOnSuccess) pushToast("success", "Sent.");
     } catch (err: any) {
       setStatus("error");
       const msg = err?.message || "Something went wrong. Please try again.";
       setErrorText(msg);
-      showToast("error", msg);
+      pushToast("error", msg);
     }
   }
 
@@ -510,11 +460,6 @@ export default function ChatWidget() {
               </button>
             </div>
           )}
-        </div>
-      )}
-      {toast && (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-[70] w-[min(92vw,380px)]">
-          <Toast toast={toast} onClose={() => setToast(null)} />
         </div>
       )}
     </div>
