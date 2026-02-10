@@ -743,17 +743,8 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       <p className="mt-1 text-sm text-neutral-600">Create, edit, and delete prompts shown in the gated /tools library.</p>
                     </div>
 
-                                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setImportOpen(true)}
-                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                          disabled={busy}
-                        >
-                          Import
-                        </button>
-
                         <button
                           type="button"
                           onClick={() => void loadAll()}
@@ -761,6 +752,15 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                           disabled={busy}
                         >
                           Refresh
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setImportOpen(true)}
+                          className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          disabled={busy}
+                        >
+                          Import
                         </button>
 
                         <button
@@ -792,7 +792,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                           Export JSON
                         </button>
                       </div>
-                    </div></div>
                     </div>
                   </div>
 
