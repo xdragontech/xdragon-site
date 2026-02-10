@@ -793,6 +793,8 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         </button>
                       </div>
                     </div>
+                  </div>
+
                   <div className="mt-4 grid gap-3 lg:grid-cols-12">
                     <div className="lg:col-span-6">
                       <input
