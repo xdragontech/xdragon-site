@@ -80,10 +80,11 @@ async function enforceRateLimit(
   if (minuteExceeded || hourExceeded) {
     const retryAfter = minuteExceeded ? 60 : 3600;
     res.setHeader("Retry-After", String(retryAfter));
-    return res.status(429).json({
+    res.status(429).json({
       ok: false,
       error: "Rate limit exceeded. Please try again shortly.",
     } as any);
+    return false;
   }
 
   return true;
