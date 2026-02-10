@@ -744,16 +744,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     </div>
 
                                         <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <button
-                        type="button"
-                        onClick={openNewPrompt}
-                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
-                        disabled={busy}
-                      >
-                        New
-                      </button>
-
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => setImportOpen(true)}
@@ -771,9 +762,18 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                         >
                           Refresh
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={openNewPrompt}
+                          className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
+                          disabled={busy}
+                        >
+                          New
+                        </button>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={exportCsv}
@@ -792,6 +792,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                           Export JSON
                         </button>
                       </div>
+                    </div></div>
                     </div>
                   </div>
 
