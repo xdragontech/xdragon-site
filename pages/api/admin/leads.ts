@@ -16,17 +16,19 @@ type LeadEvent = {
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-async function redis<T>(path: string, body: any): Promise<T> {
+async function redis<T>(path: string, body?: any): Promise<T> {
   if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) {
     throw new Error("Missing Upstash Redis env vars");
   }
+
+  const hasBody = body !== undefined && body !== null;
   const res = await fetch(`${UPSTASH_REDIS_REST_URL}${path}`, {
-    method: "POST",
+    method: hasBody ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
     },
-    body: JSON.stringify(body),
+    ...(hasBody ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!res.ok) {
@@ -69,7 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const results: LeadEvent[] = [];
 
     for (const list of lists) {
-      const r = await redis<{ result: string[] }>("/lrange", [list.key, 0, limit - 1]);
+      const r = await redis<{ result: string[] }>(`/lrange/${encodeURIComponent(list.key)}/0/${limit - 1}`);
       const items = Array.isArray(r?.result) ? r.result : [];
       for (const raw of items) {
         try {
