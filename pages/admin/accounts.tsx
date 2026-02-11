@@ -152,11 +152,8 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((s) => {
-        const u = s?.user;
-        const email = (u?.email || "").toString();
-        const name = (u?.name || "").toString();
-        const username = email ? email.split("@")[0] : (name ? name.split(" ")[0] : "");
-        setLoggedInAs(username);
+        const email = (s?.user?.email || "").toString();
+        setLoggedInAs(email);
       })
       .catch(() => {});
   }, []);

@@ -1,10 +1,14 @@
 // pages/admin/library/prompts.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
+import Head from "next/head";
+import Link from "next/link";
 import { getServerSession } from "next-auth/next";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { authOptions } from "../../api/auth/[...nextauth]";
-import AdminLayout from "../../../components/admin/AdminLayout";
-import LibraryCardHeader from "../../../components/admin/LibraryCardHeader";
+import AdminHeader from "../../../components/admin/AdminHeader";
+import AdminSidebar from "../../../components/admin/AdminSidebar";
 
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
@@ -139,6 +143,8 @@ function SmallModal({
 }
 
 export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+  const router = useRouter();
+
   const [loggedInAs, setLoggedInAs] = useState<string>("");
 
   useEffect(() => {
@@ -146,11 +152,14 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
       .then((r) => r.json())
       .then((s) => {
         const email = (s?.user?.email || "").toString();
-        const username = email ? email.split("@")[0] : "";
-        setLoggedInAs(username);
+        setLoggedInAs(email);
       })
       .catch(() => {});
   }, []);
+
+  const isDashboard = router.pathname === "/admin/dashboard";
+  const isAccounts = router.pathname === "/admin/accounts";
+  const isLibrary = router.pathname.startsWith("/admin/library");
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -163,10 +172,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [prompts, setPrompts] = useState<PromptRow[]>([]);
-
-  // Import / export
-  const [importOpen, setImportOpen] = useState(false);
-  const [importJson, setImportJson] = useState("");
 
   // Prompt modal state
   const [promptModalOpen, setPromptModalOpen] = useState(false);
@@ -398,134 +403,103 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
     }
   }
 
-  function downloadBlob(filename: string, blob: Blob) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportJson() {
-    const payload = filteredPrompts.map((p) => ({
-      title: p.title,
-      description: p.description || "",
-      content: p.content,
-      status: p.status,
-      category: p.category?.slug || p.category?.name || "",
-    }));
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    downloadBlob(`prompts_${new Date().toISOString().slice(0, 10)}.json`, blob);
-  }
-
-  function csvEscape(v: string) {
-    const s = (v ?? "").toString();
-    if (/[\n\r",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  }
-
-  function exportCsv() {
-    const header = ["Title", "Description", "Category", "Status", "Content"].join(",");
-    const rows = filteredPrompts.map((p) =>
-      [
-        csvEscape(p.title),
-        csvEscape(p.description || ""),
-        csvEscape(p.category?.name || ""),
-        csvEscape(p.status),
-        csvEscape(p.content),
-      ].join(",")
-    );
-    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
-    downloadBlob(`prompts_${new Date().toISOString().slice(0, 10)}.csv`, blob);
-  }
-
-  async function importFromJson() {
-    setErr(null);
-    setMsg(null);
-
-    let items: any[];
-    try {
-      items = JSON.parse(importJson);
-      if (!Array.isArray(items)) throw new Error("JSON must be an array of prompts");
-    } catch (e: any) {
-      setErr(e?.message || "Invalid JSON");
-      return;
-    }
-
-    const normalize = (s: string) => s.trim().toLowerCase();
-    const bySlug = new Map(categoryOptions.map((c) => [normalize(c.slug), c]));
-    const byName = new Map(categoryOptions.map((c) => [normalize(c.name), c]));
-
-    setBusy(true);
-    try {
-      let okCount = 0;
-      let failCount = 0;
-
-      for (const raw of items) {
-        const t = (raw?.title || raw?.name || "").toString().trim();
-        const c = (raw?.content || raw?.prompt || "").toString();
-        if (!t || !c) {
-          failCount++;
-          continue;
-        }
-
-        const statusVal = (raw?.status || "DRAFT").toString().toUpperCase();
-        const statusSafe: PromptStatus = (statusVal === "PUBLISHED" || statusVal === "ARCHIVED" || statusVal === "DRAFT") ? statusVal : "DRAFT";
-
-        const catRaw = (raw?.categoryId || raw?.category || raw?.categorySlug || raw?.categoryName || "").toString();
-        const catKey = normalize(catRaw);
-        const cat = bySlug.get(catKey) || byName.get(catKey);
-
-        const body = {
-          title: t,
-          description: (raw?.description || "").toString() || null,
-          content: c,
-          status: statusSafe,
-          categoryId: cat ? cat.id : null,
-        };
-
-        const r = await fetch("/api/admin/library/prompts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j?.ok) {
-          failCount++;
-        } else {
-          okCount++;
-        }
-      }
-
-      setImportOpen(false);
-      setImportJson("");
-      setMsg(`Import complete: ${okCount} created, ${failCount} skipped/failed.`);
-      await loadAll();
-    } catch (e: any) {
-      setErr(e?.message || "Import failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const categoryOptions = useMemo(() => {
     const sorted = [...categories].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
     return sorted;
   }, [categories]);
 
   return (
-    <AdminLayout title="X Dragon Command — Library" sectionLabel="Library" loggedInAs={loggedInAs} active="library">
-      {(err || msg) && (
-        <div className="mb-4 space-y-2">
-          {err && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>}
-          {msg && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div>}
-        </div>
-      )}
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <Head>
+        <title>X Dragon Command — Library</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
 
-      <div className="grid gap-6 lg:grid-cols-12">
+      <header className="border-b border-neutral-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="flex flex-col items-start">
+                <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
+                <div
+                  className="mt-1 font-semibold leading-none text-neutral-900"
+                  style={{ fontFamily: "Orbitron, ui-sans-serif, system-ui", fontSize: "1.6875rem" }}
+                >
+                  Command
+                </div>
+              </div>
+
+              <div className="flex h-11 items-center">
+                <div className="text-sm text-neutral-600">Library</div>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end">
+              <button
+                onClick={() => signOut({ callbackUrl: "/admin/signin" })}
+                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
+                Sign out
+              </button>
+              {loggedInAs ? (
+                <div className="mt-2 text-sm text-neutral-600">Logged in as: {loggedInAs}</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid gap-6 lg:grid-cols-12">
+          <aside className="lg:col-span-2">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+              <nav className="space-y-2">
+                <Link
+                  href="/admin/dashboard"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isDashboard ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Dashboard
+                </Link>
+                
+                <Link
+                  href="/admin/accounts"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isAccounts ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Accounts
+                </Link>
+<Link
+                  href="/admin/library"
+                  className={
+                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
+                    (isLibrary ? " ring-2 ring-neutral-900/20" : "")
+                  }
+                >
+                  Library
+                </Link>
+              </nav>
+            </div>
+          </aside>
+
+          <section className="lg:col-span-10">
+            {(err || msg) && (
+              <div className="mb-4 space-y-2">
+                {err && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>}
+                {msg && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{msg}</div>}
+              </div>
+            )}
+
+            <div className="grid gap-6 lg:grid-cols-12">
               {/* Categories */}
               <div className="lg:col-span-4">
                 <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
@@ -595,58 +569,31 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
               {/* Prompts */}
               <div className="lg:col-span-8">
                 <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                  <LibraryCardHeader
-                    title="Prompt Library"
-                    description="Create, edit, and delete prompts shown in the gated /tools library."
-                    actionsTop={
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => void loadAll()}
-                          className="rounded-full border border-neutral-200 bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                          disabled={busy}
-                        >
-                          Refresh
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setImportOpen(true)}
-                          className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
-                          disabled={busy}
-                        >
-                          Import
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openNewPrompt}
-                          className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900"
-                          disabled={busy}
-                        >
-                          New
-                        </button>
-                      </>
-                    }
-                    actionsBottom={
-                      <>
-                        <button
-                          type="button"
-                          onClick={exportCsv}
-                          className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
-                          disabled={busy || loading || filteredPrompts.length === 0}
-                        >
-                          Export CSV
-                        </button>
-                        <button
-                          type="button"
-                          onClick={exportJson}
-                          className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
-                          disabled={busy || loading || filteredPrompts.length === 0}
-                        >
-                          Export JSON
-                        </button>
-                      </>
-                    }
-                  />
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h1 className="text-lg font-semibold">Prompt Library</h1>
+                      <p className="mt-1 text-sm text-neutral-600">Create, edit, and delete prompts shown in the gated /tools library.</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void loadAll()}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                        disabled={busy}
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openNewPrompt}
+                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+                        disabled={busy}
+                      >
+                        New prompt
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="mt-4 grid gap-3 lg:grid-cols-12">
                     <div className="lg:col-span-6">
@@ -692,15 +639,15 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                     {loading ? "Loading…" : `${filteredPrompts.length} prompt${filteredPrompts.length === 1 ? "" : "s"}`}
                   </div>
 
-                  <div className="mt-4 overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
-                    <table className="min-w-[1000px] w-full text-sm">
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200">
+                    <table className="w-full text-sm">
                       <thead className="bg-neutral-50 text-neutral-600">
                         <tr className="text-left">
                           <th className="px-4 py-3 font-medium">Title</th>
                           <th className="px-4 py-3 font-medium">Category</th>
                           <th className="px-4 py-3 font-medium">Status</th>
                           <th className="px-4 py-3 font-medium">Updated</th>
-                          <th className="sticky right-0 px-4 py-3 font-medium text-right bg-neutral-50 border-l border-neutral-200">Actions</th>
+                          <th className="px-4 py-3 font-medium text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-200">
@@ -728,7 +675,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                                 <StatusPill status={p.status} />
                               </td>
                               <td className="px-4 py-3 text-neutral-700">{fmtDate(p.updatedAt)}</td>
-                              <td className="sticky right-0 px-4 py-3 bg-white border-l border-neutral-200">
+                              <td className="px-4 py-3">
                                 <div className="flex justify-end gap-2">
                                   <button
                                     type="button"
@@ -761,51 +708,9 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                 </div>
               </div>
             </div>
-
-      {/* Prompt modal */}
-      {/* Import modal */}
-      <Modal
-        open={importOpen}
-        title="Import prompts (JSON)"
-        onClose={() => {
-          if (busy) return;
-          setImportOpen(false);
-        }}
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-neutral-600">
-            Paste a JSON array of prompts. Each item should have at least <span className="font-semibold">title</span> and <span className="font-semibold">content</span>. Optional: description, status, category (slug/name).
-          </p>
-
-          <textarea
-            value={importJson}
-            onChange={(e) => setImportJson(e.target.value)}
-            className="h-56 w-full resize-y rounded-xl border border-neutral-300 bg-white px-3 py-2 font-mono text-xs outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-            placeholder='[
-  {"title":"My Prompt","content":"...","status":"PUBLISHED","category":"analytics"}
-]'
-          />
-
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setImportOpen(false)}
-              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-              disabled={busy}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void importFromJson()}
-              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-              disabled={busy || !importJson.trim()}
-            >
-              {busy ? "Importing…" : "Import"}
-            </button>
-          </div>
+          </section>
         </div>
-      </Modal>
+      </main>
 
       {/* Prompt modal */}
       <Modal
@@ -951,6 +856,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
           </div>
         </div>
       </SmallModal>
-    </AdminLayout>
+    </div>
   );
 }

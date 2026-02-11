@@ -152,8 +152,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
       .then((r) => r.json())
       .then((s) => {
         const email = (s?.user?.email || "").toString();
-        const username = email ? email.split("@")[0] : "";
-        setLoggedInAs(username);
+        setLoggedInAs(email);
       })
       .catch(() => {});
   }, []);
