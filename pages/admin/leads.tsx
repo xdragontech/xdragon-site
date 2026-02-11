@@ -6,15 +6,15 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import LibraryCardHeader from "../../components/admin/LibraryCardHeader";
 import { useToast } from "../../components/ui/toast";
 
-type LeadKind = "chat" | "contact";
+type LeadSource = "chat" | "contact";
 
-type LeadEvent = {
-  ts: string;
-  kind: LeadKind;
+type LeadRow = {
+  ts: string; // display timestamp (most recent activity)
+  source: LeadSource;
   ip?: string;
-  ua?: string;
-  referer?: string;
-  [k: string]: any;
+  name?: string | null;
+  email?: string | null;
+  raw: any; // aggregated payload for Copy JSON
 };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -42,9 +42,9 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { toast } = useToast();
 
-  const [items, setItems] = useState<LeadEvent[]>([]);
+  const [items, setItems] = useState<LeadRow[]>([]);
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState<"all" | LeadKind>("all");
+  const [kind, setKind] = useState<"all" | LeadSource>("all");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
 
@@ -79,7 +79,8 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
   }, [items, q]);
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" });
+    // Export the aggregated "raw" objects for downstream use.
+    const blob = new Blob([JSON.stringify(filtered.map((x) => x.raw), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -100,16 +101,22 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
   }
 
   function exportCsv() {
-    const keys = ["ts", "kind", "ip", "ua", "referer"];
-    const extraKeys = new Set<string>();
-    for (const it of filtered.slice(0, 50)) {
-      Object.keys(it || {}).forEach((k) => {
-        if (!keys.includes(k)) extraKeys.add(k);
-      });
-    }
-    const header = [...keys, ...Array.from(extraKeys)].slice(0, 40); // keep it readable
+    const header = ["name", "email", "source", "ip", "ts"];
     const lines = [header.join(",")];
-    for (const it of filtered) lines.push(toCsvRow(it, header));
+    for (const it of filtered) {
+      lines.push(
+        toCsvRow(
+          {
+            name: it.name || "",
+            email: it.email || "",
+            source: it.source,
+            ip: it.ip || "",
+            ts: it.ts,
+          },
+          header
+        )
+      );
+    }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -197,10 +204,11 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
           <table className="min-w-[1000px] w-full text-sm">
             <thead className="bg-neutral-50">
               <tr className="text-left text-neutral-600">
-                <th className="px-4 py-3 font-semibold">Time</th>
-                <th className="px-4 py-3 font-semibold">Kind</th>
+                <th className="px-4 py-3 font-semibold">Name</th>
+                <th className="px-4 py-3 font-semibold">Email</th>
+                <th className="px-4 py-3 font-semibold">Source</th>
                 <th className="px-4 py-3 font-semibold">IP</th>
-                <th className="px-4 py-3 font-semibold">Summary</th>
+                <th className="px-4 py-3 font-semibold">Date/Time</th>
                 <th className="sticky right-0 px-4 py-3 font-semibold bg-neutral-50 border-l border-neutral-200 text-right">
                   Actions
                 </th>
@@ -208,21 +216,17 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
             </thead>
             <tbody>
               {filtered.map((it, idx) => {
-                const summary =
-                  it.kind === "contact"
-                    ? (it.message || it.subject || "").toString().slice(0, 120)
-                    : (it.lastUserMessage || it.lead?.email || it.lead?.name || "").toString().slice(0, 120);
-
                 return (
-                  <tr key={`${it.kind}-${it.ts}-${idx}`} className="border-t border-neutral-200 hover:bg-neutral-50">
-                    <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{new Date(it.ts).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-neutral-700">{it.kind}</td>
+                  <tr key={`${it.source}-${it.ts}-${idx}`} className="border-t border-neutral-200 hover:bg-neutral-50">
+                    <td className="px-4 py-3 text-neutral-900 font-medium">{it.name || ""}</td>
+                    <td className="px-4 py-3 text-neutral-700">{it.email || ""}</td>
+                    <td className="px-4 py-3 text-neutral-700">{it.source}</td>
                     <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{it.ip || ""}</td>
-                    <td className="px-4 py-3 text-neutral-700">{summary}</td>
+                    <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{new Date(it.ts).toLocaleString()}</td>
                     <td className="sticky right-0 px-4 py-3 bg-white border-l border-neutral-200 text-right">
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText(JSON.stringify(it, null, 2));
+                          navigator.clipboard.writeText(JSON.stringify(it.raw, null, 2));
                           toast("success", "Copied.");
                         }}
                         className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-50"
@@ -236,7 +240,7 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
 
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-neutral-600">
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-neutral-600">
                     No leads found.
                   </td>
                 </tr>
