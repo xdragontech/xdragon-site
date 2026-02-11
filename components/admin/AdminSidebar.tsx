@@ -18,9 +18,9 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
   const subBase =
     "block w-full rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-500";
 
-  const isOnLibraryRoute = router.pathname.startsWith("/admin/library");
-  const subItemClass = (href: string) =>
-    subBase + (router.pathname === href ? " ring-2 ring-neutral-900/20" : "");
+  const isOnLibraryRoute = router.pathname.startsWith("/admin/library") || router.pathname === "/admin/prompts";
+  const subItemClass = (href: string, aliases: string[] = []) =>
+    subBase + ((router.pathname === href || aliases.includes(router.pathname)) ? " ring-2 ring-neutral-900/20" : "");
 
   // Show the tree whenever you're anywhere under /admin/library
   const showLibraryTree = isOnLibraryRoute || active === "library";
@@ -48,7 +48,7 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
 
             {showLibraryTree && (
               <div className="space-y-2 pl-3">
-                <Link href="/admin/library/prompts" className={subItemClass("/admin/library/prompts")}>
+                <Link href="/admin/library/prompts" className={subItemClass("/admin/library/prompts", ["/admin/prompts"])}>
                   Prompts
                 </Link>
                 <Link href="/admin/library/guides" className={subItemClass("/admin/library/guides")}>
