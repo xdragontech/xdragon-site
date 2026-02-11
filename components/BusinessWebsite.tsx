@@ -374,20 +374,22 @@ export default function BusinessWebsite() {
       <section id="case-study" className="py-20 bg-white border-b border-neutral-200">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-10 items-center">
           <div>
-            <h2 className="text-3xl sm:text-4xl font-bold">Case Study</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold">30-Day Turnaround Playbook</h2>
             <p className="mt-4 text-neutral-700">
-              Placeholder case study text — you can refine this later with real client results and metrics.
+              A focused first month designed to create momentum fast—stabilize the stack, remove bottlenecks, and produce a clear
+              roadmap tied to business outcomes.
             </p>
             <ul className="mt-6 space-y-2 text-neutral-700 text-sm">
-              <li>• Key challenge here</li>
-              <li>• What X Dragon delivered</li>
-              <li>• The before → after impact</li>
+              <li>• <span className="font-semibold">Week 1:</span> Discovery + baseline audit (performance, reliability, security)</li>
+              <li>• <span className="font-semibold">Week 2:</span> Quick wins shipped (highest ROI fixes first)</li>
+              <li>• <span className="font-semibold">Week 3:</span> Monitoring + incident readiness (alerts, dashboards, runbooks)</li>
+              <li>• <span className="font-semibold">Week 4:</span> Scale + cost plan (capacity, hardening, prioritized roadmap)</li>
             </ul>
           </div>
           <div>
             <img
               src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=1600&auto=format&fit=crop"
-              alt="Case study placeholder"
+              alt="30-day turnaround playbook"
               className="rounded-2xl shadow"
             />
           </div>
