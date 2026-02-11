@@ -163,7 +163,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       map.set(k, arr);
     }
 
-    for (const [groupKey, evs] of map.entries()) {
+    // Avoid `for...of map.entries()` to keep compatibility with TS targets < ES2015
+    // (some Next/Vercel builds don't enable downlevelIteration).
+    map.forEach((evs, groupKey) => {
       evs.sort((a, b) => parseTs(a.ts) - parseTs(b.ts));
       const first = evs[0];
       const last = evs[evs.length - 1];
@@ -211,7 +213,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           })),
         },
       });
-    }
+    });
 
     rows.sort((a, b) => parseTs(b.ts) - parseTs(a.ts));
 
