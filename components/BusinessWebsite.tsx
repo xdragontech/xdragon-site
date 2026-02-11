@@ -385,6 +385,18 @@ export default function BusinessWebsite() {
               <li>• <span className="font-semibold">Week 3:</span> Monitoring + incident readiness (alerts, dashboards, runbooks)</li>
               <li>• <span className="font-semibold">Week 4:</span> Scale + cost plan (capacity, hardening, prioritized roadmap)</li>
             </ul>
+
+            <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-3">
+              <a
+                href="#contact"
+                className="inline-flex items-center justify-center rounded-2xl bg-black text-white px-5 py-3 text-sm font-semibold hover:opacity-90"
+              >
+                Get your 30-day plan
+              </a>
+              <div className="text-xs text-neutral-600">
+                Tell us what you’re building — we’ll reply with a tailored 30-day plan and next steps.
+              </div>
+            </div>
           </div>
           <div>
             <img
