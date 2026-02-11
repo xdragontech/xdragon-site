@@ -394,7 +394,7 @@ export default function BusinessWebsite() {
                 Get your 30-day plan
               </a>
               <div className="text-xs text-neutral-600">
-                Tell us what you’re building — we’ll reply with a tailored 30-day plan and next steps.
+                Tell us your biggest challenges — we’ll reply with a tailored 30-day plan and next steps.
               </div>
             </div>
           </div>
