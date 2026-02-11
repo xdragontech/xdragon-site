@@ -19,9 +19,11 @@ type LeadEvent = {
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
+
+  const role = ((session as any)?.role || (session as any)?.user?.role || null) as string | null;
   const user = (session as any)?.user;
 
-  if (!user || user.role !== "admin") {
+  if (!session || role !== "ADMIN") {
     return {
       redirect: {
         destination: "/admin/signin",
