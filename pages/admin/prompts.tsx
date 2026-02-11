@@ -1,7 +1,6 @@
 // pages/admin/library.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Head from "next/head";
-import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
@@ -156,10 +155,6 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
       })
       .catch(() => {});
   }, []);
-
-  const isDashboard = router.pathname === "/admin/dashboard";
-  const isAccounts = router.pathname === "/admin/accounts";
-  const isLibrary = router.pathname === "/admin/library";
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -456,40 +451,7 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
 
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-6 lg:grid-cols-12">
-          <aside className="lg:col-span-2">
-            <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
-              <nav className="space-y-2">
-                <Link
-                  href="/admin/dashboard"
-                  className={
-                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
-                    (isDashboard ? " ring-2 ring-neutral-900/20" : "")
-                  }
-                >
-                  Dashboard
-                </Link>
-                
-                <Link
-                  href="/admin/accounts"
-                  className={
-                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
-                    (isAccounts ? " ring-2 ring-neutral-900/20" : "")
-                  }
-                >
-                  Accounts
-                </Link>
-<Link
-                  href="/admin/library"
-                  className={
-                    "block w-full rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors" +
-                    (isLibrary ? " ring-2 ring-neutral-900/20" : "")
-                  }
-                >
-                  Library
-                </Link>
-              </nav>
-            </div>
-          </aside>
+          <AdminSidebar active="library" />
 
           <section className="lg:col-span-10">
             {(err || msg) && (
