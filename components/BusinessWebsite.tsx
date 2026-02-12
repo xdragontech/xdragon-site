@@ -461,20 +461,59 @@ export default function BusinessWebsite() {
       <section id="testimonials" className="py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
-            <h2 className="text-3xl sm:text-4xl font-bold">What Clients Say</h2>
-            <p className="mt-3 text-neutral-600">Here’s what operators and founders say after handing us their AI and infrastructure headaches.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold">Work With Confidence</h2>
+            <p className="mt-3 text-neutral-600">
+              If you don’t have time for vendor roulette, start with a fixed-scope assessment and a plan you can act on—whether you work with us or not.
+            </p>
           </div>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { quote: "They nailed it—on time and on budget. Our results improved within weeks.", name: "Alex R.", role: "Operations Director" },
-              { quote: "Professional, friendly, and genuinely invested in our success.", name: "Jamie L.", role: "Founder" },
-              { quote: "Clear communication and excellent execution at every step.", name: "Priya S.", role: "Marketing Lead" },
-            ].map((t, i) => (
-              <figure key={i} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <blockquote className="text-neutral-800">“{t.quote}”</blockquote>
-                <figcaption className="mt-4 text-sm text-neutral-600">— {t.name}, {t.role}</figcaption>
-              </figure>
-            ))}
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <div className="text-sm font-semibold text-neutral-500">Risk Reversal</div>
+              <ul className="mt-4 space-y-2 text-sm text-neutral-700">
+                <li>• <span className="font-semibold">Fixed-scope kickoff:</span> clear deliverables and a defined first sprint.</li>
+                <li>• <span className="font-semibold">Transparency pledge:</span> you get a prioritized risk + opportunity map in writing.</li>
+                <li>• <span className="font-semibold">No lock-in:</span> documentation and handoff so your team stays in control.</li>
+              </ul>
+
+              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                <a
+                  href="#contact"
+                  className="inline-flex items-center justify-center rounded-2xl bg-black text-white px-5 py-2.5 text-sm font-semibold hover:opacity-90"
+                >
+                  Request an assessment
+                </a>
+                <a
+                  href="#contact"
+                  className="inline-flex items-center justify-center rounded-2xl border border-neutral-300 bg-white text-neutral-900 px-5 py-2.5 text-sm font-semibold hover:bg-neutral-50"
+                >
+                  Get your 30-day plan
+                </a>
+              </div>
+              <p className="mt-3 text-xs text-neutral-500">Tell us your biggest challenges.</p>
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <div className="text-sm font-semibold text-neutral-500">Trust Signals</div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 text-sm text-neutral-700">
+                <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
+                  <div className="font-semibold">Operational visibility</div>
+                  <div className="mt-1 text-neutral-600">Monitoring, alerts, and a clear incident workflow.</div>
+                </div>
+                <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
+                  <div className="font-semibold">Security hygiene</div>
+                  <div className="mt-1 text-neutral-600">Least-privilege access and secrets handled properly.</div>
+                </div>
+                <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
+                  <div className="font-semibold">Documentation first</div>
+                  <div className="mt-1 text-neutral-600">Runbooks, decisions, and next steps you can reuse.</div>
+                </div>
+                <div className="rounded-xl bg-neutral-50 p-4 border border-neutral-200">
+                  <div className="font-semibold">Practical delivery</div>
+                  <div className="mt-1 text-neutral-600">Focused changes that reduce risk and improve performance.</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
