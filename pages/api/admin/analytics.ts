@@ -1,7 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-import { prisma } from "../../../lib/prisma";
+
+
+type PrismaMod = { prisma?: any; default?: any };
+
+async function getPrisma() {
+  const mod: PrismaMod = await import("../../../lib/prisma");
+  return (mod as any).prisma ?? (mod as any).default;
+}
+
 
 type Ok = {
   ok: true;
@@ -32,6 +40,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   since.setDate(since.getDate() - 7);
 
   try {
+    const prisma = await getPrisma();
+    if (!prisma?.lead) throw new Error("Prisma client missing Lead model. Ensure prisma generate ran on deploy.");
+
     const [total, contact, chat, last7Contact, last7Chat] = await Promise.all([
       prisma.lead.count(),
       prisma.lead.count({ where: { source: "CONTACT" } }),

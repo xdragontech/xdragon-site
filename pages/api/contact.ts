@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
-import { prisma } from "../../lib/prisma";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
