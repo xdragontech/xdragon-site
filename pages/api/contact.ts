@@ -1,6 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
 
+type PrismaMod = { prisma?: any; default?: any };
+
+async function getPrisma() {
+  const mod: PrismaMod = await import("../../lib/prisma");
+  return (mod as any).prisma ?? (mod as any).default;
+}
+
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
  * - Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in env.
@@ -201,25 +208,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     // Durable record in Postgres for cross-referencing / records.
     // Best-effort: do not fail the request if DB write fails.
-    prisma.lead
-      .create({
-        data: {
-          source: "CONTACT",
-          name,
-          email,
-          ip,
-          userAgent,
-          message,
-          payload: {
+    getPrisma()
+      .then((prisma) => {
+        if (!prisma?.lead?.create) throw new Error("Prisma client missing Lead model");
+        return prisma.lead.create({
+          data: {
+            source: "CONTACT",
             name,
             email,
-            phone: phone || null,
-            message,
             ip,
             userAgent,
-            ts: new Date().toISOString(),
+            message,
+            payload: {
+              name,
+              email,
+              phone: phone || null,
+              message,
+              ip,
+              userAgent,
+              ts: new Date().toISOString(),
+            },
           },
-        },
+        });
       })
       .catch((e) => {
         console.error("Contact lead DB write failed", e);
