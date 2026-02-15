@@ -210,9 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           name,
           email,
           ip,
-          userAgent,
-          message,
-          payload: {
+          raw: {
             name,
             email,
             phone: phone || null,
