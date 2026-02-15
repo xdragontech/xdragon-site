@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
+import { prisma } from "../../lib/prisma";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -196,6 +197,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   if (!message) return res.status(400).json({ ok: false, error: "Message is required" });
 
   try {
+    const ip = getClientIp(req);
+    const userAgent = cleanStr(req.headers["user-agent"], 400);
+
+    // Durable record in Postgres for cross-referencing / records.
+    // Best-effort: do not fail the request if DB write fails.
+    prisma.lead
+      .create({
+        data: {
+          source: "CONTACT",
+          name,
+          email,
+          ip,
+          userAgent,
+          message,
+          payload: {
+            name,
+            email,
+            phone: phone || null,
+            message,
+            ip,
+            userAgent,
+            ts: new Date().toISOString(),
+          },
+        },
+      })
+      .catch((e) => {
+        console.error("Contact lead DB write failed", e);
+      });
+
+    // Backup trail in Redis (if configured)
+    logLeadEvent("contact", {
+      name,
+      email,
+      phone: phone || null,
+      message,
+      ip,
+      userAgent,
+      ts: new Date().toISOString(),
+    }).catch(() => {});
+
     const resend = new Resend(RESEND_API_KEY);
 
     const subject = `New contact request — ${name}`;

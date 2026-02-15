@@ -180,3 +180,30 @@ model Article {
   @@index([categoryId])
   @@index([title])
 }
+
+// --- Leads ---
+
+enum LeadSource {
+  CONTACT
+  CHAT
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  source    LeadSource
+
+  name      String?
+  email     String?
+  ip        String?
+  userAgent String?
+  message   String?
+
+  payload   Json?
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([source])
+  @@index([createdAt])
+  @@index([email])
+}
