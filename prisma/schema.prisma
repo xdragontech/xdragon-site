@@ -21,6 +21,7 @@ enum UserRole {
 }
 
 model User {
+
   id            String     @id @default(cuid())
   name          String?
   email         String?    @unique
@@ -32,8 +33,8 @@ model User {
   createdAt     DateTime   @default(now())
   lastLoginAt   DateTime?
 
-  accounts    Account[]
-  sessions    Session[]
+  accounts Account[]
+  sessions Session[]
   loginEvents LoginEvent[]
 
   @@index([email])
@@ -56,7 +57,6 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
-  @@index([userId])
 }
 
 model Session {
@@ -66,8 +66,14 @@ model Session {
   expires      DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
-  @@index([userId])
+model EmailVerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@index([identifier])
 }
 
 model VerificationToken {
@@ -78,28 +84,23 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Password reset flow (store HASHED token, not raw)
 model PasswordResetToken {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime @default(now())
+  identifier String    // user email (lowercased)
+  token      String    @unique // SHA-256 hash of the raw token
+  expires    DateTime
+  createdAt  DateTime  @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  @@index([identifier])
 }
-
 model LoginEvent {
   id        String   @id @default(cuid())
   userId    String
-  createdAt DateTime @default(now())
-  ip        String?
-  city      String?
-  region    String?
-  country   String?
+  ip        String
+  countryIso2 String?
+  countryName String?
   userAgent String?
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -107,7 +108,80 @@ model LoginEvent {
   @@index([createdAt])
 }
 
-// --- NEW: Durable leads record (contact + chat) ---
+enum PromptStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  prompts   Prompt[]
+}
+
+model Prompt {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  content     String
+  status      PromptStatus @default(DRAFT)
+
+  // Ordering + tags
+  sortOrder   Int          @default(0)
+  tags        String[]     @default([])
+
+  categoryId  String?
+  category    Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([title])
+}
+
+
+// --- Articles (separate from Prompt Library) ---
+
+model ArticleCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  articles  Article[]
+}
+
+model Article {
+  id         String       @id @default(cuid())
+  title      String
+  slug       String       @unique
+  summary    String
+  content    String
+  status     PromptStatus @default(DRAFT)
+
+  categoryId String?
+  category   ArticleCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Optional tags (Postgres text[])
+  tags       String[]     @default([])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([title])
+}
+
+// --- Leads (durable lead records for cross-referencing / analytics) ---
 
 enum LeadSource {
   CONTACT
@@ -122,8 +196,9 @@ model Lead {
   ip        String?
   raw       Json?
   createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  @@index([source, createdAt])
-  @@index([email])
+  @@index([source])
   @@index([createdAt])
+  @@index([email])
 }
