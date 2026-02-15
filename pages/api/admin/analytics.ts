@@ -1,15 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-
-
-type PrismaMod = { prisma?: any; default?: any };
-
-async function getPrisma() {
-  const mod: PrismaMod = await import("../../../lib/prisma");
-  return (mod as any).prisma ?? (mod as any).default;
-}
-
+import { prisma } from "../../../lib/prisma";
 
 type Ok = {
   ok: true;
@@ -40,9 +32,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   since.setDate(since.getDate() - 7);
 
   try {
-    const prisma = await getPrisma();
-    if (!prisma?.lead) throw new Error("Prisma client missing Lead model. Ensure prisma generate ran on deploy.");
-
     const [total, contact, chat, last7Contact, last7Chat] = await Promise.all([
       prisma.lead.count(),
       prisma.lead.count({ where: { source: "CONTACT" } }),
@@ -59,6 +48,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
   } catch (e) {
     console.error("/api/admin/analytics failed", e);
-    return res.status(500).json({ ok: false, error: "Failed to load analytics" });
+    // Admin-only endpoint; returning the message is acceptable and helps debugging.
+    const msg = e instanceof Error ? e.message : "Failed to load analytics";
+    return res.status(500).json({ ok: false, error: msg || "Failed to load analytics" });
   }
 }
