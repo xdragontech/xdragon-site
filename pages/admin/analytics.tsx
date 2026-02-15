@@ -95,7 +95,7 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
       <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <LibraryCardHeader
           title="Analytics"
-          description="High-level lead analytics. Contacts are stored in the database for cross-referencing; chat lead analytics will expand as chat events are persisted in DB."
+          description="High-level lead analytics (DB source of truth). Contact and chat leads are persisted to Postgres for durable records and consistent reporting."
           actionsTop={topActions}
         />
 
@@ -121,8 +121,8 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
           <div className="lg:col-span-4">
             <StatCard
               label="Last 7 Days"
-              value={data ? String(data.last7d.contact) : "—"}
-              hint="Contact leads in the last 7 days."
+              value={data ? String((data.last7d.contact || 0) + (data.last7d.chat || 0)) : "—"}
+              hint={data ? `Contact: ${data.last7d.contact} • Chat: ${data.last7d.chat}` : "Contact + chat leads in the last 7 days."}
             />
           </div>
         </div>
@@ -130,8 +130,8 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
         <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
           <div className="font-semibold text-neutral-900">Notes</div>
           <ul className="mt-2 list-disc pl-5 space-y-1">
-            <li>Contact submissions are now written to the database so you can cross-reference and keep a durable record.</li>
-            <li>Chat lead analytics will become richer once chat lead events are also persisted in DB (we can add that next).</li>
+            <li>Contact submissions and chat leads are written to the database so you can cross-reference and keep a durable record.</li>
+            <li>Leads and analytics now share the same source of truth (Postgres Lead records).</li>
             <li>
               Last updated: {data ? new Date(data.updatedAt).toLocaleString() : "—"}
             </li>

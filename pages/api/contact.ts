@@ -1,7 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
-import { prisma } from "../../lib/prisma";
 
+type PrismaMod = { prisma?: any; default?: any };
+
+async function getPrisma() {
+  const mod: PrismaMod = await import("../../lib/prisma");
+  return (mod as any).prisma ?? (mod as any).default;
+}
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -202,28 +207,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const userAgent = cleanStr(req.headers["user-agent"], 400);
 
     // Durable record in Postgres for cross-referencing / records.
-    // Best-effort: do not fail the request if DB write fails.
-    prisma.lead
-      .create({
-        data: {
+    // Dedupe rule: (email + createdAt day).
+    try {
+      const prisma = await getPrisma();
+      if (!prisma?.lead) throw new Error("Prisma client missing Lead model");
+
+      const normalizedEmail = String(email || "").trim().toLowerCase();
+      const dayStart = new Date();
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+      const existing = await prisma.lead.findFirst({
+        where: {
           source: "CONTACT",
-          name,
-          email,
-          ip,
-          raw: {
+          email: normalizedEmail,
+          createdAt: { gte: dayStart, lt: dayEnd },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const payload = {
+        name,
+        email: normalizedEmail,
+        phone: phone || null,
+        message,
+        ip,
+        userAgent,
+        ts: new Date().toISOString(),
+      };
+
+      if (existing?.id) {
+        await prisma.lead.update({
+          where: { id: existing.id },
+          data: {
             name,
-            email,
-            phone: phone || null,
-            message,
+            email: normalizedEmail,
             ip,
             userAgent,
-            ts: new Date().toISOString(),
+            message,
+            payload,
           },
-        },
-      })
-      .catch((e) => {
-        console.error("Contact lead DB write failed", e);
-      });
+        });
+      } else {
+        await prisma.lead.create({
+          data: {
+            source: "CONTACT",
+            name,
+            email: normalizedEmail,
+            ip,
+            userAgent,
+            message,
+            payload,
+          },
+        });
+      }
+    } catch (e) {
+      // Do not block contact email delivery on DB issues.
+      console.error("Contact lead DB write failed", e);
+    }
 
     // Backup trail in Redis (if configured)
     logLeadEvent("contact", {

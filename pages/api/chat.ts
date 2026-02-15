@@ -161,6 +161,12 @@ type ChatOutput = {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+type PrismaMod = { prisma?: any; default?: any };
+async function getPrisma() {
+  const mod: PrismaMod = await import("../../lib/prisma");
+  return (mod as any).prisma ?? (mod as any).default;
+}
+
 function isValidEmail(email: string | null | undefined): boolean {
   const e = (email || "").trim();
   if (!e) return false;
@@ -610,6 +616,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       Boolean(mergedLead.name);
 
     if (shouldLogLead) {
+      // Source-of-truth lead record in Postgres: 1 row per conversation (keyed by conversationId).
+      // Best-effort: do not fail the request if DB write fails.
+      try {
+        const prisma = await getPrisma();
+        if (prisma?.lead) {
+          const cid = typeof conversationId === "string" ? conversationId.trim() : "";
+          const ip = getClientIp(req);
+          const userAgent = String(req.headers["user-agent"] || "");
+          const referer = String(req.headers["referer"] || "");
+
+          const payload = {
+            conversationId: cid || null,
+            returnId,
+            lead: mergedLead,
+            wants_follow_up,
+            next_question,
+            lastUserMessage: lastUser,
+            reply,
+            emailed,
+            ip,
+            userAgent,
+            referer,
+            lastSeenAt: new Date().toISOString(),
+          };
+
+          if (cid) {
+            // Find by payload.conversationId (avoids requiring a dedicated DB column).
+            const existing = await prisma.lead.findFirst({
+              where: {
+                source: "CHAT",
+                payload: {
+                  path: ["conversationId"],
+                  equals: cid,
+                },
+              },
+              orderBy: { createdAt: "desc" },
+            });
+
+            if (existing?.id) {
+              await prisma.lead.update({
+                where: { id: existing.id },
+                data: {
+                  name: mergedLead.name || null,
+                  email: mergedLead.email || null,
+                  ip,
+                  userAgent,
+                  payload,
+                },
+              });
+            } else {
+              await prisma.lead.create({
+                data: {
+                  source: "CHAT",
+                  name: mergedLead.name || null,
+                  email: mergedLead.email || null,
+                  ip,
+                  userAgent,
+                  payload,
+                },
+              });
+            }
+          } else {
+            // No conversationId — still persist a row for visibility.
+            await prisma.lead.create({
+              data: {
+                source: "CHAT",
+                name: mergedLead.name || null,
+                email: mergedLead.email || null,
+                ip,
+                userAgent,
+                payload,
+              },
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Chat lead DB write failed", e);
+      }
+
       await logLeadEvent("chat", {
         ts: new Date().toISOString(),
         ip: getClientIp(req),

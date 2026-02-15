@@ -161,7 +161,7 @@ export default function LeadsPage({ loggedInAs }: InferGetServerSidePropsType<ty
       <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <LibraryCardHeader
           title="Leads"
-          description="Recent contact submissions and chat lead events (backup log)."
+          description="Recent leads from contact submissions and chat (DB source of truth)."
           actionsTop={topActions}
           actionsBottom={bottomActions}
         />
