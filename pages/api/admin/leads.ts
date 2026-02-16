@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
+import { prisma } from "../../../lib/prisma";
 
 /**
  * DB-backed Leads API (source of truth).
@@ -19,12 +20,6 @@ type LeadRow = {
   email?: string | null;
   raw: any;
 };
-
-type PrismaMod = { prisma?: any; default?: any };
-async function getPrisma() {
-  const mod: PrismaMod = await import("../../../lib/prisma");
-  return (mod as any).prisma ?? (mod as any).default;
-}
 
 function parseLimit(raw: any, fallback: number) {
   const n = Number(raw);
@@ -55,9 +50,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     kindParam === "chat" ? "CHAT" : kindParam === "contact" ? "CONTACT" : null;
 
   try {
-    const prisma = await getPrisma();
-    if (!prisma?.lead?.findMany) throw new Error("Prisma client missing Lead model");
-
     const leads = await prisma.lead.findMany({
       where: sourceFilter ? { source: sourceFilter } : undefined,
       orderBy: { createdAt: "desc" },
@@ -76,18 +68,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ip: l.ip || undefined,
         name: l.name ?? null,
         email: l.email ?? null,
-        raw: {
-          id: l.id,
-          source: l.source,
-          name: l.name ?? null,
-          email: l.email ?? null,
-          ip: l.ip ?? null,
-          userAgent: l.userAgent ?? null,
-          message: l.message ?? null,
-          payload: l.payload ?? null,
-          createdAt: l.createdAt,
-          updatedAt: l.updatedAt,
-        },
+        raw:
+          l.raw ??
+          {
+            id: l.id,
+            source: l.source,
+            name: l.name ?? null,
+            email: l.email ?? null,
+            ip: l.ip ?? null,
+            createdAt: l.createdAt,
+          },
       };
     });
 
