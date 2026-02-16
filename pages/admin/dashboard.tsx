@@ -170,7 +170,7 @@ function LoginIpsTable({ loading, error, groups }: { loading: boolean; error: st
                 {top.map((r) => (
                   <tr key={r.ip} className="border-t border-neutral-200">
                     <td className="px-3 py-2 font-mono text-xs text-neutral-800 whitespace-nowrap">{r.ip}</td>
-                    <td className="px-3 py-2 text-neutral-700">{(r as any).countryIso3 || r.country || "—"}</td>
+                    <td className="px-3 py-2 text-neutral-700">{(r as any).countryIso3 || r.country || "Unknown"}</td>
                     <td className="px-3 py-2 text-right font-semibold text-neutral-900">{r.count}</td>
                   </tr>
                 ))}
@@ -378,7 +378,18 @@ function WorldHeatMapCard({
   loading: boolean;
   error: string | null;
 }) {
-  const top = countries.slice(0, 8);
+  const unknownCount = (countries || []).reduce((sum, c) => {
+    const name = (c?.country || "").toString().trim().toLowerCase();
+    if (!name || name === "unknown") return sum + (Number(c?.count || 0) || 0);
+    return sum;
+  }, 0);
+
+  const top = (countries || [])
+    .filter((c) => {
+      const name = (c?.country || "").toString().trim().toLowerCase();
+      return !!name && name !== "unknown";
+    })
+    .slice(0, 8);
   const counts = countries.map((c) => c.count || 0);
   const legendMin = counts.length ? Math.min(...counts) : 0;
   const legendMax = counts.length ? Math.max(...counts) : 0;
@@ -436,7 +447,7 @@ function WorldHeatMapCard({
           <div className="rounded-xl border border-neutral-200 bg-white p-3">
             <div className="text-xs font-semibold text-neutral-900">Top countries</div>
             <div className="mt-2 space-y-2">
-              {top.length ? (
+              {top.length || unknownCount > 0 ? (
                 top.map((r) => (
                   <div key={r.country} className="flex items-center justify-between gap-2 text-sm">
                     <div className="truncate text-neutral-700">{r.country}</div>
@@ -448,6 +459,15 @@ function WorldHeatMapCard({
               ) : (
                 <div className="text-sm text-neutral-600">No geo data yet.</div>
               )}
+
+              {unknownCount > 0 ? (
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <div className="truncate text-neutral-500">Unknown (legacy/no geo)</div>
+                  <div className="rounded-lg bg-neutral-100 px-2 py-1 text-xs font-semibold text-neutral-900">
+                    {unknownCount}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
