@@ -126,6 +126,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const limit = Math.max(1, Math.min(2000, Number(limitRaw || 500) || 500));
   const dryRun = forceDryRun || (String(dryRunRaw || "").toLowerCase() === "true");
 
+  // Build a "known geo" map from existing login events that already have country data.
+  // This avoids external geo lookups entirely for IPs we've seen since geo capture was enabled.
+  const known = await prisma.loginEvent.findMany({
+    where: {
+      AND: [{ countryIso2: { not: null } }, { countryName: { not: null } }],
+    },
+    select: { ip: true, countryIso2: true, countryName: true },
+    orderBy: { createdAt: "desc" },
+    take: 5000,
+  });
+
+  const ipToGeo = new Map<string, Geo>();
+  for (const row of known) {
+    const ipNorm = normalizeIp(row.ip);
+    if (!ipNorm || isPrivateIp(ipNorm)) continue;
+    if (ipToGeo.has(ipNorm)) continue; // keep most-recent (query is DESC)
+    ipToGeo.set(ipNorm, {
+      iso2: row.countryIso2 ? String(row.countryIso2).toUpperCase() : null,
+      name: row.countryName ? String(row.countryName) : null,
+    });
+  }
+
   // Pull a batch of historical logins missing country info.
   const missing = await prisma.loginEvent.findMany({
     where: {
@@ -140,6 +162,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   let updated = 0;
   let skippedPrivate = 0;
   let unresolved = 0;
+  let matchedExisting = 0;
+  let resolvedExternal = 0;
 
   // Group ids by resolved iso2+name so we can updateMany efficiently.
   const updatesByKey = new Map<string, { iso2: string; name: string; ids: string[] }>();
@@ -152,7 +176,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       continue;
     }
 
-    const geo = await geoForIp(ipNorm);
+    // 1) Prefer first-party geo captured on newer login events (self-healing).
+    const knownGeo = ipToGeo.get(ipNorm);
+    if (knownGeo?.iso2 || knownGeo?.name) matchedExisting += 1;
+    let geo: Geo | null = knownGeo ? { iso2: knownGeo.iso2, name: knownGeo.name } : null;
+
+    // 2) Fallback to external geo only if we have never seen this IP with geo data.
+    if (!geo?.iso2 && !geo?.name) {
+      geo = await geoForIp(ipNorm);
+      if (geo?.iso2 || geo?.name) resolvedExternal += 1;
+    }
+
     if (!geo?.iso2 && !geo?.name) {
       unresolved += 1;
       continue;
@@ -203,6 +237,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     updated,
     skippedPrivate,
     unresolved,
+    matchedExisting,
+    resolvedExternal,
     remainingMissing,
     dryRun,
   });
