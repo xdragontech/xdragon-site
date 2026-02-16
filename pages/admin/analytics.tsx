@@ -59,6 +59,10 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
 
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoErr, setGeoErr] = useState<string>("");
+  const [geoResult, setGeoResult] = useState<any>(null);
+
   async function load() {
     setLoading(true);
     setErr("");
@@ -72,6 +76,43 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
       toast("error", `Failed to load analytics: ${e?.message || "Please try again."}`);
     } finally {
       setLoading(false);
+    }
+  }
+
+
+  async function previewGeoBackfill() {
+    setGeoLoading(true);
+    setGeoErr("");
+    try {
+      const res = await fetch("/api/admin/backfill-login-geo?limit=500&dryRun=true");
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) throw new Error(j?.error || "Failed to preview geo backfill");
+      setGeoResult(j);
+      toast("success", `Preview: ${j.updated || 0} updates ready • ${j.remainingMissing ?? "?"} remaining`);
+    } catch (e: any) {
+      setGeoErr(e?.message || "Failed to preview geo backfill");
+      toast("error", `Geo backfill preview failed: ${e?.message || "Please try again."}`);
+    } finally {
+      setGeoLoading(false);
+    }
+  }
+
+  async function runGeoBackfill() {
+    setGeoLoading(true);
+    setGeoErr("");
+    try {
+      const res = await fetch("/api/admin/backfill-login-geo?limit=500", { method: "POST" });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) throw new Error(j?.error || "Failed to run geo backfill");
+      setGeoResult(j);
+      toast("success", `Backfilled ${j.updated || 0} login events`);
+      // Refresh analytics after backfill so cards update immediately.
+      load();
+    } catch (e: any) {
+      setGeoErr(e?.message || "Failed to run geo backfill");
+      toast("error", `Geo backfill failed: ${e?.message || "Please try again."}`);
+    } finally {
+      setGeoLoading(false);
     }
   }
 
@@ -127,7 +168,61 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+        
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-neutral-900">Geo Backfill</div>
+              <div className="mt-1 text-sm text-neutral-700">
+                Older login events may not have country data stored. Run this once to backfill missing geo so “Top Countries” and the CTRY
+                column reflect historical logins.
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={previewGeoBackfill}
+                disabled={geoLoading}
+                className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50 disabled:opacity-60"
+              >
+                {geoLoading ? "Working…" : "Preview"}
+              </button>
+              <button
+                type="button"
+                onClick={runGeoBackfill}
+                disabled={geoLoading}
+                className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-60"
+              >
+                {geoLoading ? "Working…" : "Run backfill"}
+              </button>
+            </div>
+          </div>
+
+          {geoErr ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{geoErr}</div>
+          ) : null}
+
+          {geoResult ? (
+            <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <span>
+                  <span className="font-semibold text-neutral-900">Processed:</span> {geoResult.processed ?? "—"}
+                </span>
+                <span>
+                  <span className="font-semibold text-neutral-900">Updated:</span> {geoResult.updated ?? "—"}
+                </span>
+                <span>
+                  <span className="font-semibold text-neutral-900">Unresolved:</span> {geoResult.unresolved ?? "—"}
+                </span>
+                <span>
+                  <span className="font-semibold text-neutral-900">Remaining:</span> {geoResult.remainingMissing ?? "—"}
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+<div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
           <div className="font-semibold text-neutral-900">Notes</div>
           <ul className="mt-2 list-disc pl-5 space-y-1">
             <li>Contact submissions and chat leads are written to the database so you can cross-reference and keep a durable record.</li>
