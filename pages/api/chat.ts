@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
+import { prisma } from "../../lib/prisma";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -160,12 +161,6 @@ type ChatOutput = {
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-type PrismaMod = { prisma?: any; default?: any };
-async function getPrisma() {
-  const mod: PrismaMod = await import("../../lib/prisma");
-  return (mod as any).prisma ?? (mod as any).default;
-}
 
 function isValidEmail(email: string | null | undefined): boolean {
   const e = (email || "").trim();
@@ -619,12 +614,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Source-of-truth lead record in Postgres: 1 row per conversation (keyed by conversationId).
       // Best-effort: do not fail the request if DB write fails.
       try {
-        const prisma = await getPrisma();
-        if (prisma?.lead) {
-          const cid = typeof conversationId === "string" ? conversationId.trim() : "";
-          const ip = getClientIp(req);
-          const userAgent = String(req.headers["user-agent"] || "");
-          const referer = String(req.headers["referer"] || "");
+        const cid = typeof conversationId === "string" ? conversationId.trim() : "";
+        const ip = getClientIp(req);
+        const userAgent = String(req.headers["user-agent"] || "");
+        const referer = String(req.headers["referer"] || "");
 
           const payload = {
             conversationId: cid || null,
@@ -641,7 +634,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             lastSeenAt: new Date().toISOString(),
           };
 
-          if (cid) {
+        if (cid) {
             // Find by payload.conversationId (avoids requiring a dedicated DB column).
             const existing = await prisma.lead.findFirst({
               where: {
@@ -690,7 +683,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               },
             });
           }
-        }
       } catch (e) {
         console.error("Chat lead DB write failed", e);
       }

@@ -69,6 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name: l.name ?? null,
         email: l.email ?? null,
         raw:
+          l.payload ??
           l.raw ??
           {
             id: l.id,

@@ -1,12 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
-
-type PrismaMod = { prisma?: any; default?: any };
-
-async function getPrisma() {
-  const mod: PrismaMod = await import("../../lib/prisma");
-  return (mod as any).prisma ?? (mod as any).default;
-}
+import { prisma } from "../../lib/prisma";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -209,9 +203,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     // Durable record in Postgres for cross-referencing / records.
     // Dedupe rule: (email + createdAt day).
     try {
-      const prisma = await getPrisma();
-      if (!prisma?.lead) throw new Error("Prisma client missing Lead model");
-
       const normalizedEmail = String(email || "").trim().toLowerCase();
       const dayStart = new Date();
       dayStart.setUTCHours(0, 0, 0, 0);
