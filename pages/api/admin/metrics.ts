@@ -39,6 +39,35 @@ function isPrivateIp(ip: string) {
   );
 }
 
+// Normalize IP strings coming from proxies / logs.
+// Handles: "ip, proxy", "ip:port", "[ipv6]:port", "::ffff:ipv4".
+function normalizeIp(input: string): string {
+  let ip = (input || "").trim();
+  if (!ip) return "";
+
+  // If we got an X-Forwarded-For style list, take the first hop.
+  if (ip.includes(",")) {
+    ip =
+      ip
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)[0] || "";
+  }
+
+  // IPv4-mapped IPv6
+  if (ip.toLowerCase().startsWith("::ffff:")) ip = ip.slice(7);
+
+  // Bracketed IPv6 with port
+  const m6 = ip.match(/^\[([^\]]+)\]:(\d+)$/);
+  if (m6) return m6[1];
+
+  // IPv4 with port
+  const m4 = ip.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/);
+  if (m4) return m4[1];
+
+  return ip;
+}
+
 // Cache geo lookups within a single serverless instance.
 type Geo = { name: string | null; iso2: string | null; iso3: string | null };
 
@@ -73,13 +102,15 @@ const geoCache: Map<string, Geo> =
 async function geoForIp(ip: string): Promise<Geo> {
   const empty: Geo = { name: null, iso2: null, iso3: null };
   if (!ip) return empty;
-  if (isPrivateIp(ip)) return { name: "Private", iso2: null, iso3: null };
-  if (geoCache.has(ip)) return geoCache.get(ip) ?? empty;
+  const norm = normalizeIp(ip);
+  if (!norm) return empty;
+  if (isPrivateIp(norm)) return { name: "Private", iso2: null, iso3: null };
+  if (geoCache.has(norm)) return geoCache.get(norm) ?? empty;
 
   // Best-effort: do NOT fail the endpoint if geo lookup fails.
   try {
     // ipwho.is has a generous free tier for simple lookups.
-    const r = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country_code,country`, {
+    const r = await fetch(`https://ipwho.is/${encodeURIComponent(norm)}?fields=success,country_code,country`, {
       method: "GET",
       headers: { "User-Agent": "xdragon-admin-metrics" },
     });
@@ -89,10 +120,10 @@ async function geoForIp(ip: string): Promise<Geo> {
     const iso3 = iso2ToIso3(iso2);
 
     const geo: Geo = { name, iso2, iso3 };
-    geoCache.set(ip, geo);
+    geoCache.set(norm, geo);
     return geo;
   } catch {
-    geoCache.set(ip, empty);
+    geoCache.set(norm, empty);
     return empty;
   }
 }
@@ -194,18 +225,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const ipCounts = new Map<string, number>();
   // Prefer the most recent non-null geo for each IP from stored LoginEvent fields.
   const ipGeo = new Map<string, { iso2: string | null; name: string | null }>();
+  // Track raw IP strings for IPs missing stored geo so we can progressively backfill.
+  const ipMissingGeoRaw = new Map<string, Set<string>>();
   for (const ev of events) {
     const idx = bucketIndex(period, start, ev.createdAt);
     if (idx >= 0 && idx < logins.length) logins[idx] += 1;
 
-    const ip = (ev.ip || "").trim();
+    const rawIp = (ev.ip || "").trim();
+    const ip = normalizeIp(rawIp);
     if (ip) {
       ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
       // Because `events` are ordered DESC, the first geo we see per IP is the most recent.
       if (!ipGeo.has(ip)) {
         const iso2 = ((ev as any).countryIso2 || null) as string | null;
         const name = ((ev as any).countryName || null) as string | null;
-        if (iso2 || name) ipGeo.set(ip, { iso2, name });
+        if (iso2 || name) {
+          ipGeo.set(ip, { iso2, name });
+        } else if (rawIp) {
+          const set = ipMissingGeoRaw.get(ip) || new Set<string>();
+          set.add(rawIp);
+          ipMissingGeoRaw.set(ip, set);
+        }
       }
     }
   }
@@ -237,6 +277,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const geo = await geoForIp(ip);
     const country = (geo.name || iso2ToCountryName(geo.iso2) || null) as string | null;
     ipGroups.push({ ip, country, countryIso3: geo.iso3, count });
+
+    // Progressive backfill: if this IP had missing stored geo historically,
+    // and we successfully resolved it now, update those older rows so future loads don't depend on ipwho.
+    try {
+      const rawSet = ipMissingGeoRaw.get(ip);
+      if (rawSet && (geo.iso2 || country)) {
+        const rawIps = Array.from(rawSet.values()).slice(0, 50); // guardrail
+        const iso2 = geo.iso2 ? geo.iso2.trim().toUpperCase() : null;
+        const name = country;
+        if (rawIps.length && (iso2 || name)) {
+          // eslint-disable-next-line no-await-in-loop
+          await prisma.loginEvent.updateMany({
+            where: {
+              ip: { in: rawIps },
+              OR: [{ countryIso2: null }, { countryName: null }],
+            } as any,
+            data: {
+              countryIso2: iso2,
+              countryName: name,
+            } as any,
+          });
+        }
+      }
+    } catch {
+      // ignore backfill failures
+    }
   }
   // Countries for signups:
   // User model doesn't store a signup IP. We approximate using the earliest LoginEvent IP
@@ -259,7 +325,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
       for (const r of loginRows) {
         if (!firstIpByUser.has(r.userId)) {
-          const ip = (r.ip || "").trim();
+          const ip = normalizeIp((r.ip || "").trim());
           if (ip && !isPrivateIp(ip)) {
             firstIpByUser.set(r.userId, ip);
             // Prefer Cloudflare-derived country fields captured at login time
