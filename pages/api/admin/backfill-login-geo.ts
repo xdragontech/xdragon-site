@@ -107,11 +107,14 @@ async function geoForIp(ip: string): Promise<Geo> {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<Ok | Err>) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+  if (req.method !== "POST" && req.method !== "GET") {
+    res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
+  // Treat GET as a safe dry-run convenience (so you can run it in a browser).
+  // Writes are only allowed via POST.
+  const forceDryRun = req.method === "GET";
   // Auth: must be signed in AND an ADMIN.
   const session = await getServerSession(req, res, authOptions as any);
   const role = getSessionRole(session);
@@ -121,7 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const dryRunRaw = Array.isArray(req.query.dryRun) ? req.query.dryRun[0] : req.query.dryRun;
 
   const limit = Math.max(1, Math.min(2000, Number(limitRaw || 500) || 500));
-  const dryRun = String(dryRunRaw || "").toLowerCase() === "true";
+  const dryRun = forceDryRun || (String(dryRunRaw || "").toLowerCase() === "true");
 
   // Pull a batch of historical logins missing country info.
   const missing = await prisma.loginEvent.findMany({
