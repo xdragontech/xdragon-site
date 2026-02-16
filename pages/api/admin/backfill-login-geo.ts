@@ -10,6 +10,8 @@ type Ok = {
   updated: number;
   skippedPrivate: number;
   unresolved: number;
+  matchedExisting: number;
+  resolvedExternal: number;
   remainingMissing: number;
   dryRun: boolean;
 };
