@@ -178,7 +178,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }),
     prisma.loginEvent.findMany({
       where: { createdAt: { gte: start, lte: end } },
-      select: { createdAt: true, ip: true },
+      // Prefer Cloudflare-derived geo fields captured at login time.
+      // This keeps dashboard geo stable even if third-party IP geo is down.
+      select: { createdAt: true, ip: true, countryIso2: true, countryName: true },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -190,12 +192,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
   // Aggregate login buckets + ip groups
   const ipCounts = new Map<string, number>();
+  // Prefer the most recent non-null geo for each IP from stored LoginEvent fields.
+  const ipGeo = new Map<string, { iso2: string | null; name: string | null }>();
   for (const ev of events) {
     const idx = bucketIndex(period, start, ev.createdAt);
     if (idx >= 0 && idx < logins.length) logins[idx] += 1;
 
     const ip = (ev.ip || "").trim();
-    if (ip) ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
+    if (ip) {
+      ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
+      // Because `events` are ordered DESC, the first geo we see per IP is the most recent.
+      if (!ipGeo.has(ip)) {
+        const iso2 = ((ev as any).countryIso2 || null) as string | null;
+        const name = ((ev as any).countryName || null) as string | null;
+        if (iso2 || name) ipGeo.set(ip, { iso2, name });
+      }
+    }
   }
 
   const totals = {
@@ -211,6 +223,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   // Resolve countries (best-effort)
   const ipGroups: IpGroup[] = [];
   for (const [ip, count] of topIps) {
+    const stored = ipGeo.get(ip) || { iso2: null, name: null };
+    const storedIso3 = iso2ToIso3(stored.iso2);
+    const storedCountry = (stored.name || iso2ToCountryName(stored.iso2) || null) as string | null;
+
+    // Use stored geo first; fall back to third-party geo lookup for older records.
+    if (storedCountry || storedIso3) {
+      ipGroups.push({ ip, country: storedCountry, countryIso3: storedIso3, count });
+      continue;
+    }
+
     // eslint-disable-next-line no-await-in-loop
     const geo = await geoForIp(ip);
     const country = (geo.name || iso2ToCountryName(geo.iso2) || null) as string | null;
