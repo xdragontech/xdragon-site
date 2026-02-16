@@ -1,6 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
-import { prisma } from "../../lib/prisma";
+
+type PrismaMod = { prisma?: any; default?: any };
+
+async function getPrisma() {
+  const mod: PrismaMod = await import("../../lib/prisma");
+  return (mod as any).prisma ?? (mod as any).default;
+}
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -203,6 +209,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     // Durable record in Postgres for cross-referencing / records.
     // Dedupe rule: (email + createdAt day).
     try {
+      const prisma = await getPrisma();
+      if (!prisma?.lead) throw new Error("Prisma client missing Lead model");
+
       const normalizedEmail = String(email || "").trim().toLowerCase();
       const dayStart = new Date();
       dayStart.setUTCHours(0, 0, 0, 0);
@@ -218,15 +227,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         orderBy: { createdAt: "desc" },
       });
 
-      const payload = {
-        name,
-        email: normalizedEmail,
-        phone: phone || null,
-        message,
-        ip,
-        userAgent,
-        ts: new Date().toISOString(),
-      };
+      // NOTE: Keep DB schema coupling minimal.
+      // The Lead model can evolve; do not assume extra scalar columns like
+      // userAgent/message exist. Full context remains available via email + Redis log.
 
       if (existing?.id) {
         await prisma.lead.update({
@@ -235,9 +238,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             name,
             email: normalizedEmail,
             ip,
-            userAgent,
-            message,
-            payload,
           },
         });
       } else {
@@ -247,9 +247,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             name,
             email: normalizedEmail,
             ip,
-            userAgent,
-            message,
-            payload,
           },
         });
       }
