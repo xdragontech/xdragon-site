@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
-import { prisma } from "../../lib/prisma";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -161,6 +160,12 @@ type ChatOutput = {
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+type PrismaMod = { prisma?: any; default?: any };
+async function getPrisma() {
+  const mod: PrismaMod = await import("../../lib/prisma");
+  return (mod as any).prisma ?? (mod as any).default;
+}
 
 function isValidEmail(email: string | null | undefined): boolean {
   const e = (email || "").trim();
@@ -614,10 +619,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Source-of-truth lead record in Postgres: 1 row per conversation (keyed by conversationId).
       // Best-effort: do not fail the request if DB write fails.
       try {
-        const cid = typeof conversationId === "string" ? conversationId.trim() : "";
-        const ip = getClientIp(req);
-        const userAgent = String(req.headers["user-agent"] || "");
-        const referer = String(req.headers["referer"] || "");
+        const prisma = await getPrisma();
+        if (prisma?.lead) {
+          const cid = typeof conversationId === "string" ? conversationId.trim() : "";
+          const ip = getClientIp(req);
+          const userAgent = String(req.headers["user-agent"] || "");
+          const referer = String(req.headers["referer"] || "");
 
           const payload = {
             conversationId: cid || null,
@@ -634,55 +641,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             lastSeenAt: new Date().toISOString(),
           };
 
-        if (cid) {
-            // Find by payload.conversationId (avoids requiring a dedicated DB column).
-            const existing = await prisma.lead.findFirst({
-              where: {
-                source: "CHAT",
-                payload: {
-                  path: ["conversationId"],
-                  equals: cid,
-                },
-              },
-              orderBy: { createdAt: "desc" },
-            });
+          if (cid) {
+            // 1 lead per conversation: use conversationId as the Lead.id.
+            // This avoids JSON-path filtering incompatibilities across Prisma/DB versions.
+            const createData: any = {
+              id: cid,
+              source: "CHAT",
+              name: mergedLead.name || null,
+              email: mergedLead.email || null,
+              ip,
+              userAgent,
+            };
+            createData.payload = payload;
 
-            if (existing?.id) {
-              await prisma.lead.update({
-                where: { id: existing.id },
-                data: {
-                  name: mergedLead.name || null,
-                  email: mergedLead.email || null,
-                  ip,
-                  userAgent,
-                  payload,
-                },
-              });
-            } else {
-              await prisma.lead.create({
-                data: {
-                  source: "CHAT",
-                  name: mergedLead.name || null,
-                  email: mergedLead.email || null,
-                  ip,
-                  userAgent,
-                  payload,
-                },
-              });
-            }
+            const updateData: any = {
+              name: mergedLead.name || null,
+              email: mergedLead.email || null,
+              ip,
+              userAgent,
+            };
+            updateData.payload = payload;
+
+            await prisma.lead.upsert({
+              where: { id: cid },
+              create: createData,
+              update: updateData,
+            });
           } else {
             // No conversationId — still persist a row for visibility.
-            await prisma.lead.create({
-              data: {
-                source: "CHAT",
-                name: mergedLead.name || null,
-                email: mergedLead.email || null,
-                ip,
-                userAgent,
-                payload,
-              },
-            });
+            const data: any = {
+              source: "CHAT",
+              name: mergedLead.name || null,
+              email: mergedLead.email || null,
+              ip,
+              userAgent,
+            };
+            data.payload = payload;
+            await prisma.lead.create({ data });
           }
+        }
       } catch (e) {
         console.error("Chat lead DB write failed", e);
       }
