@@ -172,7 +172,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   if (!dryRun) {
-    for (const { iso2, name, ids } of updatesByKey.values()) {
+    // Avoid iterating MapIterator directly (can fail under TS downlevel targets)
+    const batches = Array.from(updatesByKey.values());
+    for (let i = 0; i < batches.length; i++) {
+      const { iso2, name, ids } = batches[i];
       if (!ids.length) continue;
       const result = await prisma.loginEvent.updateMany({
         where: { id: { in: ids } },
