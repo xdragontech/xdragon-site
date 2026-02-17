@@ -52,7 +52,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const leads = await prisma.lead.findMany({
       where: sourceFilter ? { source: sourceFilter } : undefined,
-      orderBy: { createdAt: "desc" },
+      // Use updatedAt so CHAT leads (which upsert by conversationId) surface when
+      // a returning visitor continues the same conversation.
+      orderBy: { updatedAt: "desc" },
       take: limit,
     });
 
@@ -60,10 +62,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const sourceLower = String(l.source || "").toLowerCase();
       const source: LeadSource = sourceLower === "chat" ? "chat" : "contact";
 
-      const createdAtIso = l.createdAt ? new Date(l.createdAt).toISOString() : new Date().toISOString();
+      // Prefer updatedAt to represent "most recent activity".
+      const tsIso = (l.updatedAt || l.createdAt)
+        ? new Date(l.updatedAt || l.createdAt).toISOString()
+        : new Date().toISOString();
 
       return {
-        ts: createdAtIso,
+        ts: tsIso,
         source,
         ip: l.ip || undefined,
         name: l.name ?? null,
