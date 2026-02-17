@@ -182,6 +182,174 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
   const [catEditing, setCatEditing] = useState<CategoryRow | null>(null);
   const [catName, setCatName] = useState("");
 
+  // Import/Export state
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFileName, setImportFileName] = useState<string>("");
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importDefaultStatus, setImportDefaultStatus] = useState<PromptStatus>("DRAFT");
+  const [importing, setImporting] = useState(false);
+
+  function downloadExport(format: "csv" | "json") {
+    // Uses the existing admin export endpoint (server returns attachment)
+    window.location.href = `/api/admin/library/prompts/export?format=${format}`;
+  }
+
+  function parseCsv(text: string): any[] {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+
+      if (inQuotes) {
+        if (ch === '"' && next === '"') {
+          cur += '"';
+          i++;
+          continue;
+        }
+        if (ch === '"') {
+          inQuotes = false;
+          continue;
+        }
+        cur += ch;
+        continue;
+      }
+
+      if (ch === '"') {
+        inQuotes = true;
+        continue;
+      }
+
+      if (ch === ",") {
+        row.push(cur);
+        cur = "";
+        continue;
+      }
+
+      if (ch === "\n") {
+        row.push(cur);
+        cur = "";
+        // skip empty trailing lines
+        if (row.some((c) => String(c).trim().length > 0)) rows.push(row);
+        row = [];
+        continue;
+      }
+
+      if (ch === "\r") continue;
+
+      cur += ch;
+    }
+
+    // last cell
+    row.push(cur);
+    if (row.some((c) => String(c).trim().length > 0)) rows.push(row);
+
+    if (rows.length === 0) return [];
+    const header = rows[0].map((h) => String(h || "").trim());
+    const out: any[] = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const obj: any = {};
+      for (let j = 0; j < header.length; j++) obj[header[j]] = r[j];
+      // normalize for our bulk importer
+      if (obj.name && !obj.title) obj.title = obj.name;
+      if (obj.prompt && !obj.content) obj.content = obj.prompt;
+
+      if (typeof obj.tags === "string") {
+        obj.tags = obj.tags
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+      }
+      if (typeof obj.sortOrder === "string" && obj.sortOrder.trim() !== "") obj.sortOrder = Number(obj.sortOrder);
+
+      out.push(obj);
+    }
+
+    return out;
+  }
+
+  async function onPickImportFile(file: File | null) {
+    setErr(null);
+    setMsg(null);
+    setImportFileName(file?.name || "");
+    setImportRows([]);
+
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const lower = (file.name || "").toLowerCase();
+
+      let rows: any[] = [];
+      if (lower.endsWith(".json")) {
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) throw new Error("JSON must be an array of prompts");
+        rows = parsed;
+      } else {
+        rows = parseCsv(text);
+      }
+
+      // very light validation
+      rows = rows
+        .map((r) => ({
+          ...r,
+          title: String(r.title || r.name || "").trim(),
+          content: String(r.content || r.prompt || "").trim(),
+          description: r.description ? String(r.description) : null,
+        }))
+        .filter((r) => r.title && r.content);
+
+      setImportRows(rows);
+      setMsg(rows.length ? `Loaded ${rows.length} rows from ${file.name}` : `No valid rows found in ${file.name}`);
+    } catch (e: any) {
+      setErr(e?.message || "Failed to read file");
+    }
+  }
+
+  async function runImport() {
+    if (importRows.length === 0) {
+      setErr("Nothing to import.");
+      return;
+    }
+
+    setImporting(true);
+    setErr(null);
+    setMsg(null);
+
+    try {
+      const r = await fetch("/api/admin/library/prompts/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "import",
+          rows: importRows,
+          defaultStatus: importDefaultStatus,
+        }),
+      });
+
+      const j = await r.json();
+      if (!r.ok || !j?.ok) throw new Error(j?.error || "Import failed");
+
+      setMsg(`Imported ${j?.count ?? importRows.length} prompts.`);
+      setImportOpen(false);
+      setImportFileName("");
+      setImportRows([]);
+
+      // Refresh list
+      await loadAll();
+    } catch (e: any) {
+      setErr(e?.message || "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+
   const filteredPrompts = useMemo(() => {
     const s = q.trim().toLowerCase();
 
@@ -546,6 +714,32 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       >
                         Refresh
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setImportOpen(true)}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                        disabled={busy}
+                      >
+                        Import
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadExport("csv")}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                        disabled={busy}
+                      >
+                        Export CSV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadExport("json")}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                        disabled={busy}
+                      >
+                        Export JSON
+                      </button>
+
                       <button
                         type="button"
                         onClick={openNewPrompt}
@@ -674,6 +868,73 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
         </div>
       </main>
 
+
+
+      {/* Import modal */}
+      <SmallModal
+        open={importOpen}
+        title="Import prompts"
+        onClose={() => {
+          if (importing) return;
+          setImportOpen(false);
+        }}
+      >
+        <div className="space-y-4">
+          <div className="text-sm text-neutral-700">
+            Upload a <span className="font-semibold">CSV</span> (export format) or a <span className="font-semibold">JSON</span> array of prompts.
+            Rows must include at minimum <span className="font-semibold">title</span> and <span className="font-semibold">content</span>.
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-xs font-semibold text-neutral-700">Default status</label>
+            <select
+              value={importDefaultStatus}
+              onChange={(e) => setImportDefaultStatus(e.target.value as PromptStatus)}
+              className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+              disabled={importing}
+            >
+              <option value="DRAFT">DRAFT</option>
+              <option value="PUBLISHED">PUBLISHED</option>
+              <option value="ARCHIVED">ARCHIVED</option>
+            </select>
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-xs font-semibold text-neutral-700">File</label>
+            <input
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              onChange={(e) => void onPickImportFile(e.target.files?.[0] ?? null)}
+              className="block w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+              disabled={importing}
+            />
+            {importFileName ? (
+              <div className="text-xs text-neutral-600">
+                {importFileName} — {importRows.length ? `${importRows.length} rows ready` : "no rows ready"}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(false)}
+              className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+              disabled={importing}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void runImport()}
+              className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-60"
+              disabled={importing || importRows.length === 0}
+            >
+              {importing ? "Importing…" : "Import"}
+            </button>
+          </div>
+        </div>
+      </SmallModal>
       {/* Prompt modal */}
       <Modal
         open={promptModalOpen}
