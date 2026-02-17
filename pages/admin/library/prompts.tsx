@@ -55,6 +55,14 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   return { props: {} };
 };
 
+// Button style tokens (keep consistent; avoids accidental UI drift)
+const BTN_SOLID_BLACK =
+  "rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800";
+const BTN_OUTLINE =
+  "rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50";
+const BTN_SOLID_RED =
+  "rounded-xl border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700";
+
 function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -705,49 +713,33 @@ export default function AdminLibraryPage(_props: InferGetServerSidePropsType<typ
                       <p className="mt-1 text-sm text-neutral-600">Create, edit, and delete prompts shown in the gated /tools library.</p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void loadAll()}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={busy}
-                      >
-                        Refresh
-                      </button>
+                    {/*
+                      Toolbar layout and colors are intentional (match the established admin UI).
+                      Keep as two rows: primary actions (Refresh/Import/New) and export actions.
+                    */}
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <button type="button" onClick={() => void loadAll()} className={BTN_SOLID_RED} disabled={busy}>
+                          Refresh
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setImportOpen(true)}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={busy}
-                      >
-                        Import
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadExport("csv")}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={busy}
-                      >
-                        Export CSV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadExport("json")}
-                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={busy}
-                      >
-                        Export JSON
-                      </button>
+                        <button type="button" onClick={() => setImportOpen(true)} className={BTN_OUTLINE} disabled={busy}>
+                          Import
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={openNewPrompt}
-                        className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-                        disabled={busy}
-                      >
-                        New prompt
-                      </button>
+                        <button type="button" onClick={openNewPrompt} className={BTN_SOLID_BLACK} disabled={busy}>
+                          New
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <button type="button" onClick={() => downloadExport("csv")} className={BTN_OUTLINE} disabled={busy}>
+                          Export CSV
+                        </button>
+                        <button type="button" onClick={() => downloadExport("json")} className={BTN_OUTLINE} disabled={busy}>
+                          Export JSON
+                        </button>
+                      </div>
                     </div>
                   </div>
 
