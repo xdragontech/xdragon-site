@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getClientIp } from "../../lib/requestIdentity";
 import OpenAI from "openai";
 
 /**
@@ -7,7 +6,17 @@ import OpenAI from "openai";
  * - Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in env.
  * - If env vars are missing, rate limiting is skipped (no-op).
  */
-// NOTE: getClientIp is shared (Cloudflare-first) via lib/requestIdentity.
+function getClientIp(req: NextApiRequest): string {
+  const xf = (req.headers["x-forwarded-for"] || "") as string;
+  const first = xf.split(",")[0]?.trim();
+  const ip =
+    first ||
+    (req.headers["x-real-ip"] as string) ||
+    (req.headers["cf-connecting-ip"] as string) ||
+    (req.socket.remoteAddress as string) ||
+    "unknown";
+  return ip;
+}
 
 async function upstashIncr(key: string): Promise<number | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -643,7 +652,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               ip,
               userAgent,
             };
-            createData.payload = payload;
+            // Persist full context in the existing Lead.raw Json column.
+            // NOTE: Lead model does not include a `payload` column.
+            createData.raw = payload;
 
             const updateData: any = {
               name: mergedLead.name || null,
@@ -651,7 +662,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               ip,
               userAgent,
             };
-            updateData.payload = payload;
+            updateData.raw = payload;
 
             await prisma.lead.upsert({
               where: { id: cid },
@@ -667,7 +678,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               ip,
               userAgent,
             };
-            data.payload = payload;
+            data.raw = payload;
             await prisma.lead.create({ data });
           }
         }
