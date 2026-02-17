@@ -5,6 +5,12 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../lib/prisma";
+import {
+  getClientIp,
+  getCfCountryIso2,
+  getUserAgent,
+  iso2ToCountryName,
+} from "../../../lib/requestIdentity";
 
 function cookieDomain(): string | undefined {
   // Share the session cookie between www.xdragon.tech and admin.xdragon.tech in production.
@@ -15,62 +21,8 @@ function cookieDomain(): string | undefined {
   return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
 }
 
-function getHeader(req: any, name: string): string | undefined {
-  const headers = req?.headers;
-  if (!headers) return undefined;
-
-  const key = name.toLowerCase();
-  const val = headers[key] ?? headers[name] ?? headers[name.toLowerCase()];
-  if (Array.isArray(val)) return val[0];
-  if (typeof val === "string") return val;
-  return undefined;
-}
-
-function getClientIp(req: any): string {
-  // Cloudflare (proxied): CF-Connecting-IP is the true client IP.
-  const cfIp = getHeader(req, "cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
-
-  // Vercel/Proxies: x-forwarded-for is usually a comma-separated list.
-  const xff = getHeader(req, "x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-
-  const realIp = getHeader(req, "x-real-ip");
-  if (realIp) return realIp.trim();
-
-  // Node req sometimes has socket/connection
-  const socketIp = req?.socket?.remoteAddress || req?.connection?.remoteAddress;
-  if (typeof socketIp === "string" && socketIp) return socketIp;
-
-  return "unknown";
-}
-
-function getCfCountryIso2(req: any): string | null {
-  const c = getHeader(req, "cf-ipcountry");
-  if (!c) return null;
-  const v = c.trim().toUpperCase();
-  // Cloudflare uses "XX" for unknown.
-  if (!v || v === "XX") return null;
-  return v;
-}
-
-function iso2ToCountryName(iso2: string | null): string | null {
-  if (!iso2) return null;
-  try {
-    const dn = new Intl.DisplayNames(["en"], { type: "region" });
-    return (dn.of(iso2) as string) || null;
-  } catch {
-    return null;
-  }
-}
-
-
-function getUserAgent(req: any): string {
-  return getHeader(req, "user-agent")?.trim() || "";
-}
+// NOTE: Request identity helpers are shared via lib/requestIdentity to keep
+// client IP and country consistent across all API routes.
 
 async function getUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
@@ -167,8 +119,8 @@ export const authOptions: NextAuthOptions = {
           // Best-effort login telemetry (never block auth if this fails)
           try {
             const ip = getClientIp(req);
-      const countryIso2 = getCfCountryIso2(req);
-      const countryName = iso2ToCountryName(countryIso2);
+            const countryIso2 = getCfCountryIso2(req);
+            const countryName = iso2ToCountryName(countryIso2);
             const userAgent = getUserAgent(req);
             await prisma.loginEvent.create({ data: { userId: "xdadmin", ip, userAgent, countryIso2, countryName } });
           } catch (err) {
@@ -194,8 +146,8 @@ export const authOptions: NextAuthOptions = {
         // Record last login + IP (best-effort; never block auth if this fails)
         try {
           const ip = getClientIp(req);
-      const countryIso2 = getCfCountryIso2(req);
-      const countryName = iso2ToCountryName(countryIso2);
+          const countryIso2 = getCfCountryIso2(req);
+          const countryName = iso2ToCountryName(countryIso2);
           const userAgent = getUserAgent(req);
           await prisma.$transaction([
             prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
@@ -243,7 +195,6 @@ export const authOptions: NextAuthOptions = {
         if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
           (token as any).role = "ADMIN";
         }
-
       }
 
       // Fallback env-admin role when there's no DB user record (or before roles are backfilled).

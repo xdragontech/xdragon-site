@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getClientIp } from "../../lib/requestIdentity";
 import OpenAI from "openai";
 
 /**
@@ -6,17 +7,7 @@ import OpenAI from "openai";
  * - Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in env.
  * - If env vars are missing, rate limiting is skipped (no-op).
  */
-function getClientIp(req: NextApiRequest): string {
-  const xf = (req.headers["x-forwarded-for"] || "") as string;
-  const first = xf.split(",")[0]?.trim();
-  const ip =
-    first ||
-    (req.headers["x-real-ip"] as string) ||
-    (req.headers["cf-connecting-ip"] as string) ||
-    (req.socket.remoteAddress as string) ||
-    "unknown";
-  return ip;
-}
+// NOTE: getClientIp is shared (Cloudflare-first) via lib/requestIdentity.
 
 async function upstashIncr(key: string): Promise<number | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
