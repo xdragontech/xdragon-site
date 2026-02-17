@@ -8,6 +8,11 @@ import { prisma } from "../../../lib/prisma";
  *
  * Returns rows shaped for the admin Leads table:
  * - Name, Email, Source, IP, Date/Time, Copy JSON
+ *
+ * IMPORTANT:
+ * LeadEvent is append-only (especially for CHAT). For the Leads table we want ONE ROW per "contact":
+ * - CHAT: one row per conversationId (latest event)
+ * - CONTACT: one row per leadId (latest event)
  */
 
 type LeadSource = "chat" | "contact";
@@ -31,6 +36,17 @@ function getSessionRole(session: any): string | null {
   return (session?.role as string) || (session?.user?.role as string) || null;
 }
 
+function eventKey(ev: any): string {
+  const src = String(ev?.source || "").toUpperCase();
+  if (src === "CHAT") {
+    // Prefer conversationId, else fall back to leadId, else to event id (worst case).
+    return `chat:${ev?.conversationId || ev?.leadId || ev?.id}`;
+  }
+  // CONTACT: prefer linked leadId; fallback to email; else event id.
+  const email = (ev?.lead?.email || (ev?.raw as any)?.lead?.email || (ev?.raw as any)?.email || "") as string;
+  return `contact:${ev?.leadId || email || ev?.id}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -50,19 +66,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     kindParam === "chat" ? "CHAT" : kindParam === "contact" ? "CONTACT" : null;
 
   try {
-    // LeadEvent is the source of truth.
+    // We need enough rows to dedupe into `limit` unique "contacts".
+    // Use a small multiplier and cap hard so this doesn't get expensive.
+    const take = Math.min(Math.max(limit * 6, limit), 1500);
+
     const events = await prisma.leadEvent.findMany({
       where: sourceFilter ? { source: sourceFilter } : undefined,
       orderBy: { createdAt: "desc" },
-      take: limit,
+      take,
       include: { lead: true },
     });
 
-    const rows: LeadRow[] = (Array.isArray(events) ? events : []).map((ev: any) => {
+    const seen = new Set<string>();
+    const rows: LeadRow[] = [];
+
+    for (const ev of Array.isArray(events) ? events : []) {
+      const key = eventKey(ev);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
       const sourceLower = String(ev.source || "").toLowerCase();
       const source: LeadSource = sourceLower === "chat" ? "chat" : "contact";
 
-      const createdAtIso = ev.createdAt ? new Date(ev.createdAt).toISOString() : new Date().toISOString();
+      const createdAtIso = ev.createdAt
+        ? new Date(ev.createdAt).toISOString()
+        : new Date().toISOString();
 
       // Prefer linked Lead summary when present (CONTACT), else fall back to raw.lead (CHAT)
       const raw = ev.raw ?? {};
@@ -71,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const name = ev.lead?.name ?? rawLead?.name ?? null;
       const email = ev.lead?.email ?? rawLead?.email ?? null;
 
-      return {
+      rows.push({
         ts: createdAtIso,
         source,
         ip: ev.ip || undefined,
@@ -87,8 +115,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ip: ev.ip ?? null,
           createdAt: ev.createdAt,
         },
-      };
-    });
+      });
+
+      if (rows.length >= limit) break;
+    }
 
     return res.status(200).json({ ok: true, kind: kindParam, limit, items: rows });
   } catch (e: any) {
