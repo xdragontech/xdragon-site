@@ -7,15 +7,32 @@ import OpenAI from "openai";
  * - If env vars are missing, rate limiting is skipped (no-op).
  */
 function getClientIp(req: NextApiRequest): string {
+  // Cloudflare-proxied: CF-Connecting-IP is the most reliable client IP.
+  const cf = (req.headers["cf-connecting-ip"] as string) || "";
+  if (cf) return cf;
+
   const xf = (req.headers["x-forwarded-for"] || "") as string;
   const first = xf.split(",")[0]?.trim();
-  const ip =
+  return (
     first ||
     (req.headers["x-real-ip"] as string) ||
-    (req.headers["cf-connecting-ip"] as string) ||
     (req.socket.remoteAddress as string) ||
-    "unknown";
-  return ip;
+    "unknown"
+  );
+}
+
+function getCfCountry(req: NextApiRequest): { iso2: string | null; name: string | null } {
+  const iso2 = String(req.headers["cf-ipcountry"] || "").trim().toUpperCase();
+  if (!iso2 || iso2 === "XX") return { iso2: null, name: null };
+  let name: string | null = null;
+  try {
+    // eslint-disable-next-line no-undef
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    name = dn.of(iso2) || null;
+  } catch {
+    name = null;
+  }
+  return { iso2, name };
 }
 
 async function upstashIncr(key: string): Promise<number | null> {
@@ -616,17 +633,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       Boolean(mergedLead.name);
 
     if (shouldLogLead) {
-      // Source-of-truth lead record in Postgres: 1 row per conversation (keyed by conversationId).
+      // Source-of-truth lead timeline in Postgres (append-only): LeadEvent.
       // Best-effort: do not fail the request if DB write fails.
       try {
         const prisma = await getPrisma();
-        if (prisma?.lead) {
+        if (prisma?.leadEvent) {
           const cid = typeof conversationId === "string" ? conversationId.trim() : "";
           const ip = getClientIp(req);
           const userAgent = String(req.headers["user-agent"] || "");
           const referer = String(req.headers["referer"] || "");
+          const cc = getCfCountry(req);
 
-          const payload = {
+          const raw = {
             conversationId: cid || null,
             returnId,
             lead: mergedLead,
@@ -638,49 +656,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ip,
             userAgent,
             referer,
-            lastSeenAt: new Date().toISOString(),
           };
 
-          if (cid) {
-            // 1 lead per conversation: use conversationId as the Lead.id.
-            // This avoids JSON-path filtering incompatibilities across Prisma/DB versions.
-            const createData: any = {
-              id: cid,
+          await prisma.leadEvent.create({
+            data: {
               source: "CHAT",
-              name: mergedLead.name || null,
-              email: mergedLead.email || null,
+              conversationId: cid || null,
               ip,
-              userAgent,
-            };
-            // Persist full context in the existing Lead.raw Json column.
-            // NOTE: Lead model does not include a `payload` column.
-            createData.raw = payload;
-
-            const updateData: any = {
-              name: mergedLead.name || null,
-              email: mergedLead.email || null,
-              ip,
-              userAgent,
-            };
-            updateData.raw = payload;
-
-            await prisma.lead.upsert({
-              where: { id: cid },
-              create: createData,
-              update: updateData,
-            });
-          } else {
-            // No conversationId — still persist a row for visibility.
-            const data: any = {
-              source: "CHAT",
-              name: mergedLead.name || null,
-              email: mergedLead.email || null,
-              ip,
-              userAgent,
-            };
-            data.raw = payload;
-            await prisma.lead.create({ data });
-          }
+              countryIso2: cc.iso2,
+              countryName: cc.name,
+              userAgent: userAgent || null,
+              referer: referer || null,
+              raw,
+            },
+          });
         }
       } catch (e) {
         console.error("Chat lead DB write failed", e);

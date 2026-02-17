@@ -198,7 +198,33 @@ model Lead {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
+  events    LeadEvent[]
+
   @@index([source])
   @@index([createdAt])
   @@index([email])
+}
+
+// --- Lead events (append-only timeline; source of truth for Leads + Analytics) ---
+
+model LeadEvent {
+  id             String     @id @default(cuid())
+  source         LeadSource
+  // Optional: link to a durable Lead summary row when available (CONTACT always, CHAT optionally)
+  leadId         String?
+  conversationId String?
+  ip             String?
+  countryIso2    String?
+  countryName    String?
+  userAgent      String?
+  referer        String?
+  raw            Json?
+  createdAt      DateTime   @default(now())
+
+  lead           Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([source])
+  @@index([createdAt])
+  @@index([leadId])
+  @@index([conversationId])
 }

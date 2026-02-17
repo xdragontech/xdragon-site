@@ -50,40 +50,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     kindParam === "chat" ? "CHAT" : kindParam === "contact" ? "CONTACT" : null;
 
   try {
-    const leads = await prisma.lead.findMany({
+    // LeadEvent is the source of truth.
+    const events = await prisma.leadEvent.findMany({
       where: sourceFilter ? { source: sourceFilter } : undefined,
-      // Use updatedAt so CHAT leads (which upsert by conversationId) surface when
-      // a returning visitor continues the same conversation.
-      orderBy: { updatedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       take: limit,
+      include: { lead: true },
     });
 
-    const rows: LeadRow[] = (Array.isArray(leads) ? leads : []).map((l: any) => {
-      const sourceLower = String(l.source || "").toLowerCase();
+    const rows: LeadRow[] = (Array.isArray(events) ? events : []).map((ev: any) => {
+      const sourceLower = String(ev.source || "").toLowerCase();
       const source: LeadSource = sourceLower === "chat" ? "chat" : "contact";
 
-      // Prefer updatedAt to represent "most recent activity".
-      const tsIso = (l.updatedAt || l.createdAt)
-        ? new Date(l.updatedAt || l.createdAt).toISOString()
-        : new Date().toISOString();
+      const createdAtIso = ev.createdAt ? new Date(ev.createdAt).toISOString() : new Date().toISOString();
+
+      // Prefer linked Lead summary when present (CONTACT), else fall back to raw.lead (CHAT)
+      const raw = ev.raw ?? {};
+      const rawLead = (raw as any)?.lead ?? raw;
+
+      const name = ev.lead?.name ?? rawLead?.name ?? null;
+      const email = ev.lead?.email ?? rawLead?.email ?? null;
 
       return {
-        ts: tsIso,
+        ts: createdAtIso,
         source,
-        ip: l.ip || undefined,
-        name: l.name ?? null,
-        email: l.email ?? null,
-        raw:
-          l.payload ??
-          l.raw ??
-          {
-            id: l.id,
-            source: l.source,
-            name: l.name ?? null,
-            email: l.email ?? null,
-            ip: l.ip ?? null,
-            createdAt: l.createdAt,
-          },
+        ip: ev.ip || undefined,
+        name,
+        email,
+        raw: ev.raw ?? {
+          id: ev.id,
+          source: ev.source,
+          leadId: ev.leadId ?? null,
+          conversationId: ev.conversationId ?? null,
+          name,
+          email,
+          ip: ev.ip ?? null,
+          createdAt: ev.createdAt,
+        },
       };
     });
 

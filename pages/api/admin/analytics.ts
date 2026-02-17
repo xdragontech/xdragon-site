@@ -32,12 +32,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   since.setDate(since.getDate() - 7);
 
   try {
+    // LeadEvent is the source of truth for counts.
     const [total, contact, chat, last7Contact, last7Chat] = await Promise.all([
-      prisma.lead.count(),
-      prisma.lead.count({ where: { source: "CONTACT" } }),
-      prisma.lead.count({ where: { source: "CHAT" } }),
-      prisma.lead.count({ where: { source: "CONTACT", createdAt: { gte: since } } }),
-      prisma.lead.count({ where: { source: "CHAT", createdAt: { gte: since } } }),
+      prisma.leadEvent.count(),
+      prisma.leadEvent.count({ where: { source: "CONTACT" } }),
+      prisma.leadEvent.count({ where: { source: "CHAT" } }),
+      prisma.leadEvent.count({ where: { source: "CONTACT", createdAt: { gte: since } } }),
+      prisma.leadEvent.count({ where: { source: "CHAT", createdAt: { gte: since } } }),
     ]);
 
     return res.status(200).json({

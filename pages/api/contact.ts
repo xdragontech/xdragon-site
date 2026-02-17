@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
-import { getClientIp } from "../../lib/requestIdentity";
 
 type PrismaMod = { prisma?: any; default?: any };
 
@@ -14,6 +13,32 @@ async function getPrisma() {
  * - Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in env.
  * - If env vars are missing, rate limiting is skipped (no-op).
  */
+function getClientIp(req: NextApiRequest): string {
+  const cf = (req.headers["cf-connecting-ip"] as string) || "";
+  if (cf) return cf;
+  const xf = (req.headers["x-forwarded-for"] || "") as string;
+  const first = xf.split(",")[0]?.trim();
+  return (
+    first ||
+    (req.headers["x-real-ip"] as string) ||
+    (req.socket.remoteAddress as string) ||
+    "unknown"
+  );
+}
+
+function getCfCountry(req: NextApiRequest): { iso2: string | null; name: string | null } {
+  const iso2 = String(req.headers["cf-ipcountry"] || "").trim().toUpperCase();
+  if (!iso2 || iso2 === "XX") return { iso2: null, name: null };
+  let name: string | null = null;
+  try {
+    // eslint-disable-next-line no-undef
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    name = dn.of(iso2) || null;
+  } catch {
+    name = null;
+  }
+  return { iso2, name };
+}
 
 async function upstashIncr(key: string): Promise<number | null> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -221,8 +246,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       // The Lead model can evolve; do not assume extra scalar columns like
       // userAgent/message exist. Full context remains available via email + Redis log.
 
+      const cc = getCfCountry(req);
+      const ua = cleanStr(req.headers["user-agent"], 400);
+      const referer = cleanStr(req.headers["referer"], 600);
+
+      let leadId: string | null = null;
+
       if (existing?.id) {
-        await prisma.lead.update({
+        const updated = await prisma.lead.update({
           where: { id: existing.id },
           data: {
             name,
@@ -230,13 +261,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             ip,
           },
         });
+        leadId = updated?.id || existing.id;
       } else {
-        await prisma.lead.create({
+        const created = await prisma.lead.create({
           data: {
             source: "CONTACT",
             name,
             email: normalizedEmail,
             ip,
+          },
+        });
+        leadId = created?.id || null;
+      }
+
+      // Append-only LeadEvent (source of truth for the Leads table + analytics)
+      if (prisma?.leadEvent) {
+        await prisma.leadEvent.create({
+          data: {
+            source: "CONTACT",
+            leadId: leadId || undefined,
+            ip,
+            countryIso2: cc.iso2,
+            countryName: cc.name,
+            userAgent: ua || null,
+            referer: referer || null,
+            raw: {
+              name,
+              email: normalizedEmail,
+              phone: phone || null,
+              message,
+            },
           },
         });
       }
