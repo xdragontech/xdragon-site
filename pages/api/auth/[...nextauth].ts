@@ -13,9 +13,9 @@ import {
 } from "../../../lib/requestIdentity";
 
 function cookieDomain(): string | undefined {
-  // Share the session cookie between www.xdragon.tech and admin.xdragon.tech in production.
-  // In local dev, DO NOT set a Domain attribute (browsers will reject it).
-  if (process.env.NODE_ENV !== "production") return undefined;
+  // Only share cookies across subdomains in true production.
+  // Preview/staging should use host-only cookies to avoid collisions with production.
+  if (process.env.VERCEL_ENV !== "production") return undefined;
 
   // Allow override if you ever change domains.
   return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
