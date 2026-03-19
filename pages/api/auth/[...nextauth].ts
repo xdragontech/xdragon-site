@@ -209,19 +209,19 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
-      if (!session.user) {
-        (session as any).user = {
+      const sessionUser =
+        session.user ??
+        ((session as any).user = {
           name: null,
           email: null,
           image: null,
-        };
-      }
+        });
 
-      session.user.email = typeof token.email === "string" ? token.email : session.user.email;
-      session.user.name = typeof token.name === "string" ? token.name : session.user.name;
-      (session.user as any).id = typeof token.sub === "string" ? token.sub : undefined;
-      (session.user as any).role = (token as any).role || "USER";
-      (session.user as any).status = (token as any).status || "ACTIVE";
+      sessionUser.email = typeof token.email === "string" ? token.email : sessionUser.email;
+      sessionUser.name = typeof token.name === "string" ? token.name : sessionUser.name;
+      (sessionUser as any).id = typeof token.sub === "string" ? token.sub : undefined;
+      (sessionUser as any).role = (token as any).role || "USER";
+      (sessionUser as any).status = (token as any).status || "ACTIVE";
 
       (session as any).role = (token as any).role || "USER";
       (session as any).status = (token as any).status || "ACTIVE";
