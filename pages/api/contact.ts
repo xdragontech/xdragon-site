@@ -45,14 +45,19 @@ async function upstashIncr(key: string): Promise<number | null> {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
 
-  const resp = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  try {
+    const resp = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-  if (!resp.ok) return null;
-  const data = (await resp.json()) as { result?: number };
-  return typeof data?.result === "number" ? data.result : null;
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as { result?: number };
+    return typeof data?.result === "number" ? data.result : null;
+  } catch (error) {
+    console.warn("Contact rate limit increment failed; allowing request", error);
+    return null;
+  }
 }
 
 async function upstashExpire(key: string, ttlSeconds: number): Promise<void> {
@@ -123,32 +128,36 @@ async function enforceRateLimit(
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return true; // no-op if not configured
 
-  const ip = getClientIp(req);
+  try {
+    const ip = getClientIp(req);
 
-  const now = Date.now();
-  const minuteWindow = Math.floor(now / 60_000);
-  const hourWindow = Math.floor(now / 3_600_000);
+    const now = Date.now();
+    const minuteWindow = Math.floor(now / 60_000);
+    const hourWindow = Math.floor(now / 3_600_000);
 
-  const minuteKey = `rl:${cfg.name}:m:${minuteWindow}:${ip}`;
-  const hourKey = `rl:${cfg.name}:h:${hourWindow}:${ip}`;
+    const minuteKey = `rl:${cfg.name}:m:${minuteWindow}:${ip}`;
+    const hourKey = `rl:${cfg.name}:h:${hourWindow}:${ip}`;
 
-  const minuteCount = await upstashIncr(minuteKey);
-  if (minuteCount === 1) await upstashExpire(minuteKey, 60);
+    const minuteCount = await upstashIncr(minuteKey);
+    if (minuteCount === 1) await upstashExpire(minuteKey, 60);
 
-  const hourCount = await upstashIncr(hourKey);
-  if (hourCount === 1) await upstashExpire(hourKey, 3600);
+    const hourCount = await upstashIncr(hourKey);
+    if (hourCount === 1) await upstashExpire(hourKey, 3600);
 
-  const minuteExceeded = typeof minuteCount === "number" && minuteCount > cfg.perMinute;
-  const hourExceeded = typeof hourCount === "number" && hourCount > cfg.perHour;
+    const minuteExceeded = typeof minuteCount === "number" && minuteCount > cfg.perMinute;
+    const hourExceeded = typeof hourCount === "number" && hourCount > cfg.perHour;
 
-  if (minuteExceeded || hourExceeded) {
-    const retryAfter = minuteExceeded ? 60 : 3600;
-    res.setHeader("Retry-After", String(retryAfter));
-    res.status(429).json({
-      ok: false,
-      error: "Rate limit exceeded. Please try again shortly.",
-    } as any);
-    return false;
+    if (minuteExceeded || hourExceeded) {
+      const retryAfter = minuteExceeded ? 60 : 3600;
+      res.setHeader("Retry-After", String(retryAfter));
+      res.status(429).json({
+        ok: false,
+        error: "Rate limit exceeded. Please try again shortly.",
+      } as any);
+      return false;
+    }
+  } catch (error) {
+    console.warn("Contact rate limiting failed; allowing request", error);
   }
 
   return true;
