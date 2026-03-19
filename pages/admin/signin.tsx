@@ -1,26 +1,31 @@
-const PUBLIC_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
-const PUBLIC_ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
+const PROD_WWW_HOST = "www.xdragon.tech";
+const PROD_ADMIN_HOST = "admin.xdragon.tech";
+const STAGING_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "staging.xdragon.tech";
+const STAGING_ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "stg-admin.xdragon.tech";
+
+function allowedHosts(): Set<string> {
+  return new Set([
+    "xdragon.tech",
+    PROD_WWW_HOST,
+    PROD_ADMIN_HOST,
+    STAGING_WWW_HOST,
+    STAGING_ADMIN_HOST,
+  ].map((h) => h.toLowerCase()));
+}
 
 function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const fallback = "/admin/dashboard";
   if (!v) return fallback;
 
-  // Only allow same-site relative paths, or absolute URLs that point to the configured X Dragon hosts.
   try {
     if (v.startsWith("/")) return v;
-
     const u = new URL(v);
     const host = u.hostname.toLowerCase();
-    const allowedHosts = new Set(["xdragon.tech", PUBLIC_WWW_HOST.toLowerCase(), PUBLIC_ADMIN_HOST.toLowerCase()]);
-
-    // If user arrived with a callbackUrl to the public site or admin host, rewrite to the current origin.
-    if (allowedHosts.has(host)) {
+    if (allowedHosts().has(host)) {
       return `${currentOrigin}${u.pathname}${u.search}${u.hash}`;
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
   return fallback;
 }
 
@@ -35,15 +40,12 @@ import { authOptions } from "../api/auth/[...nextauth]";
 
 function prettyAuthError(err?: string | null): string | null {
   if (!err) return null;
-
-  // NextAuth can return codes like "CredentialsSignin" in the URL query.
   const map: Record<string, string> = {
     CredentialsSignin: "Invalid email or password.",
     AccessDenied: "Access denied.",
     Configuration: "Auth configuration error. Please contact support.",
     Verification: "Verification failed. Please try again.",
   };
-
   return map[err] || err;
 }
 
@@ -51,9 +53,9 @@ export default function AdminCommandSignIn() {
   const router = useRouter();
 
   const callbackUrl = useMemo(() => {
-  if (typeof window === "undefined") return "/admin/dashboard";
-  return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin);
-    }, [router.query.callbackUrl]);
+    if (typeof window === "undefined") return "/admin/dashboard";
+    return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin);
+  }, [router.query.callbackUrl]);
 
   const initialErr = useMemo(() => {
     const q = router.query.error;
@@ -91,7 +93,6 @@ export default function AdminCommandSignIn() {
       }
 
       if (res.ok && res.url) {
-        // Important: do a hard navigation so cookies/session are applied cleanly.
         window.location.href = res.url;
         return;
       }
@@ -109,7 +110,6 @@ export default function AdminCommandSignIn() {
     <>
       <Head>
         <title>X Dragon Command — Sign in</title>
-        {/* Orbitron for the "Command" mark */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -120,7 +120,6 @@ export default function AdminCommandSignIn() {
 
       <div className="min-h-screen bg-neutral-50 text-neutral-900">
         <div className="mx-auto max-w-lg px-4 py-16">
-          {/* Brand */}
           <div className="mb-8 flex items-start justify-center gap-4">
             <div className="flex flex-col items-start">
               <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
@@ -136,7 +135,6 @@ export default function AdminCommandSignIn() {
             </div>
           </div>
 
-          {/* Card */}
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
             <h1 className="text-lg font-semibold">Sign in</h1>
             <p className="mt-1 text-sm text-neutral-600">Use your admin credentials to manage users.</p>
@@ -183,7 +181,7 @@ export default function AdminCommandSignIn() {
 
             <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
               Tip: if you get signed-in but bounced back here, double-check that you always use the same canonical domain
-              (recommended: <span className="font-medium">{"https://" + PUBLIC_ADMIN_HOST}</span>) and that
+              (recommended: <span className="font-medium">{"https://" + STAGING_ADMIN_HOST}</span>) and that
               <span className="font-medium"> NEXTAUTH_URL</span> matches it in Vercel.
             </div>
           </div>
@@ -195,8 +193,6 @@ export default function AdminCommandSignIn() {
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-  // If already authed, go to admin page.
   if (session?.user) {
     return {
       redirect: {
@@ -205,6 +201,5 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       },
     };
   }
-
   return { props: {} };
 };
