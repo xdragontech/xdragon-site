@@ -14,10 +14,10 @@ type LibraryIndexProps = {
 export const getServerSideProps: GetServerSideProps<LibraryIndexProps> = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
 
-  const role = (session as any)?.role as string | undefined;
-  const status = (session as any)?.status as string | undefined;
+  const role = (((session as any)?.role || (session as any)?.user?.role) as string | undefined);
+  const status = (((session as any)?.status || (session as any)?.user?.status) as string | undefined);
 
-  if (!session?.user || role !== "ADMIN" || status === "BLOCKED") {
+  if (!session || role !== "ADMIN" || status === "BLOCKED") {
     const callbackUrl = encodeURIComponent("/admin/library");
     return {
       redirect: {
@@ -29,7 +29,7 @@ export const getServerSideProps: GetServerSideProps<LibraryIndexProps> = async (
 
   return {
     props: {
-      loggedInAs: session.user.email ?? null,
+      loggedInAs: session?.user?.email ?? null,
     },
   };
 };

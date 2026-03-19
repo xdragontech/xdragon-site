@@ -39,10 +39,10 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
 
   // Only allow ACTIVE admin users
-  const role = (session as any)?.role as string | undefined;
-  const status = (session as any)?.status as string | undefined;
+  const role = (((session as any)?.role || (session as any)?.user?.role) as string | undefined);
+  const status = (((session as any)?.status || (session as any)?.user?.status) as string | undefined);
 
-  if (!session?.user || role !== "ADMIN" || status === "BLOCKED") {
+  if (!session || role !== "ADMIN" || status === "BLOCKED") {
     const callbackUrl = encodeURIComponent("/admin/library/prompts");
     return {
       redirect: {

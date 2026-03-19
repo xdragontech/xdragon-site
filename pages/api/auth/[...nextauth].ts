@@ -12,13 +12,9 @@ import {
   iso2ToCountryName,
 } from "../../../lib/requestIdentity";
 
-const PROD_WWW_HOST = "www.xdragon.tech";
-const PROD_ADMIN_HOST = "admin.xdragon.tech";
-const STAGING_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "staging.xdragon.tech";
-const STAGING_ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "stg-admin.xdragon.tech";
-const IS_PREVIEW =
-  process.env.VERCEL_ENV === "preview" ||
-  [STAGING_WWW_HOST, STAGING_ADMIN_HOST].some((h) => (process.env.NEXTAUTH_URL || "").includes(h));
+const WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
+const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
+const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
 
 function cookieName(kind: "session-token" | "callback-url"): string {
   return IS_PREVIEW ? `__Secure-stg-next-auth.${kind}` : `__Secure-next-auth.${kind}`;
@@ -29,7 +25,11 @@ function csrfCookieName(): string {
 }
 
 function cookieDomain(): string | undefined {
-  if (IS_PREVIEW || process.env.VERCEL_ENV !== "production") return undefined;
+  // Only share cookies across subdomains in true production.
+  // Preview/staging should use host-only cookies to avoid collisions with production.
+  if (process.env.VERCEL_ENV !== "production") return undefined;
+
+  // Allow override if you ever change domains.
   return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
 }
 
@@ -43,19 +43,8 @@ function cookieOptions({ httpOnly = true }: { httpOnly?: boolean } = {}) {
   };
 }
 
-function allowedHosts(baseUrl: string): Set<string> {
-  const set = new Set<string>([
-    "xdragon.tech",
-    PROD_WWW_HOST,
-    PROD_ADMIN_HOST,
-    STAGING_WWW_HOST,
-    STAGING_ADMIN_HOST,
-  ]);
-  try {
-    set.add(new URL(baseUrl).hostname.toLowerCase());
-  } catch {}
-  return set;
-}
+// NOTE: Request identity helpers are shared via lib/requestIdentity to keep
+// client IP and country consistent across all API routes.
 
 async function getUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
@@ -75,7 +64,7 @@ function isEnvAdminEmail(email: string | null | undefined): boolean {
   if (!raw.trim()) return false;
   const set = new Set(
     raw
-      .split(/[\s,]+/)
+      .split(/[,\s]+/)
       .map((x) => x.trim().toLowerCase())
       .filter(Boolean)
   );
@@ -84,10 +73,16 @@ function isEnvAdminEmail(email: string | null | undefined): boolean {
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+
+  // Credentials sign-in requires JWT strategy in NextAuth v4.
   session: { strategy: "jwt" },
+
   secret: process.env.NEXTAUTH_SECRET,
   useSecureCookies: true,
+
+  // Keep the default user sign-in page. Admin routes should redirect to /admin/signin via middleware.
   pages: { signIn: "/auth/signin" },
+
   cookies: {
     sessionToken: {
       name: cookieName("session-token"),
@@ -98,10 +93,12 @@ export const authOptions: NextAuthOptions = {
       options: cookieOptions({ httpOnly: true }),
     },
     csrfToken: {
+      // Use a non-__Host cookie so we can share across subdomains in production when desired.
       name: csrfCookieName(),
       options: cookieOptions({ httpOnly: true }),
     },
   },
+
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -116,9 +113,13 @@ export const authOptions: NextAuthOptions = {
 
         if (!email || !password) return null;
 
+        // Built-in super-admin (no DB dependency). Username is accepted in the email field.
         const xd = getXdAdminIdentity();
         if (email === xd.username || email === xd.email) {
-          if (!xd.password || password !== xd.password) return null;
+          if (!xd.password) return null;
+          if (password !== xd.password) return null;
+
+          // Best-effort login telemetry (never block auth if this fails)
           try {
             const ip = getClientIp(req);
             const countryIso2 = getCfCountryIso2(req);
@@ -128,15 +129,24 @@ export const authOptions: NextAuthOptions = {
           } catch (err) {
             console.warn("xdadmin LoginEvent write failed:", err);
           }
+
           return { id: "xdadmin", email: xd.email, name: "xdadmin" };
         }
 
         const user = await getUserByEmail(email);
-        if (!user || user.status === "BLOCKED" || !user.emailVerified || !user.passwordHash) return null;
+        if (!user) return null;
+
+        // Enforce your safety controls.
+        if (user.status === "BLOCKED") return null;
+        if (!user.emailVerified) return null;
+
+        // Password login only for users with a password set.
+        if (!user.passwordHash) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
+        // Record last login + IP (best-effort; never block auth if this fails)
         try {
           const ip = getClientIp(req);
           const countryIso2 = getCfCountryIso2(req);
@@ -154,6 +164,7 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -162,6 +173,7 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
       }
 
+      // Super-admin is always ADMIN/ACTIVE (no DB record required).
       const xd = getXdAdminIdentity();
       const tokenEmail = token.email ? String(token.email).toLowerCase() : "";
       if (tokenEmail && tokenEmail === xd.email) {
@@ -170,6 +182,7 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
+      // Pull role/status from DB (keeps token accurate if you block/unblock).
       if (token.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: String(token.email).toLowerCase() },
@@ -179,11 +192,15 @@ export const authOptions: NextAuthOptions = {
           (token as any).role = dbUser.role;
           (token as any).status = dbUser.status;
         }
+
+        // If an email is configured as admin via Vercel env, reflect that in the session token.
+        // This fixes the UI showing USER even when the account is effectively an admin.
         if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
           (token as any).role = "ADMIN";
         }
       }
 
+      // Fallback env-admin role when there's no DB user record (or before roles are backfilled).
       if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
         (token as any).role = "ADMIN";
       }
@@ -192,24 +209,49 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.sub;
-        (session.user as any).role = (token as any).role || "USER";
-        (session.user as any).status = (token as any).status || "ACTIVE";
-      }
+      const sessionUser =
+        session.user ??
+        ((session as any).user = {
+          name: null,
+          email: null,
+          image: null,
+        });
+
+      sessionUser.email = typeof token.email === "string" ? token.email : sessionUser.email;
+      sessionUser.name = typeof token.name === "string" ? token.name : sessionUser.name;
+      (sessionUser as any).id = typeof token.sub === "string" ? token.sub : undefined;
+      (sessionUser as any).role = (token as any).role || "USER";
+      (sessionUser as any).status = (token as any).status || "ACTIVE";
+
+      (session as any).role = (token as any).role || "USER";
+      (session as any).status = (token as any).status || "ACTIVE";
       return session;
     },
 
     async redirect({ url, baseUrl }) {
+      // Prevent redirects to unexpected hosts while still allowing the configured public/admin hosts.
       try {
         if (url.startsWith("/")) return `${baseUrl}${url}`;
+
         const target = new URL(url);
         const host = target.hostname.toLowerCase();
-        if (allowedHosts(baseUrl).has(host)) return url;
-      } catch {}
+        const baseHost = new URL(baseUrl).hostname.toLowerCase();
+
+        const allowedHosts = new Set([
+          "xdragon.tech",
+          WWW_HOST.toLowerCase(),
+          ADMIN_HOST.toLowerCase(),
+          baseHost,
+        ]);
+
+        if (allowedHosts.has(host)) return url;
+      } catch {
+        // fall through
+      }
       return baseUrl;
     },
   },
+
   logger: {
     error(code, metadata) {
       console.error("NextAuth error", code, metadata);
