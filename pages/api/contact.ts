@@ -156,7 +156,7 @@ async function enforceRateLimit(
 
 
 type Data =
-  | { ok: true; id?: string }
+  | { ok: true; id?: string; notification?: "sent" | "deferred" }
   | { ok: false; error: string; details?: unknown };
 
 function getEnv() {
@@ -178,6 +178,32 @@ function getEnv() {
   return { RESEND_API_KEY, FROM, TO };
 }
 
+function getNotificationConfig() {
+  const { RESEND_API_KEY, FROM, TO } = getEnv();
+
+  if (!RESEND_API_KEY) {
+    return { error: "Missing RESEND_API_KEY", RESEND_API_KEY, FROM, TO };
+  }
+  if (!FROM) {
+    return {
+      error: "Missing sender env var (set RESEND_FROM or RESEND_FROM_EMAIL)",
+      RESEND_API_KEY,
+      FROM,
+      TO,
+    };
+  }
+  if (!TO) {
+    return {
+      error: "Missing recipient env var (set RESEND_TO_EMAIL)",
+      RESEND_API_KEY,
+      FROM,
+      TO,
+    };
+  }
+
+  return { error: null, RESEND_API_KEY, FROM, TO };
+}
+
 function isEmail(s: unknown): s is string {
   return typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
@@ -196,22 +222,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const _rlOk = await enforceRateLimit(req, res, { name: "contact", perMinute: 5, perHour: 40 });
   if (!_rlOk) return;
 
-  const { RESEND_API_KEY, FROM, TO } = getEnv();
-
-  if (!RESEND_API_KEY) {
-    return res.status(500).json({ ok: false, error: "Missing RESEND_API_KEY" });
-  }
-  if (!FROM) {
-    return res.status(500).json({ ok: false, error: "Missing sender env var (set RESEND_FROM or RESEND_FROM_EMAIL)" });
-  }
-  if (!TO) {
-    return res.status(500).json({ ok: false, error: "Missing recipient env var (set RESEND_TO_EMAIL)" });
-  }
-
   const name = cleanStr(req.body?.name, 200);
   const email = cleanStr(req.body?.email, 320);
   const phone = cleanStr(req.body?.phone, 80);
   const message = cleanStr(req.body?.message, 4000);
+  let capturedLeadId: string | undefined;
 
   if (!name) return res.status(400).json({ ok: false, error: "Name is required" });
   if (!isEmail(email)) return res.status(400).json({ ok: false, error: "Valid email is required" });
@@ -294,6 +309,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           },
         });
       }
+
+      capturedLeadId = leadId || undefined;
     } catch (e) {
       // Do not block contact email delivery on DB issues.
       console.error("Contact lead DB write failed", e);
@@ -309,6 +326,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       userAgent,
       ts: new Date().toISOString(),
     }).catch(() => {});
+
+    const { error: notificationError, RESEND_API_KEY, FROM, TO } = getNotificationConfig();
+    if (notificationError) {
+      console.error("Contact notification config missing", notificationError);
+
+      if (capturedLeadId) {
+        return res.status(202).json({ ok: true, id: capturedLeadId, notification: "deferred" });
+      }
+
+      return res.status(500).json({ ok: false, error: notificationError });
+    }
 
     const resend = new Resend(RESEND_API_KEY);
 
@@ -339,9 +367,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       (result as any)?.id ||
       undefined;
 
-    return res.status(200).json({ ok: true, id });
+    return res.status(200).json({ ok: true, id, notification: "sent" });
   } catch (e) {
     console.error("Contact email send failed", e);
-    return res.status(500).json({ ok: false, error: "Failed to send message", details: e });
+    if (capturedLeadId) {
+      return res.status(202).json({ ok: true, id: capturedLeadId, notification: "deferred" });
+    }
+
+    return res.status(500).json({ ok: false, error: "Failed to send message" });
   }
 }

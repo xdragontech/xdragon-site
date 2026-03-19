@@ -1,6 +1,9 @@
 import type { AppProps } from "next/app";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/router";
 import "../styles/globals.css";
+import BrandHead from "../components/BrandHead";
+import { shouldRenderPublicChat } from "../lib/siteConfig";
 import { ToastProvider } from "../components/ui/toast";
 
 /**
@@ -12,10 +15,14 @@ import { ToastProvider } from "../components/ui/toast";
 const ChatWidget = dynamic(() => import("../components/ChatWidget"), { ssr: false });
 
 export default function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
+  const renderChatWidget = shouldRenderPublicChat(router.pathname);
+
   return (
     <ToastProvider>
+      <BrandHead />
       <Component {...pageProps} />
-      <ChatWidget />
+      {renderChatWidget ? <ChatWidget /> : null}
     </ToastProvider>
   );
 }

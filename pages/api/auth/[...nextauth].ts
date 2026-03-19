@@ -11,9 +11,8 @@ import {
   getUserAgent,
   iso2ToCountryName,
 } from "../../../lib/requestIdentity";
+import { authCookieDomain, canonicalAdminHost, canonicalPublicHost, getAllowedHosts } from "../../../lib/siteConfig";
 
-const WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
-const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
 const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
 
 function cookieName(kind: "session-token" | "callback-url"): string {
@@ -25,12 +24,7 @@ function csrfCookieName(): string {
 }
 
 function cookieDomain(): string | undefined {
-  // Only share cookies across subdomains in true production.
-  // Preview/staging should use host-only cookies to avoid collisions with production.
-  if (process.env.VERCEL_ENV !== "production") return undefined;
-
-  // Allow override if you ever change domains.
-  return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
+  return authCookieDomain();
 }
 
 function cookieOptions({ httpOnly = true }: { httpOnly?: boolean } = {}) {
@@ -237,12 +231,7 @@ export const authOptions: NextAuthOptions = {
         const host = target.hostname.toLowerCase();
         const baseHost = new URL(baseUrl).hostname.toLowerCase();
 
-        const allowedHosts = new Set([
-          "xdragon.tech",
-          WWW_HOST.toLowerCase(),
-          ADMIN_HOST.toLowerCase(),
-          baseHost,
-        ]);
+        const allowedHosts = getAllowedHosts([baseHost, canonicalPublicHost(), canonicalAdminHost()]);
 
         if (allowedHosts.has(host)) return url;
       } catch {

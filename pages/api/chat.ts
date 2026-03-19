@@ -176,7 +176,20 @@ type ChatOutput = {
   wants_follow_up: boolean;
 };
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openaiClient: OpenAI | null | undefined;
+
+function getOpenAIClient(): OpenAI | null {
+  if (openaiClient !== undefined) return openaiClient;
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    openaiClient = null;
+    return openaiClient;
+  }
+
+  openaiClient = new OpenAI({ apiKey });
+  return openaiClient;
+}
 
 type PrismaMod = { prisma?: any; default?: any };
 async function getPrisma() {
@@ -383,6 +396,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!_rlOk) return;
 
   try {
+    const openai = getOpenAIClient();
+    if (!openai) {
+      return res.status(500).json({ ok: false, error: "Missing OPENAI_API_KEY" });
+    }
+
     const { conversationId, messages, lead, emailed: emailedIn } = (req.body || {}) as {
       conversationId?: string;
       messages?: ChatMessage[];
