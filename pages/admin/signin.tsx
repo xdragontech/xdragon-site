@@ -1,16 +1,14 @@
-const PROD_WWW_HOST = "www.xdragon.tech";
-const PROD_ADMIN_HOST = "admin.xdragon.tech";
-const STAGING_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "staging.xdragon.tech";
-const STAGING_ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "stg-admin.xdragon.tech";
+import type { GetServerSideProps } from "next";
+import Head from "next/head";
+import { getServerSession } from "next-auth/next";
+import { signIn } from "next-auth/react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import { canonicalAdminHost, getAllowedHosts } from "../../lib/siteConfig";
+import { authOptions } from "../api/auth/[...nextauth]";
 
 function allowedHosts(): Set<string> {
-  return new Set([
-    "xdragon.tech",
-    PROD_WWW_HOST,
-    PROD_ADMIN_HOST,
-    STAGING_WWW_HOST,
-    STAGING_ADMIN_HOST,
-  ].map((h) => h.toLowerCase()));
+  return getAllowedHosts();
 }
 
 function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
@@ -29,15 +27,6 @@ function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin:
   return fallback;
 }
 
-// pages/admin/signin.tsx
-import type { GetServerSideProps } from "next";
-import Head from "next/head";
-import { getServerSession } from "next-auth/next";
-import { signIn } from "next-auth/react";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/router";
-import { authOptions } from "../api/auth/[...nextauth]";
-
 function prettyAuthError(err?: string | null): string | null {
   if (!err) return null;
   const map: Record<string, string> = {
@@ -51,6 +40,10 @@ function prettyAuthError(err?: string | null): string | null {
 
 export default function AdminCommandSignIn() {
   const router = useRouter();
+  const recommendedAdminHost = useMemo(() => {
+    if (typeof window === "undefined") return canonicalAdminHost();
+    return canonicalAdminHost(window.location.hostname);
+  }, []);
 
   const callbackUrl = useMemo(() => {
     if (typeof window === "undefined") return "/admin/dashboard";
@@ -181,7 +174,7 @@ export default function AdminCommandSignIn() {
 
             <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
               Tip: if you get signed-in but bounced back here, double-check that you always use the same canonical domain
-              (recommended: <span className="font-medium">{"https://" + STAGING_ADMIN_HOST}</span>) and that
+              (recommended: <span className="font-medium">{"https://" + recommendedAdminHost}</span>) and that
               <span className="font-medium"> NEXTAUTH_URL</span> matches it in Vercel.
             </div>
           </div>
