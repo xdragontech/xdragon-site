@@ -27,6 +27,15 @@ export default function middleware(req: NextRequest) {
   if (url.pathname.startsWith("/api")) return NextResponse.next();
 
   const isAdminPath = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
+  const isRootPath = url.pathname === "/" || url.pathname === "";
+
+  // Visiting the admin host root should land on the admin sign-in page.
+  // The page itself will forward authenticated users to /admin/dashboard.
+  if (host === ADMIN_HOST && isRootPath) {
+    url.pathname = "/admin/signin";
+    url.protocol = "https:";
+    return NextResponse.redirect(url, 308);
+  }
 
   // Admin console should only live on the configured admin host
   if (isAdminPath && host !== ADMIN_HOST) {
