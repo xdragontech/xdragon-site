@@ -1,7 +1,7 @@
 // middleware.ts
 // Subdomain routing guard for a single Vercel project serving BOTH:
-// - Main site: https://www.xdragon.tech
-// - Admin console: https://admin.xdragon.tech
+// - Main site: https://www.xdragon.tech (or staging.xdragon.tech in Preview)
+// - Admin console: https://admin.xdragon.tech (or stg-admin.xdragon.tech in Preview)
 //
 // Goals:
 // - Never redirect /api/* (especially /api/auth/*), to avoid auth loops.
@@ -10,8 +10,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const WWW_HOST = "www.xdragon.tech";
-const ADMIN_HOST = "admin.xdragon.tech";
+const WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
+const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
 
 function getHost(req: NextRequest): string {
   const xfHost = req.headers.get("x-forwarded-host") || "";
@@ -27,8 +27,17 @@ export default function middleware(req: NextRequest) {
   if (url.pathname.startsWith("/api")) return NextResponse.next();
 
   const isAdminPath = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
+  const isRootPath = url.pathname === "/" || url.pathname === "";
 
-  // Admin console should only live on admin.xdragon.tech
+  // Visiting the admin host root should land on the admin sign-in page.
+  // The page itself will forward authenticated users to /admin/dashboard.
+  if (host === ADMIN_HOST && isRootPath) {
+    url.pathname = "/admin/signin";
+    url.protocol = "https:";
+    return NextResponse.redirect(url, 308);
+  }
+
+  // Admin console should only live on the configured admin host
   if (isAdminPath && host !== ADMIN_HOST) {
     url.hostname = ADMIN_HOST;
     url.protocol = "https:";

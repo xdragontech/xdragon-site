@@ -12,10 +12,23 @@ import {
   iso2ToCountryName,
 } from "../../../lib/requestIdentity";
 
+
+const WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
+const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
+const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
+
+function cookieName(kind: "session-token" | "callback-url"): string {
+  return IS_PREVIEW ? `__Secure-stg-next-auth.${kind}` : `__Secure-next-auth.${kind}`;
+}
+
+function csrfCookieName(): string {
+  return IS_PREVIEW ? "stg-next-auth.csrf-token" : "next-auth.csrf-token";
+}
+
 function cookieDomain(): string | undefined {
-  // Share the session cookie between www.xdragon.tech and admin.xdragon.tech in production.
-  // In local dev, DO NOT set a Domain attribute (browsers will reject it).
-  if (process.env.NODE_ENV !== "production") return undefined;
+  // Only share cookies across subdomains in true production.
+  // Preview/staging should use host-only cookies to avoid collisions with production.
+  if (process.env.VERCEL_ENV !== "production") return undefined;
 
   // Allow override if you ever change domains.
   return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
@@ -64,7 +77,7 @@ export const authOptions: NextAuthOptions = {
 
   cookies: {
     sessionToken: {
-      name: "__Secure-next-auth.session-token",
+      name: cookieName("session-token"),
       options: {
         httpOnly: true,
         sameSite: "lax",
@@ -74,7 +87,7 @@ export const authOptions: NextAuthOptions = {
       },
     },
     callbackUrl: {
-      name: "__Secure-next-auth.callback-url",
+      name: cookieName("callback-url"),
       options: {
         httpOnly: true,
         sameSite: "lax",
@@ -85,7 +98,7 @@ export const authOptions: NextAuthOptions = {
     },
     csrfToken: {
       // Use a non-__Host cookie so we can share across subdomains when desired.
-      name: "next-auth.csrf-token",
+      name: csrfCookieName(),
       options: {
         httpOnly: true,
         sameSite: "lax",
@@ -225,13 +238,9 @@ export const authOptions: NextAuthOptions = {
         const target = new URL(url);
         const host = target.hostname.toLowerCase();
 
-        const allowed =
-          host === "xdragon.tech" ||
-          host === "www.xdragon.tech" ||
-          host === "admin.xdragon.tech" ||
-          host.endsWith(".xdragon.tech");
+        const allowedHosts = new Set(["xdragon.tech", WWW_HOST.toLowerCase(), ADMIN_HOST.toLowerCase()]);
 
-        if (allowed) return url;
+        if (allowedHosts.has(host)) return url;
       } catch {
         // fall through
       }

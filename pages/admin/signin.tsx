@@ -1,18 +1,21 @@
+const PUBLIC_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
+const PUBLIC_ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
+
 function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const fallback = "/admin/dashboard";
   if (!v) return fallback;
 
-  // Only allow same-site relative paths, or absolute URLs that point to xdragon.* domains.
+  // Only allow same-site relative paths, or absolute URLs that point to the configured X Dragon hosts.
   try {
-    // Relative path
     if (v.startsWith("/")) return v;
 
     const u = new URL(v);
     const host = u.hostname.toLowerCase();
+    const allowedHosts = new Set(["xdragon.tech", PUBLIC_WWW_HOST.toLowerCase(), PUBLIC_ADMIN_HOST.toLowerCase()]);
 
-    // If user arrived with a callbackUrl to www/xdragon root, rewrite to the current origin (admin.*).
-    if (host === "www.xdragon.tech" || host === "xdragon.tech" || host === "admin.xdragon.tech") {
+    // If user arrived with a callbackUrl to the public site or admin host, rewrite to the current origin.
+    if (allowedHosts.has(host)) {
       return `${currentOrigin}${u.pathname}${u.search}${u.hash}`;
     }
   } catch {
@@ -46,11 +49,11 @@ function prettyAuthError(err?: string | null): string | null {
 
 export default function AdminCommandSignIn() {
   const router = useRouter();
-  
-const callbackUrl = useMemo(() => {
+
+  const callbackUrl = useMemo(() => {
   if (typeof window === "undefined") return "/admin/dashboard";
   return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin);
-}, [router.query.callbackUrl]);
+    }, [router.query.callbackUrl]);
 
   const initialErr = useMemo(() => {
     const q = router.query.error;
@@ -180,7 +183,7 @@ const callbackUrl = useMemo(() => {
 
             <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
               Tip: if you get signed-in but bounced back here, double-check that you always use the same canonical domain
-              (recommended: <span className="font-medium">https://admin.xdragon.tech</span>) and that
+              (recommended: <span className="font-medium">{"https://" + PUBLIC_ADMIN_HOST}</span>) and that
               <span className="font-medium"> NEXTAUTH_URL</span> matches it in Vercel.
             </div>
           </div>

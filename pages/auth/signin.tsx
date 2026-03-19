@@ -4,6 +4,8 @@ import { useRouter } from "next/router";
 
 type ProviderKey = "credentials";
 
+const PUBLIC_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
+
 function prettyAuthError(code?: string | string[] | null) {
   const c = Array.isArray(code) ? code[0] : code;
   if (!c) return null;
@@ -85,7 +87,7 @@ export default function SignInPage() {
       if (!sess?.user?.email) {
         setError(
           "Signed in, but your session was not established. This is usually a domain/cookie mismatch. " +
-            "Make sure you always use ONE domain (recommend: https://www.xdragon.tech) and set NEXTAUTH_URL to it in Vercel."
+            `Make sure you always use ONE domain (recommend: https://${PUBLIC_WWW_HOST}) and set NEXTAUTH_URL to it in Vercel.`
         );
         return;
       }
