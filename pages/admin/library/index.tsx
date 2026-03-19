@@ -29,7 +29,7 @@ export const getServerSideProps: GetServerSideProps<LibraryIndexProps> = async (
 
   return {
     props: {
-      loggedInAs: session.user.email ?? null,
+      loggedInAs: session?.user?.email ?? null,
     },
   };
 };
