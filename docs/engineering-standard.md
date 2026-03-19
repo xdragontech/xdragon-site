@@ -64,3 +64,9 @@ Stop and clarify before merging if a change:
 - changes auth/cookie/domain behavior across environments
 - adds multi-brand implications without a tenancy plan
 - hides a broken env contract behind silent failures
+
+## Reference docs
+- [`docs/refactor-roadmap.md`](/Users/grantr/Projects/xdragon-site/docs/refactor-roadmap.md)
+- [`docs/staging-qa-checklist.md`](/Users/grantr/Projects/xdragon-site/docs/staging-qa-checklist.md)
+- [`docs/production-rollout-checklist.md`](/Users/grantr/Projects/xdragon-site/docs/production-rollout-checklist.md)
+- [`docs/minimum-safe-follow-up-plan.md`](/Users/grantr/Projects/xdragon-site/docs/minimum-safe-follow-up-plan.md)

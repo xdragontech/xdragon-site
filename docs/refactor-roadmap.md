@@ -9,6 +9,12 @@ This is the working plan for splitting the current single Next.js app into:
 
 This roadmap is intentionally incremental. We do not change layout/design unless explicitly approved.
 
+## Companion docs
+- [`docs/engineering-standard.md`](/Users/grantr/Projects/xdragon-site/docs/engineering-standard.md)
+- [`docs/staging-qa-checklist.md`](/Users/grantr/Projects/xdragon-site/docs/staging-qa-checklist.md)
+- [`docs/production-rollout-checklist.md`](/Users/grantr/Projects/xdragon-site/docs/production-rollout-checklist.md)
+- [`docs/minimum-safe-follow-up-plan.md`](/Users/grantr/Projects/xdragon-site/docs/minimum-safe-follow-up-plan.md)
+
 ## Current reality
 - The repo is one Pages Router app serving both marketing and admin/resource flows.
 - Public brand content, host rules, auth rules, and admin behavior are still coupled.
