@@ -12,7 +12,6 @@ import {
   iso2ToCountryName,
 } from "../../../lib/requestIdentity";
 
-
 const WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
 const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
 const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
@@ -34,13 +33,22 @@ function cookieDomain(): string | undefined {
   return process.env.AUTH_COOKIE_DOMAIN || ".xdragon.tech";
 }
 
+function cookieOptions({ httpOnly = true }: { httpOnly?: boolean } = {}) {
+  return {
+    httpOnly,
+    sameSite: "lax" as const,
+    path: "/",
+    secure: true,
+    ...(cookieDomain() ? { domain: cookieDomain() } : {}),
+  };
+}
+
 // NOTE: Request identity helpers are shared via lib/requestIdentity to keep
 // client IP and country consistent across all API routes.
 
 async function getUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 }
-
 
 function getXdAdminIdentity() {
   const username = (process.env.XDADMIN_USERNAME || "xdadmin").trim().toLowerCase();
@@ -78,34 +86,16 @@ export const authOptions: NextAuthOptions = {
   cookies: {
     sessionToken: {
       name: cookieName("session-token"),
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-        domain: cookieDomain(),
-      },
+      options: cookieOptions({ httpOnly: true }),
     },
     callbackUrl: {
       name: cookieName("callback-url"),
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-        domain: cookieDomain(),
-      },
+      options: cookieOptions({ httpOnly: true }),
     },
     csrfToken: {
-      // Use a non-__Host cookie so we can share across subdomains when desired.
+      // Use a non-__Host cookie so we can share across subdomains in production when desired.
       name: csrfCookieName(),
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-        domain: cookieDomain(),
-      },
+      options: cookieOptions({ httpOnly: true }),
     },
   },
 
@@ -230,15 +220,20 @@ export const authOptions: NextAuthOptions = {
     },
 
     async redirect({ url, baseUrl }) {
-      // Prevent redirects to unexpected hosts (e.g. *.vercel.app) while still
-      // allowing www/admin subdomains + the apex domain.
+      // Prevent redirects to unexpected hosts while still allowing the configured public/admin hosts.
       try {
         if (url.startsWith("/")) return `${baseUrl}${url}`;
 
         const target = new URL(url);
         const host = target.hostname.toLowerCase();
+        const baseHost = new URL(baseUrl).hostname.toLowerCase();
 
-        const allowedHosts = new Set(["xdragon.tech", WWW_HOST.toLowerCase(), ADMIN_HOST.toLowerCase()]);
+        const allowedHosts = new Set([
+          "xdragon.tech",
+          WWW_HOST.toLowerCase(),
+          ADMIN_HOST.toLowerCase(),
+          baseHost,
+        ]);
 
         if (allowedHosts.has(host)) return url;
       } catch {

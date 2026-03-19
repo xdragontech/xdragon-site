@@ -37,21 +37,21 @@ export default function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // Admin console should only live on the configured admin host
+  // Admin console should only live on the configured admin host.
   if (isAdminPath && host !== ADMIN_HOST) {
     url.hostname = ADMIN_HOST;
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
 
-  // Main site should NOT serve admin routes
+  // Main site should NOT serve admin routes.
   if (!isAdminPath && host === ADMIN_HOST) {
     url.hostname = WWW_HOST;
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
 
-  // Optional: normalize apex -> www if you have xdragon.tech attached
+  // Optional: normalize apex -> www if you have xdragon.tech attached.
   if (host === "xdragon.tech") {
     url.hostname = WWW_HOST;
     url.protocol = "https:";
@@ -65,7 +65,10 @@ export const config = {
   // Only run where we need it.
   matcher: [
     "/admin/:path*",
-    "/tools",
+    "/tools/:path*",
+    "/prompts/:path*",
+    "/guides/:path*",
+    "/resources/:path*",
     "/auth/:path*",
     "/",
   ],
