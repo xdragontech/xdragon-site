@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/router";
+import { canonicalPublicHost } from "../../lib/siteConfig";
 
 type ProviderKey = "credentials";
-
-const PUBLIC_WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
 
 function prettyAuthError(code?: string | string[] | null) {
   const c = Array.isArray(code) ? code[0] : code;
@@ -85,9 +84,10 @@ export default function SignInPage() {
       // or NEXTAUTH_URL is not set correctly.
       const sess = await getSession();
       if (!sess?.user?.email) {
+        const recommendedHost = canonicalPublicHost(window.location.hostname);
         setError(
           "Signed in, but your session was not established. This is usually a domain/cookie mismatch. " +
-            `Make sure you always use ONE domain (recommend: https://${PUBLIC_WWW_HOST}) and set NEXTAUTH_URL to it in Vercel.`
+            `Make sure you always use ONE domain (recommend: https://${recommendedHost}) and set NEXTAUTH_URL to it in Vercel.`
         );
         return;
       }

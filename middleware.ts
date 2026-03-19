@@ -1,17 +1,10 @@
 // middleware.ts
-// Subdomain routing guard for a single Vercel project serving BOTH:
-// - Main site: https://www.xdragon.tech (or staging.xdragon.tech in Preview)
-// - Admin console: https://admin.xdragon.tech (or stg-admin.xdragon.tech in Preview)
-//
-// Goals:
-// - Never redirect /api/* (especially /api/auth/*), to avoid auth loops.
-// - Only redirect when you're on the *wrong* host for a given path.
+// Deterministic subdomain routing for both production and staging custom hosts.
+// Do not rely solely on build-time env values for host pairing.
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-const WWW_HOST = process.env.NEXT_PUBLIC_WWW_HOST || "www.xdragon.tech";
-const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST || "admin.xdragon.tech";
+import { adminHostFor, getAllowedHosts, getBrandSiteConfig, isAdminHost, publicHostFor } from "./lib/siteConfig";
 
 function getHost(req: NextRequest): string {
   const xfHost = req.headers.get("x-forwarded-host") || "";
@@ -22,38 +15,46 @@ function getHost(req: NextRequest): string {
 export default function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const host = getHost(req);
+  const cfg = getBrandSiteConfig();
 
-  // Safety: never touch API routes (prevents NextAuth redirect loops)
-  if (url.pathname.startsWith("/api")) return NextResponse.next();
+  // Never touch API routes. Also leave raw vercel preview domains alone.
+  if (url.pathname.startsWith("/api") || host.endsWith(".vercel.app")) {
+    return NextResponse.next();
+  }
+
+  // Unknown hosts should not be force-routed into the X Dragon pair.
+  if (!getAllowedHosts().has(host)) {
+    return NextResponse.next();
+  }
 
   const isAdminPath = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
   const isRootPath = url.pathname === "/" || url.pathname === "";
+  const onAdminHost = isAdminHost(host);
 
-  // Visiting the admin host root should land on the admin sign-in page.
-  // The page itself will forward authenticated users to /admin/dashboard.
-  if (host === ADMIN_HOST && isRootPath) {
+  // Admin host root should always land on the admin sign-in route on the SAME host.
+  if (onAdminHost && isRootPath) {
     url.pathname = "/admin/signin";
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
 
-  // Admin console should only live on the configured admin host
-  if (isAdminPath && host !== ADMIN_HOST) {
-    url.hostname = ADMIN_HOST;
+  // Admin routes must stay on the matching admin host for the current environment.
+  if (isAdminPath && !onAdminHost) {
+    url.hostname = adminHostFor(host);
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
 
-  // Main site should NOT serve admin routes
-  if (!isAdminPath && host === ADMIN_HOST) {
-    url.hostname = WWW_HOST;
+  // Non-admin routes should never stay on an admin host.
+  if (!isAdminPath && onAdminHost) {
+    url.hostname = publicHostFor(host);
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
 
-  // Optional: normalize apex -> www if you have xdragon.tech attached
-  if (host === "xdragon.tech") {
-    url.hostname = WWW_HOST;
+  // Normalize apex to production www.
+  if (host === cfg.apexHost) {
+    url.hostname = cfg.production.publicHost;
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
@@ -62,10 +63,12 @@ export default function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Only run where we need it.
   matcher: [
     "/admin/:path*",
-    "/tools",
+    "/tools/:path*",
+    "/prompts/:path*",
+    "/guides/:path*",
+    "/resources/:path*",
     "/auth/:path*",
     "/",
   ],
