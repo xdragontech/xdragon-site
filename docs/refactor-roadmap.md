@@ -12,6 +12,7 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 ## Companion docs
 - [`docs/engineering-standard.md`](./engineering-standard.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
 - [`docs/staging-qa-checklist.md`](./staging-qa-checklist.md)
 
 ## Current reality
@@ -85,6 +86,7 @@ Exit criteria:
 Tasks:
 - add `Brand` and related scoping to content/leads/auth-facing data
 - split backoffice and external identity models according to the contract doc
+- follow the additive migration sequence in the schema split plan before any destructive cleanup
 - define migration plan for current X Dragon data
 - make back office queries brand-aware by default
 

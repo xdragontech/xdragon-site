@@ -74,3 +74,4 @@ Stop and clarify before merging if a change:
 ## Reference docs
 - [`docs/refactor-roadmap.md`](./refactor-roadmap.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
