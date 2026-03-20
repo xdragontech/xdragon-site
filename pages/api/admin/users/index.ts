@@ -1,9 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
 import {
+  createManagedBackofficeInvite,
+  createManagedBackofficePasswordLink,
   createManagedBackofficeUser,
   listManagedBackofficeUsers,
 } from "../../../../lib/backofficeAdminUsers";
+import { buildOrigin, getApiRequestHost, getApiRequestProtocol } from "../../../../lib/requestHost";
+import { canonicalAdminHost } from "../../../../lib/siteConfig";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
@@ -21,7 +25,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
-      const user = await createManagedBackofficeUser(req.body || {});
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+      const action = String(body.action || "").toLowerCase();
+
+      if (action === "createinvite") {
+        const user = await createManagedBackofficeInvite(body);
+        const origin = buildOrigin(getApiRequestProtocol(req), canonicalAdminHost(getApiRequestHost(req)));
+        const invite = await createManagedBackofficePasswordLink(user.id, "invite", origin);
+        return json(res, 200, { ok: true, user, invite });
+      }
+
+      const user = await createManagedBackofficeUser(body);
       return json(res, 200, { ok: true, user });
     }
 
