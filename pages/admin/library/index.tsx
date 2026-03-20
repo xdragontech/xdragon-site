@@ -2,8 +2,7 @@
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
 import Link from "next/link";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../api/auth/[...nextauth]";
+import { requireBackofficePage } from "../../../lib/backofficeAuth";
 import AdminHeader from "../../../components/admin/AdminHeader";
 import AdminSidebar from "../../../components/admin/AdminSidebar";
 
@@ -12,24 +11,12 @@ type LibraryIndexProps = {
 };
 
 export const getServerSideProps: GetServerSideProps<LibraryIndexProps> = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-  const role = (((session as any)?.role || (session as any)?.user?.role) as string | undefined);
-  const status = (((session as any)?.status || (session as any)?.user?.status) as string | undefined);
-
-  if (!session || role !== "ADMIN" || status === "BLOCKED") {
-    const callbackUrl = encodeURIComponent("/admin/library");
-    return {
-      redirect: {
-        destination: `/admin/signin?callbackUrl=${callbackUrl}`,
-        permanent: false,
-      },
-    };
-  }
+  const auth = await requireBackofficePage(ctx, { callbackUrl: "/admin/library" });
+  if (!auth.ok) return auth.response;
 
   return {
     props: {
-      loggedInAs: session?.user?.email ?? null,
+      loggedInAs: auth.loggedInAs ?? null,
     },
   };
 };

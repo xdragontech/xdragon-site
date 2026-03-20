@@ -1,7 +1,6 @@
 // pages/api/admin/backfill-login-geo.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
+import { requireBackofficeApi } from "../../../lib/backofficeAuth";
 import { prisma } from "../../../lib/prisma";
 
 type Ok = {
@@ -17,10 +16,6 @@ type Ok = {
 };
 
 type Err = { ok: false; error: string };
-
-function getSessionRole(session: any): string | null {
-  return (session?.role as string) || (session?.user?.role as string) || null;
-}
 
 function isPrivateIp(ip: string) {
   return (
@@ -117,10 +112,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   // Treat GET as a safe dry-run convenience (so you can run it in a browser).
   // Writes are only allowed via POST.
   const forceDryRun = req.method === "GET";
-  // Auth: must be signed in AND an ADMIN.
-  const session = await getServerSession(req, res, authOptions as any);
-  const role = getSessionRole(session);
-  if (!session || role !== "ADMIN") return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res, { superadminOnly: true });
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const limitRaw = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
   const dryRunRaw = Array.isArray(req.query.dryRun) ? req.query.dryRun[0] : req.query.dryRun;

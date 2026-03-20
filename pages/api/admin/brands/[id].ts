@@ -9,6 +9,7 @@ function json(res: NextApiResponse, status: number, payload: any) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
   if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
+  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
   const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
   if (!id) return json(res, 400, { ok: false, error: "Missing id" });

@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
+import { requireBackofficeApi, resolveBackofficeReadFilter } from "../../../lib/backofficeAuth";
 import { prisma } from "../../../lib/prisma";
 
 /**
@@ -32,10 +31,6 @@ function parseLimit(raw: any, fallback: number) {
   return Math.max(1, Math.min(1000, Math.floor(n)));
 }
 
-function getSessionRole(session: any): string | null {
-  return (session?.role as string) || (session?.user?.role as string) || null;
-}
-
 function eventKey(ev: any): string {
   const src = String(ev?.source || "").toUpperCase();
   if (src === "CHAT") {
@@ -53,9 +48,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const session = await getServerSession(req, res, authOptions as any);
-  const role = getSessionRole(session);
-  if (!session || role !== "ADMIN") {
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
 
@@ -70,8 +64,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Use a small multiplier and cap hard so this doesn't get expensive.
     const take = Math.min(Math.max(limit * 6, limit), 1500);
 
+    const brandWhere = await resolveBackofficeReadFilter(auth.principal, req.query as any);
+
     const events = await prisma.leadEvent.findMany({
-      where: sourceFilter ? { source: sourceFilter } : undefined,
+      where: sourceFilter ? { ...brandWhere, source: sourceFilter } : brandWhere,
       orderBy: { createdAt: "desc" },
       take,
       include: { lead: true },

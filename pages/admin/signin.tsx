@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { canonicalAdminHost, getAllowedHosts } from "../../lib/siteConfig";
 import { authOptions } from "../api/auth/[...nextauth]";
+import { BACKOFFICE_CREDENTIALS_PROVIDER_ID, getBackofficeRole, isBackofficeSession } from "../../lib/authScopes";
 
 function allowedHosts(): Set<string> {
   return getAllowedHosts();
@@ -13,7 +14,7 @@ function allowedHosts(): Set<string> {
 
 function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  const fallback = "/admin/dashboard";
+  const fallback = "/admin/library";
   if (!v) return fallback;
 
   try {
@@ -73,7 +74,7 @@ export default function AdminCommandSignIn() {
 
     setBusy(true);
     try {
-      const res = await signIn("credentials", {
+      const res = await signIn(BACKOFFICE_CREDENTIALS_PROVIDER_ID, {
         redirect: false,
         email: e2,
         password: p2,
@@ -140,7 +141,7 @@ export default function AdminCommandSignIn() {
 
             <form onSubmit={onSubmit} className="mt-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700">Email</label>
+                <label className="block text-sm font-medium text-neutral-700">Username or email</label>
                 <input
                   className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900"
                   type="text"
@@ -186,10 +187,11 @@ export default function AdminCommandSignIn() {
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
-  if (session?.user) {
+  if (isBackofficeSession(session)) {
+    const destination = getBackofficeRole(session) === "SUPERADMIN" ? "/admin/dashboard" : "/admin/library";
     return {
       redirect: {
-        destination: "/admin/dashboard",
+        destination,
         permanent: false,
       },
     };

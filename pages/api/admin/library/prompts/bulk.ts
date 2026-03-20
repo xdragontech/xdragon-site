@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
-import { authOptions } from "../../../auth/[...nextauth]";
-import { resolveWriteBrandId } from "../../../../../lib/brandRegistry";
+import {
+  requireBackofficeApi,
+  resolveBackofficeReadFilter,
+  resolveBackofficeWriteBrandId,
+} from "../../../../../lib/backofficeAuth";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
@@ -11,8 +13,8 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 type PromptStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user?.email) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
@@ -24,8 +26,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ ok: false, error: "No ids" });
       if (!status) return res.status(400).json({ ok: false, error: "No status" });
 
+      const brandWhere = await resolveBackofficeReadFilter(auth.principal, req.body ?? {});
+      const allowed = await prisma.prompt.findMany({
+        where: {
+          ...brandWhere,
+          id: { in: ids },
+        },
+        select: { id: true },
+      });
+      const allowedIds = allowed.map((row) => row.id);
+
       await prisma.prompt.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: allowedIds } },
         data: { status },
       });
 
@@ -36,8 +48,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { items } = (req.body ?? {}) as { items: Array<{ id: string; sortOrder: number }> };
       if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ ok: false, error: "No items" });
 
+      const ids = items.map((item) => String(item.id));
+      const brandWhere = await resolveBackofficeReadFilter(auth.principal, req.body ?? {});
+      const allowed = await prisma.prompt.findMany({
+        where: {
+          ...brandWhere,
+          id: { in: ids },
+        },
+        select: { id: true },
+      });
+      const allowedIds = new Set(allowed.map((row) => row.id));
+      const allowedItems = items.filter((item) => allowedIds.has(String(item.id)));
+
       await prisma.$transaction(
-        items.map((it) =>
+        allowedItems.map((it) =>
           prisma.prompt.update({
             where: { id: String(it.id) },
             data: { sortOrder: Number.isFinite(Number(it.sortOrder)) ? Number(it.sortOrder) : 0 },
@@ -53,13 +77,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ ok: false, error: "No rows" });
 
       const status = (defaultStatus || "DRAFT") as PromptStatus;
-      const fallbackBrandId = await resolveWriteBrandId(req.body ?? {}, { allowSingleBrandFallback: true });
+      const fallbackBrandId = await resolveBackofficeWriteBrandId(auth.principal, req.body ?? {}, { allowSingleBrandFallback: true });
 
       const created = await prisma.$transaction(
         rows.map((r) =>
           prisma.prompt.create({
             data: {
-              brandId: typeof r.brandId === "string" && r.brandId.trim() ? r.brandId.trim() : fallbackBrandId,
+              brandId: fallbackBrandId,
               title: String(r.title || r.name || "").trim(),
               description: r.description ? String(r.description) : null,
               content: String(r.content || r.prompt || "").trim(),

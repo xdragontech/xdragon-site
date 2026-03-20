@@ -1,7 +1,6 @@
 // pages/api/admin/metrics.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
+import { requireBackofficeApi } from "../../../lib/backofficeAuth";
 import { prisma } from "../../../lib/prisma";
 
 export type MetricsPeriod = "today" | "7d" | "month";
@@ -24,10 +23,6 @@ type MetricsOk = {
 type MetricsErr = { ok: false; error: string };
 
 type MetricsResponse = MetricsOk | MetricsErr;
-
-function getSessionRole(session: any): string | null {
-  return (session?.role as string) || (session?.user?.role as string) || null;
-}
 
 function isPrivateIp(ip: string) {
   return (
@@ -188,10 +183,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  // Auth: must be signed in AND an ADMIN.
-  const session = await getServerSession(req, res, authOptions as any);
-  const role = getSessionRole(session);
-  if (!session || role !== "ADMIN") return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res, { superadminOnly: true });
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const period = parsePeriod(req.query.period);
   const { start, end } = periodBounds(period);

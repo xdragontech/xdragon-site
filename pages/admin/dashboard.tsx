@@ -1,9 +1,8 @@
 // pages/admin/dashboard.tsx
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
-import { getServerSession } from "next-auth/next";
 import { useEffect, useRef, useState } from "react";
-import { authOptions } from "../api/auth/[...nextauth]";
+import { requireBackofficePage } from "../../lib/backofficeAuth";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSidebar from "../../components/admin/AdminSidebar";
 
@@ -502,24 +501,18 @@ function WorldHeatMapCard({
 }
 
 export const getServerSideProps: GetServerSideProps<DashboardProps> = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-  const role = ((session as any)?.role || (session as any)?.user?.role || null) as string | null;
-  if (!session || role !== "ADMIN") {
-    return {
-      redirect: {
-        destination: "/admin/signin",
-        permanent: false,
-      },
-    };
-  }
+  const auth = await requireBackofficePage(ctx, {
+    callbackUrl: "/admin/dashboard",
+    superadminOnly: true,
+  });
+  if (!auth.ok) return auth.response;
 
   return {
     props: {
       ok: true,
       me: {
-        id: ((session as any)?.user?.id as string) || null,
-        email: ((session as any)?.user?.email as string) || null,
+        id: auth.principal.id,
+        email: auth.principal.email,
       },
     },
   };

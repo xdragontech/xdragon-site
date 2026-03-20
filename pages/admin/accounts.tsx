@@ -2,20 +2,22 @@
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Head from "next/head";
 import Link from "next/link";
-import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { authOptions } from "../api/auth/[...nextauth]";
+import { requireBackofficePage } from "../../lib/backofficeAuth";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSidebar from "../../components/admin/AdminSidebar";
 
 type UserRow = {
   id: string;
+  username?: string | null;
   email: string | null;
   name: string | null;
-  role: "USER" | "ADMIN";
+  role: "SUPERADMIN" | "STAFF";
   status: "ACTIVE" | "BLOCKED";
+  brandAccessCount?: number | null;
+  brandKeys?: string[] | null;
   createdAt?: string | null;
   lastLoginAt?: string | null;
   // Future-proof: allow extra fields without TS churn
@@ -26,20 +28,11 @@ type ApiOk = { ok: true; users: UserRow[] };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-  const role = (((session as any)?.role || (session as any)?.user?.role) as string | undefined);
-  const status = (((session as any)?.status || (session as any)?.user?.status) as string | undefined);
-
-  if (!session || role !== "ADMIN" || status === "BLOCKED") {
-    const callbackUrl = encodeURIComponent("/admin/accounts");
-    return {
-      redirect: {
-        destination: `/admin/signin?callbackUrl=${callbackUrl}`,
-        permanent: false,
-      },
-    };
-  }
+  const auth = await requireBackofficePage(ctx, {
+    callbackUrl: "/admin/accounts",
+    superadminOnly: true,
+  });
+  if (!auth.ok) return auth.response;
 
   return { props: {} };
 };
@@ -61,10 +54,13 @@ function buildExportFields(rows: UserRow[]): ExportField[] {
   // Base fields we always want first
   const base: ExportField[] = [
     { header: "id", get: (u) => u.id },
+    { header: "username", get: (u) => u.username ?? "" },
     { header: "name", get: (u) => u.name ?? "" },
     { header: "email", get: (u) => u.email ?? "" },
     { header: "role", get: (u) => u.role },
     { header: "status", get: (u) => u.status },
+    { header: "brandAccessCount", get: (u) => u.brandAccessCount ?? "" },
+    { header: "brandKeys", get: (u) => (Array.isArray(u.brandKeys) ? u.brandKeys.join(",") : "") },
     { header: "createdAt", get: (u) => u.createdAt ?? "" },
     { header: "lastLoginAt", get: (u) => u.lastLoginAt ?? "" },
   ];
@@ -188,11 +184,13 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
     const s = q.trim().toLowerCase();
     if (!s) return users;
     return users.filter((u) => {
+      const username = (u.username || "").toLowerCase();
       const name = (u.name || "").toLowerCase();
       const email = (u.email || "").toLowerCase();
       const role = (u.role || "").toLowerCase();
       const status = (u.status || "").toLowerCase();
-      return name.includes(s) || email.includes(s) || role.includes(s) || status.includes(s);
+      const brands = Array.isArray(u.brandKeys) ? u.brandKeys.join(" ").toLowerCase() : "";
+      return username.includes(s) || name.includes(s) || email.includes(s) || role.includes(s) || status.includes(s) || brands.includes(s);
     });
   }, [q, users]);
 
@@ -289,8 +287,8 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
             <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h1 className="text-lg font-semibold">Customer Accounts</h1>
-                  <p className="mt-1 text-sm text-neutral-600">Manage user accounts and export customer lists.</p>
+                  <h1 className="text-lg font-semibold">Backoffice Accounts</h1>
+                  <p className="mt-1 text-sm text-neutral-600">Manage staff and superadmin accounts for the shared backoffice.</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -307,7 +305,7 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
                     onClick={() => {
                       const csv = toCsv(filtered);
                       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-                      downloadBlob(blob, `customers-${stamp()}.csv`);
+                      downloadBlob(blob, `backoffice-accounts-${stamp()}.csv`);
                     }}
                     className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
                     disabled={loading || filtered.length === 0}
@@ -329,20 +327,21 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search name, email, role, status…"
+                  placeholder="Search username, email, role, brands, status…"
                   className="w-full rounded-xl bg-white border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
                 />
               </div>
 
-              <div className="mt-3 text-sm text-neutral-500">{loading ? "Loading…" : `${filtered.length} user${filtered.length === 1 ? "" : "s"}`}</div>
+              <div className="mt-3 text-sm text-neutral-500">{loading ? "Loading…" : `${filtered.length} account${filtered.length === 1 ? "" : "s"}`}</div>
 
               <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200">
                 <table className="w-full text-sm">
                   <thead className="bg-neutral-50 text-neutral-600">
                     <tr className="text-left">
-                      <th className="px-4 py-3 font-medium">Name</th>
+                      <th className="px-4 py-3 font-medium">Username</th>
                       <th className="px-4 py-3 font-medium">Email</th>
                       <th className="px-4 py-3 font-medium">Role</th>
+                      <th className="px-4 py-3 font-medium">Brands</th>
                       <th className="px-4 py-3 font-medium">Status</th>
                       <th className="px-4 py-3 font-medium">Created</th>
                       <th className="px-4 py-3 font-medium text-right">Actions</th>
@@ -351,14 +350,14 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
                   <tbody className="divide-y divide-neutral-200">
                     {loading ? (
                       <tr>
-                        <td className="px-4 py-6 text-neutral-500" colSpan={6}>
+                        <td className="px-4 py-6 text-neutral-500" colSpan={7}>
                           Loading…
                         </td>
                       </tr>
                     ) : filtered.length === 0 ? (
                       <tr>
-                        <td className="px-4 py-6 text-neutral-500" colSpan={6}>
-                          No users found.
+                        <td className="px-4 py-6 text-neutral-500" colSpan={7}>
+                          No accounts found.
                         </td>
                       </tr>
                     ) : (
@@ -367,11 +366,18 @@ export default function AdminAccountsPage(_props: InferGetServerSidePropsType<ty
                         return (
                           <tr key={u.id} className="hover:bg-neutral-50">
                             <td className="px-4 py-3">
-                              <div className="font-medium text-neutral-900">{u.name || "—"}</div>
+                              <div className="font-medium text-neutral-900">{u.username || u.name || "—"}</div>
                               <div className="text-xs text-neutral-500">{u.id}</div>
                             </td>
                             <td className="px-4 py-3 text-neutral-700">{u.email || "—"}</td>
                             <td className="px-4 py-3 text-neutral-700">{u.role}</td>
+                            <td className="px-4 py-3 text-neutral-700">
+                              {Array.isArray(u.brandKeys) && u.brandKeys.length > 0
+                                ? u.brandKeys.join(", ")
+                                : (u.brandAccessCount || 0) > 0
+                                  ? `${u.brandAccessCount} assigned`
+                                  : "—"}
+                            </td>
                             <td className="px-4 py-3 text-neutral-700">{u.status}</td>
                             <td className="px-4 py-3 text-neutral-700">{fmtDate(u.createdAt)}</td>
                             <td className="px-4 py-3">

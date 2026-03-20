@@ -1,7 +1,6 @@
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
-import { getServerSession } from "next-auth/next";
+import { requireBackofficePage } from "../../lib/backofficeAuth";
 import { useEffect, useState } from "react";
-import { authOptions } from "../api/auth/[...nextauth]";
 import AdminLayout from "../../components/admin/AdminLayout";
 import LibraryCardHeader from "../../components/admin/LibraryCardHeader";
 import { useToast } from "../../components/ui/toast";
@@ -21,23 +20,15 @@ type AnalyticsPayload = {
 };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-  const role = ((session as any)?.role || (session as any)?.user?.role || null) as string | null;
-  const user = (session as any)?.user;
-
-  if (!session || role !== "ADMIN") {
-    return {
-      redirect: {
-        destination: "/admin/signin",
-        permanent: false,
-      },
-    };
-  }
+  const auth = await requireBackofficePage(ctx, {
+    callbackUrl: "/admin/analytics",
+    superadminOnly: true,
+  });
+  if (!auth.ok) return auth.response;
 
   return {
     props: {
-      loggedInAs: user.email || user.name || null,
+      loggedInAs: auth.loggedInAs,
     },
   };
 };
