@@ -95,6 +95,13 @@ const ENV_GROUPS: Array<{
         description: "Canonical preview/staging admin hostname.",
         kind: "plain",
       },
+    ],
+  },
+  {
+    key: "auth",
+    title: "Auth Runtime Config",
+    description: "Shared authentication settings used by backoffice and public auth flows.",
+    items: [
       {
         key: "AUTH_COOKIE_DOMAIN",
         label: "Auth Cookie Domain",
