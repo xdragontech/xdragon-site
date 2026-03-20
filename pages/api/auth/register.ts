@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
 import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
-import { findOrBridgeExternalUserByEmail } from "../../../lib/externalIdentity";
+import { findExternalUserByEmail } from "../../../lib/externalIdentity";
 
 /**
  * Password signup + email verification
@@ -102,7 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(400).json({ ok: false, error: "Password must be at least 8 characters" });
     }
 
-    const existing = await findOrBridgeExternalUserByEmail(brand, email);
+    const existing = await findExternalUserByEmail(brand, email);
     if (existing) {
       // Avoid leaking whether account exists; respond ok.
       return res.status(200).json({ ok: true });

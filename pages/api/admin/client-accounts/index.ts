@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
 import {
-  createManagedBackofficeUser,
-  listManagedBackofficeUsers,
-} from "../../../../lib/backofficeAdminUsers";
+  createManagedExternalUser,
+  listManagedExternalUsers,
+} from "../../../../lib/externalAdminUsers";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
@@ -16,12 +16,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "GET") {
-      const users = await listManagedBackofficeUsers();
+      const users = await listManagedExternalUsers();
       return json(res, 200, { ok: true, users });
     }
 
     if (req.method === "POST") {
-      const user = await createManagedBackofficeUser(req.body || {});
+      const user = await createManagedExternalUser(req.body || {});
       return json(res, 200, { ok: true, user });
     }
 

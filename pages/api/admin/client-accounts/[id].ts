@@ -1,12 +1,13 @@
-import { BackofficeUserStatus } from "@prisma/client";
+import { ExternalUserStatus } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
 import {
-  deleteManagedBackofficeUser,
-  getManagedBackofficeUser,
-  setManagedBackofficeUserStatus,
-  updateManagedBackofficeUser,
-} from "../../../../lib/backofficeAdminUsers";
+  deleteManagedExternalUser,
+  getManagedExternalUser,
+  markManagedExternalUserVerified,
+  setManagedExternalUserStatus,
+  updateManagedExternalUser,
+} from "../../../../lib/externalAdminUsers";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
@@ -22,13 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "GET") {
-      const user = await getManagedBackofficeUser(id);
-      if (!user) return json(res, 404, { ok: false, error: "Staff account not found" });
+      const user = await getManagedExternalUser(id);
+      if (!user) return json(res, 404, { ok: false, error: "Client account not found" });
       return json(res, 200, { ok: true, user });
     }
 
     if (req.method === "DELETE") {
-      await deleteManagedBackofficeUser(auth.principal.id, id);
+      await deleteManagedExternalUser(id);
       return json(res, 200, { ok: true });
     }
 
@@ -37,15 +38,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const action = String(body.action || "").toLowerCase();
 
       if (action === "block" || action === "unblock") {
-        const user = await setManagedBackofficeUserStatus(
-          auth.principal.id,
+        const user = await setManagedExternalUserStatus(
           id,
-          action === "block" ? BackofficeUserStatus.BLOCKED : BackofficeUserStatus.ACTIVE
+          action === "block" ? ExternalUserStatus.BLOCKED : ExternalUserStatus.ACTIVE
         );
         return json(res, 200, { ok: true, user });
       }
 
-      const user = await updateManagedBackofficeUser(auth.principal.id, id, body);
+      if (action === "verify") {
+        const user = await markManagedExternalUserVerified(id);
+        return json(res, 200, { ok: true, user });
+      }
+
+      const user = await updateManagedExternalUser(id, body);
       return json(res, 200, { ok: true, user });
     }
 
