@@ -1,7 +1,6 @@
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
-import { getServerSession } from "next-auth/next";
 import Link from "next/link";
-import { authOptions } from "../../api/auth/[...nextauth]";
+import { requireBackofficePage } from "../../../lib/backofficeAuth";
 import AdminLayout from "../../../components/admin/AdminLayout";
 import LibraryCardHeader from "../../../components/admin/LibraryCardHeader";
 import { prisma } from "../../../lib/prisma";
@@ -76,18 +75,11 @@ async function loadDatabaseStatus(): Promise<DatabaseStatus> {
 }
 
 export const getServerSideProps: GetServerSideProps<ConfigsPageProps> = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-  const role = ((session as any)?.role || (session as any)?.user?.role || null) as string | null;
-  const user = (session as any)?.user;
-
-  if (!session || role !== "ADMIN") {
-    return {
-      redirect: {
-        destination: "/admin/signin",
-        permanent: false,
-      },
-    };
-  }
+  const auth = await requireBackofficePage(ctx, {
+    callbackUrl: "/admin/settings/configs",
+    superadminOnly: true,
+  });
+  if (!auth.ok) return auth.response;
 
   ctx.res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
   ctx.res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -102,7 +94,7 @@ export const getServerSideProps: GetServerSideProps<ConfigsPageProps> = async (c
 
   return {
     props: {
-      loggedInAs: user?.email || user?.name || null,
+      loggedInAs: auth.loggedInAs,
       envGroups: collectSystemEnvGroups().filter((group) => group.key !== "brand"),
       runtimeStatus: collectRuntimeStatus(requestHost),
       databaseStatus: await loadDatabaseStatus(),

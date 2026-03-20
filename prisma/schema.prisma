@@ -77,6 +77,7 @@ model User {
   accounts    Account[]
   sessions    Session[]
   loginEvents LoginEvent[]
+  externalUsers ExternalUser[] @relation("LegacyUserToExternalUsers")
 
   @@index([email])
 }
@@ -175,6 +176,7 @@ model Brand {
   staffAccesses                   BackofficeUserBrandAccess[]
   externalUsers                   ExternalUser[]
   externalAccounts                ExternalAccount[]
+  externalLoginEvents             ExternalLoginEvent[]
   externalVerificationTokens      ExternalVerificationToken[]
   externalEmailVerificationTokens ExternalEmailVerificationToken[]
   externalPasswordResetTokens     ExternalPasswordResetToken[]
@@ -297,6 +299,7 @@ model BackofficePasswordResetToken {
 model ExternalUser {
   id            String             @id @default(cuid())
   brandId       String
+  legacyUserId  String?
   email         String?
   name          String?
   passwordHash  String?
@@ -307,13 +310,16 @@ model ExternalUser {
   updatedAt     DateTime           @updatedAt
   lastLoginAt   DateTime?
 
-  brand    Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  accounts ExternalAccount[]
-  sessions ExternalSession[]
+  brand      Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  legacyUser User?                @relation("LegacyUserToExternalUsers", fields: [legacyUserId], references: [id], onDelete: SetNull)
+  accounts   ExternalAccount[]
+  sessions   ExternalSession[]
+  loginEvents ExternalLoginEvent[]
 
   @@unique([brandId, email])
   @@index([brandId])
   @@index([email])
+  @@index([legacyUserId])
 }
 
 model ExternalAccount {
@@ -348,6 +354,24 @@ model ExternalSession {
   user ExternalUser @relation(fields: [externalUserId], references: [id], onDelete: Cascade)
 
   @@index([externalUserId])
+}
+
+model ExternalLoginEvent {
+  id             String   @id @default(cuid())
+  externalUserId String
+  brandId        String
+  ip             String
+  countryIso2    String?
+  countryName    String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  user  ExternalUser @relation(fields: [externalUserId], references: [id], onDelete: Cascade)
+  brand Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([externalUserId])
+  @@index([brandId])
+  @@index([createdAt])
 }
 
 model ExternalVerificationToken {

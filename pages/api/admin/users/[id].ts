@@ -47,27 +47,41 @@ function serializeUser(u: any) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
   if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
+  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
-  const session = (auth as any).session;
-  const meId = (session as any)?.user?.id;
-  const meEmail = (((session as any)?.user?.email || "") as string).toLowerCase();
+  const meId = auth.principal.id;
 
   const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
   if (!id) return json(res, 400, { ok: false, error: "Missing id" });
 
-  const target = await prisma.user.findUnique({
+  const target = await prisma.backofficeUser.findUnique({
     where: { id },
-    select: { id: true, email: true, role: true, status: true, name: true, createdAt: true, lastLoginAt: true },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      lastLoginAt: true,
+      brandAccesses: {
+        include: {
+          brand: {
+            select: {
+              brandKey: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!target) return json(res, 404, { ok: false, error: "User not found" });
 
   const targetEmail = (target.email || "").toLowerCase();
-  const protectedAdmins = parseList(process.env.ADMIN_EMAILS);
   const isSelf = meId && target.id === meId;
 
-  const isProtectedAdmin =
-    (!!targetEmail && protectedAdmins.includes(targetEmail)) || isXdAdminEmail(targetEmail);
+  const isProtectedAdmin = (!!targetEmail && parseList(process.env.ADMIN_EMAILS).includes(targetEmail)) || isXdAdminEmail(targetEmail);
 
   // --- GET ---
   if (req.method === "GET") {
@@ -79,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (isSelf) return json(res, 403, { ok: false, error: "You can't delete your own account." });
     if (isProtectedAdmin) return json(res, 403, { ok: false, error: "This admin account is protected." });
 
-    await prisma.user.delete({ where: { id } });
+    await prisma.backofficeUser.delete({ where: { id } });
     return json(res, 200, { ok: true });
   }
 
@@ -107,10 +121,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.backofficeUser.update({
       where: { id },
       data: { status: nextStatus },
-      select: { id: true, email: true, role: true, status: true, name: true, createdAt: true, lastLoginAt: true },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        lastLoginAt: true,
+        brandAccesses: {
+          include: {
+            brand: {
+              select: {
+                brandKey: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     return json(res, 200, { ok: true, user: serializeUser(updated) });

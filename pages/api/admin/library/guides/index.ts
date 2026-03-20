@@ -1,19 +1,16 @@
 // pages/api/admin/library/guides/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
-import { authOptions } from "../../../auth/[...nextauth]";
-import { resolveWriteBrandId } from "../../../../../lib/brandRegistry";
+import {
+  assertBackofficeBrandAccess,
+  requireBackofficeApi,
+  resolveBackofficeReadFilter,
+  resolveBackofficeWriteBrandId,
+} from "../../../../../lib/backofficeAuth";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-function isAdminSession(session: any) {
-  const role = session?.role ?? session?.user?.role;
-  const status = session?.status ?? session?.user?.status;
-  return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
-}
 
 function normalizeSlug(input: string) {
   return String(input || "")
@@ -31,8 +28,8 @@ function parseTags(value: any): string[] {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions as any);
-  if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   // Backing model for Guides is currently Article (and ArticleCategory). Fall back to Guide if you rename later.
   const model: any = (prisma as any).article ?? (prisma as any).guide;
@@ -41,18 +38,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (req.method === "GET") {
       const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const brandWhere = await resolveBackofficeReadFilter(auth.principal, req.query as any);
       const where =
         q.length > 0
           ? {
-              OR: [
-                { title: { contains: q, mode: "insensitive" } },
-                { slug: { contains: q, mode: "insensitive" } },
-                { summary: { contains: q, mode: "insensitive" } },
-                { content: { contains: q, mode: "insensitive" } },
-                { status: { equals: q as any } },
+              AND: [
+                brandWhere,
+                {
+                  OR: [
+                    { title: { contains: q, mode: "insensitive" } },
+                    { slug: { contains: q, mode: "insensitive" } },
+                    { summary: { contains: q, mode: "insensitive" } },
+                    { content: { contains: q, mode: "insensitive" } },
+                    { status: { equals: q as any } },
+                  ],
+                },
               ],
             }
-          : {};
+          : brandWhere;
 
       const guides = await model.findMany({
         where,
@@ -79,9 +82,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!summary) return res.status(400).json({ ok: false, error: "Summary is required" });
       if (!content) return res.status(400).json({ ok: false, error: "Content is required" });
 
+      const brandId = await resolveBackofficeWriteBrandId(auth.principal, body, { allowSingleBrandFallback: true });
+      if (categoryId) {
+        const category = await (prisma as any).articleCategory.findUnique({
+          where: { id: categoryId },
+          select: { id: true, brandId: true },
+        });
+        if (!category) return res.status(400).json({ ok: false, error: "Category not found" });
+        assertBackofficeBrandAccess(auth.principal, category.brandId);
+        if (category.brandId !== brandId) {
+          return res.status(400).json({ ok: false, error: "Category brand does not match the selected brand" });
+        }
+      }
+
       const created = await model.create({
         data: {
-          brandId: await resolveWriteBrandId(body, { allowSingleBrandFallback: true }),
+          brandId,
           title,
           slug,
           summary,

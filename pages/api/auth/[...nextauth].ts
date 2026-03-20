@@ -2,17 +2,20 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import bcrypt from "bcryptjs";
-import { prisma } from "../../../lib/prisma";
-import {
-  getClientIp,
-  getCfCountryIso2,
-  getUserAgent,
-  iso2ToCountryName,
-} from "../../../lib/requestIdentity";
 import { getRuntimeAllowedHosts } from "../../../lib/brandRegistry";
 import { authCookieDomain } from "../../../lib/siteConfig";
+import {
+  BACKOFFICE_AUTH_SCOPE,
+  BACKOFFICE_CREDENTIALS_PROVIDER_ID,
+  EXTERNAL_AUTH_SCOPE,
+  EXTERNAL_CREDENTIALS_PROVIDER_ID,
+  EXTERNAL_LEGACY_AUTH_SCOPE,
+} from "../../../lib/authScopes";
+import {
+  authorizeBackofficeCredentials,
+  refreshBackofficeIdentity,
+} from "../../../lib/backofficeIdentity";
+import { authorizeExternalCredentials, refreshExternalIdentity } from "../../../lib/externalIdentity";
 
 const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
 
@@ -38,37 +41,7 @@ function cookieOptions({ httpOnly = true }: { httpOnly?: boolean } = {}) {
   };
 }
 
-// NOTE: Request identity helpers are shared via lib/requestIdentity to keep
-// client IP and country consistent across all API routes.
-
-async function getUserByEmail(email: string) {
-  return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-}
-
-function getXdAdminIdentity() {
-  const username = (process.env.XDADMIN_USERNAME || "xdadmin").trim().toLowerCase();
-  const email = (process.env.XDADMIN_EMAIL || "xdadmin@xdragon.tech").trim().toLowerCase();
-  const password = process.env.XDADMIN_PASSWORD || "";
-  return { username, email, password };
-}
-
-function isEnvAdminEmail(email: string | null | undefined): boolean {
-  const e = (email || "").trim().toLowerCase();
-  if (!e) return false;
-  const raw = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL_LIST || process.env.ADMIN_USERS || "";
-  if (!raw.trim()) return false;
-  const set = new Set(
-    raw
-      .split(/[,\s]+/)
-      .map((x) => x.trim().toLowerCase())
-      .filter(Boolean)
-  );
-  return set.has(e);
-}
-
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-
   // Credentials sign-in requires JWT strategy in NextAuth v4.
   session: { strategy: "jwt" },
 
@@ -96,66 +69,25 @@ export const authOptions: NextAuthOptions = {
 
   providers: [
     CredentialsProvider({
+      id: EXTERNAL_CREDENTIALS_PROVIDER_ID,
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, req) {
-        const emailRaw = credentials?.email?.trim() || "";
-        const email = emailRaw.toLowerCase();
-        const password = credentials?.password ?? "";
-
-        if (!email || !password) return null;
-
-        // Built-in super-admin (no DB dependency). Username is accepted in the email field.
-        const xd = getXdAdminIdentity();
-        if (email === xd.username || email === xd.email) {
-          if (!xd.password) return null;
-          if (password !== xd.password) return null;
-
-          // Best-effort login telemetry (never block auth if this fails)
-          try {
-            const ip = getClientIp(req);
-            const countryIso2 = getCfCountryIso2(req);
-            const countryName = iso2ToCountryName(countryIso2);
-            const userAgent = getUserAgent(req);
-            await prisma.loginEvent.create({ data: { userId: "xdadmin", ip, userAgent, countryIso2, countryName } });
-          } catch (err) {
-            console.warn("xdadmin LoginEvent write failed:", err);
-          }
-
-          return { id: "xdadmin", email: xd.email, name: "xdadmin" };
-        }
-
-        const user = await getUserByEmail(email);
-        if (!user) return null;
-
-        // Enforce your safety controls.
-        if (user.status === "BLOCKED") return null;
-        if (!user.emailVerified) return null;
-
-        // Password login only for users with a password set.
-        if (!user.passwordHash) return null;
-
-        const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
-
-        // Record last login + IP (best-effort; never block auth if this fails)
-        try {
-          const ip = getClientIp(req);
-          const countryIso2 = getCfCountryIso2(req);
-          const countryName = iso2ToCountryName(countryIso2);
-          const userAgent = getUserAgent(req);
-          await prisma.$transaction([
-            prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
-            prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent, countryIso2, countryName } }),
-          ]);
-        } catch (err) {
-          console.warn("LoginEvent write failed:", err);
-        }
-
-        return { id: user.id, email: user.email ?? undefined, name: user.name ?? undefined };
+        return authorizeExternalCredentials(credentials, req as NextApiRequest);
+      },
+    }),
+    CredentialsProvider({
+      id: BACKOFFICE_CREDENTIALS_PROVIDER_ID,
+      name: "Backoffice Credentials",
+      credentials: {
+        email: { label: "Username or email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        return authorizeBackofficeCredentials(credentials);
       },
     }),
   ],
@@ -166,38 +98,67 @@ export const authOptions: NextAuthOptions = {
         token.sub = user.id;
         token.email = user.email;
         token.name = user.name;
+        (token as any).role = (user as any).role;
+        (token as any).status = (user as any).status;
+        (token as any).authScope = (user as any).authScope;
+        (token as any).backofficeRole = (user as any).backofficeRole || null;
+        (token as any).brandKey = (user as any).brandKey || null;
+        (token as any).username = (user as any).username || null;
+        (token as any).allowedBrandKeys = (user as any).allowedBrandKeys || [];
+        (token as any).allowedBrandIds = (user as any).allowedBrandIds || [];
+        (token as any).lastSelectedBrandKey = (user as any).lastSelectedBrandKey || null;
       }
 
-      // Super-admin is always ADMIN/ACTIVE (no DB record required).
-      const xd = getXdAdminIdentity();
-      const tokenEmail = token.email ? String(token.email).toLowerCase() : "";
-      if (tokenEmail && tokenEmail === xd.email) {
-        (token as any).role = "ADMIN";
-        (token as any).status = "ACTIVE";
+      const authScope = (token as any).authScope;
+
+      if (authScope === BACKOFFICE_AUTH_SCOPE) {
+        const refreshed = await refreshBackofficeIdentity({
+          sub: typeof token.sub === "string" ? token.sub : null,
+          email: typeof token.email === "string" ? token.email : null,
+        });
+
+        if (!refreshed) {
+          (token as any).status = "BLOCKED";
+          (token as any).allowedBrandKeys = [];
+          (token as any).allowedBrandIds = [];
+          return token;
+        }
+
+        token.sub = refreshed.id;
+        token.email = refreshed.email;
+        token.name = refreshed.name;
+        (token as any).role = refreshed.role;
+        (token as any).status = refreshed.status;
+        (token as any).authScope = refreshed.authScope;
+        (token as any).backofficeRole = refreshed.backofficeRole;
+        (token as any).brandKey = null;
+        (token as any).username = refreshed.username;
+        (token as any).allowedBrandKeys = refreshed.allowedBrandKeys;
+        (token as any).allowedBrandIds = refreshed.allowedBrandIds;
+        (token as any).lastSelectedBrandKey = refreshed.lastSelectedBrandKey;
         return token;
       }
 
-      // Pull role/status from DB (keeps token accurate if you block/unblock).
-      if (token.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: String(token.email).toLowerCase() },
-          select: { role: true, status: true },
+      if (authScope === EXTERNAL_AUTH_SCOPE || authScope === EXTERNAL_LEGACY_AUTH_SCOPE) {
+        const refreshed = await refreshExternalIdentity({
+          sub: typeof token.sub === "string" ? token.sub : null,
+          email: typeof token.email === "string" ? token.email : null,
+          brandKey: typeof (token as any).brandKey === "string" ? (token as any).brandKey : null,
+          authScope,
         });
-        if (dbUser) {
-          (token as any).role = dbUser.role;
-          (token as any).status = dbUser.status;
+
+        if (!refreshed) {
+          (token as any).status = "BLOCKED";
+          return token;
         }
 
-        // If an email is configured as admin via Vercel env, reflect that in the session token.
-        // This fixes the UI showing USER even when the account is effectively an admin.
-        if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
-          (token as any).role = "ADMIN";
-        }
-      }
-
-      // Fallback env-admin role when there's no DB user record (or before roles are backfilled).
-      if ((token as any).role !== "ADMIN" && isEnvAdminEmail(String(token.email))) {
-        (token as any).role = "ADMIN";
+        token.sub = refreshed.id;
+        token.email = refreshed.email;
+        token.name = refreshed.name;
+        (token as any).role = refreshed.role;
+        (token as any).status = refreshed.status;
+        (token as any).authScope = refreshed.authScope;
+        (token as any).brandKey = refreshed.brandKey;
       }
 
       return token;
@@ -217,9 +178,24 @@ export const authOptions: NextAuthOptions = {
       (sessionUser as any).id = typeof token.sub === "string" ? token.sub : undefined;
       (sessionUser as any).role = (token as any).role || "USER";
       (sessionUser as any).status = (token as any).status || "ACTIVE";
+      (sessionUser as any).authScope = (token as any).authScope || null;
+      (sessionUser as any).backofficeRole = (token as any).backofficeRole || null;
+      (sessionUser as any).brandKey = (token as any).brandKey || null;
+      (sessionUser as any).username = (token as any).username || null;
+      (sessionUser as any).allowedBrandKeys = Array.isArray((token as any).allowedBrandKeys)
+        ? (token as any).allowedBrandKeys
+        : [];
+      (sessionUser as any).lastSelectedBrandKey = (token as any).lastSelectedBrandKey || null;
 
       (session as any).role = (token as any).role || "USER";
       (session as any).status = (token as any).status || "ACTIVE";
+      (session as any).authScope = (token as any).authScope || null;
+      (session as any).backofficeRole = (token as any).backofficeRole || null;
+      (session as any).brandKey = (token as any).brandKey || null;
+      (session as any).allowedBrandKeys = Array.isArray((token as any).allowedBrandKeys)
+        ? (token as any).allowedBrandKeys
+        : [];
+      (session as any).lastSelectedBrandKey = (token as any).lastSelectedBrandKey || null;
       return session;
     },
 

@@ -3,14 +3,14 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
 import { authOptions } from "../auth/[...nextauth]";
+import { isExternalSession } from "../../../lib/authScopes";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 function isUserSession(session: any) {
-  const status = session?.status ?? session?.user?.status;
-  return Boolean(session?.user && status !== "BLOCKED");
+  return isExternalSession(session);
 }
 
 

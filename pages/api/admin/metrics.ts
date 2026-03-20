@@ -1,7 +1,6 @@
 // pages/api/admin/metrics.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
+import { requireBackofficeApi } from "../../../lib/backofficeAuth";
 import { prisma } from "../../../lib/prisma";
 
 export type MetricsPeriod = "today" | "7d" | "month";
@@ -25,9 +24,21 @@ type MetricsErr = { ok: false; error: string };
 
 type MetricsResponse = MetricsOk | MetricsErr;
 
-function getSessionRole(session: any): string | null {
-  return (session?.role as string) || (session?.user?.role as string) || null;
-}
+type SignupRow = {
+  id: string;
+  createdAt: Date;
+  kind: "legacy" | "external";
+  legacyUserId?: string | null;
+};
+
+type LoginMetricEvent = {
+  source: "legacy" | "external";
+  principalId: string;
+  createdAt: Date;
+  ip: string;
+  countryIso2: string | null;
+  countryName: string | null;
+};
 
 function isPrivateIp(ip: string) {
   return (
@@ -182,16 +193,34 @@ function bucketIndex(period: MetricsPeriod, start: Date, when: Date): number {
   return diffDays;
 }
 
+function rememberFirstLogin(
+  firstIpByPrincipal: Map<string, string>,
+  firstGeoByPrincipal: Map<string, { iso2: string | null; name: string | null }>,
+  principalId: string,
+  ipRaw: string | null | undefined,
+  countryIso2: string | null | undefined,
+  countryName: string | null | undefined
+) {
+  if (firstIpByPrincipal.has(principalId)) return;
+
+  const ip = normalizeIp((ipRaw || "").trim());
+  if (!ip || isPrivateIp(ip)) return;
+
+  firstIpByPrincipal.set(principalId, ip);
+  firstGeoByPrincipal.set(principalId, {
+    iso2: countryIso2 || null,
+    name: countryName || null,
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse<MetricsResponse>) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  // Auth: must be signed in AND an ADMIN.
-  const session = await getServerSession(req, res, authOptions as any);
-  const role = getSessionRole(session);
-  if (!session || role !== "ADMIN") return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res, { superadminOnly: true });
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const period = parsePeriod(req.query.period);
   const { start, end } = periodBounds(period);
@@ -201,22 +230,72 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const logins = Array(labels.length).fill(0) as number[];
 
   // Fetch counts for signups and logins.
-  // NOTE: We only pull the timestamp columns and aggregate in JS to keep the endpoint simple.
-  const [users, events] = await Promise.all([
+  // NOTE: We only pull timestamp + geo identity columns and aggregate in JS to keep the endpoint simple.
+  const [legacyUsers, externalUsers, legacyEvents, externalEvents] = await Promise.all([
     prisma.user.findMany({
       where: { createdAt: { gte: start, lte: end } },
       select: { id: true, createdAt: true },
+    }),
+    prisma.externalUser.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      select: { id: true, legacyUserId: true, createdAt: true },
     }),
     prisma.loginEvent.findMany({
       where: { createdAt: { gte: start, lte: end } },
       // Prefer Cloudflare-derived geo fields captured at login time.
       // This keeps dashboard geo stable even if third-party IP geo is down.
-      select: { createdAt: true, ip: true, countryIso2: true, countryName: true },
+      select: { userId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.externalLoginEvent.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      select: { externalUserId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
-  for (const u of users) {
+  const migratedLegacyIds = new Set(
+    externalUsers
+      .map((user) => user.legacyUserId)
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const signupRows: SignupRow[] = [
+    ...legacyUsers
+      .filter((user) => !migratedLegacyIds.has(user.id))
+      .map((user) => ({
+        id: user.id,
+        createdAt: user.createdAt,
+        kind: "legacy" as const,
+      })),
+    ...externalUsers.map((user) => ({
+      id: user.id,
+      createdAt: user.createdAt,
+      kind: "external" as const,
+      legacyUserId: user.legacyUserId || null,
+    })),
+  ];
+
+  const events: LoginMetricEvent[] = [
+    ...legacyEvents.map((event) => ({
+      source: "legacy" as const,
+      principalId: event.userId,
+      createdAt: event.createdAt,
+      ip: event.ip,
+      countryIso2: event.countryIso2 || null,
+      countryName: event.countryName || null,
+    })),
+    ...externalEvents.map((event) => ({
+      source: "external" as const,
+      principalId: event.externalUserId,
+      createdAt: event.createdAt,
+      ip: event.ip,
+      countryIso2: event.countryIso2 || null,
+      countryName: event.countryName || null,
+    })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  for (const u of signupRows) {
     const idx = bucketIndex(period, start, u.createdAt);
     if (idx >= 0 && idx < signups.length) signups[idx] += 1;
   }
@@ -251,7 +330,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   const totals = {
-    signups: users.length,
+    signups: signupRows.length,
     logins: events.length,
   };
 
@@ -288,16 +367,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const name = country;
         if (rawIps.length && (iso2 || name)) {
           // eslint-disable-next-line no-await-in-loop
-          await prisma.loginEvent.updateMany({
-            where: {
-              ip: { in: rawIps },
-              OR: [{ countryIso2: null }, { countryName: null }],
-            } as any,
-            data: {
-              countryIso2: iso2,
-              countryName: name,
-            } as any,
-          });
+          await Promise.all([
+            prisma.loginEvent.updateMany({
+              where: {
+                ip: { in: rawIps },
+                OR: [{ countryIso2: null }, { countryName: null }],
+              } as any,
+              data: {
+                countryIso2: iso2,
+                countryName: name,
+              } as any,
+            }),
+            prisma.externalLoginEvent.updateMany({
+              where: {
+                ip: { in: rawIps },
+                OR: [{ countryIso2: null }, { countryName: null }],
+              } as any,
+              data: {
+                countryIso2: iso2,
+                countryName: name,
+              } as any,
+            }),
+          ]);
         }
       }
     } catch {
@@ -305,16 +396,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
   }
   // Countries for signups:
-  // User model doesn't store a signup IP. We approximate using the earliest LoginEvent IP
-  // for users created within the selected window.
+  // User models don't store a signup IP. We approximate using the earliest login IP
+  // for identities created within the selected window.
   const signupCountriesMap = new Map<string, number>();
   try {
-    const userIds = (users as any[]).map((u) => u?.id).filter(Boolean) as string[];
-    const firstIpByUser = new Map<string, string>();
+    const legacySignupRows = signupRows.filter((row) => row.kind === "legacy");
+    const externalSignupRows = signupRows.filter((row) => row.kind === "external");
+    const firstLegacyIpByUser = new Map<string, string>();
+    const firstLegacyGeoByUser = new Map<string, { iso2: string | null; name: string | null }>();
+    const firstExternalIpByUser = new Map<string, string>();
+    const firstExternalGeoByUser = new Map<string, { iso2: string | null; name: string | null }>();
 
     const chunkSize = 500;
-    for (let i = 0; i < userIds.length; i += chunkSize) {
-      const chunk = userIds.slice(i, i + chunkSize);
+
+    for (let i = 0; i < legacySignupRows.length; i += chunkSize) {
+      const chunk = legacySignupRows.slice(i, i + chunkSize).map((row) => row.id);
 
       // eslint-disable-next-line no-await-in-loop
       const loginRows = await prisma.loginEvent.findMany({
@@ -323,26 +419,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         orderBy: { createdAt: "asc" },
       });
 
-      for (const r of loginRows) {
-        if (!firstIpByUser.has(r.userId)) {
-          const ip = normalizeIp((r.ip || "").trim());
-          if (ip && !isPrivateIp(ip)) {
-            firstIpByUser.set(r.userId, ip);
-            // Prefer Cloudflare-derived country fields captured at login time
-            const iso2 = ((r as any).countryIso2 || null) as string | null;
-            const name = ((r as any).countryName || null) as string | null;
-            (firstIpByUser as any).__geo = (firstIpByUser as any).__geo || new Map<string, { iso2: string | null; name: string | null }>();
-            (firstIpByUser as any).__geo.set(r.userId, { iso2, name });
-          }
-        }
+      for (const row of loginRows) {
+        rememberFirstLogin(firstLegacyIpByUser, firstLegacyGeoByUser, row.userId, row.ip, row.countryIso2, row.countryName);
       }
     }
 
-    const firstGeoByUser: Map<string, { iso2: string | null; name: string | null }> = ((firstIpByUser as any).__geo as any) || new Map();
+    for (let i = 0; i < externalSignupRows.length; i += chunkSize) {
+      const chunk = externalSignupRows.slice(i, i + chunkSize).map((row) => row.id);
 
-    for (const [userId, ip] of Array.from(firstIpByUser.entries())) {
       // eslint-disable-next-line no-await-in-loop
-      const stored = firstGeoByUser.get(userId) || { iso2: null, name: null };
+      const loginRows = await prisma.externalLoginEvent.findMany({
+        where: { externalUserId: { in: chunk } },
+        select: { externalUserId: true, ip: true, createdAt: true, countryIso2: true, countryName: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      for (const row of loginRows) {
+        rememberFirstLogin(
+          firstExternalIpByUser,
+          firstExternalGeoByUser,
+          row.externalUserId,
+          row.ip,
+          row.countryIso2,
+          row.countryName
+        );
+      }
+    }
+
+    for (const signup of signupRows) {
+      const externalStored = signup.kind === "external" ? firstExternalGeoByUser.get(signup.id) : null;
+      const externalIp = signup.kind === "external" ? firstExternalIpByUser.get(signup.id) || null : null;
+      const legacyStored = signup.kind === "legacy"
+        ? firstLegacyGeoByUser.get(signup.id)
+        : signup.legacyUserId
+          ? firstLegacyGeoByUser.get(signup.legacyUserId)
+          : null;
+      const legacyIp = signup.kind === "legacy"
+        ? firstLegacyIpByUser.get(signup.id) || null
+        : signup.legacyUserId
+          ? firstLegacyIpByUser.get(signup.legacyUserId) || null
+          : null;
+
+      const stored = externalStored || legacyStored || { iso2: null, name: null };
+      const ip = externalIp || legacyIp;
+      if (!ip) continue;
+
       let country = stored.name || iso2ToCountryName(stored.iso2) || null;
       if (!country) {
         // eslint-disable-next-line no-await-in-loop
