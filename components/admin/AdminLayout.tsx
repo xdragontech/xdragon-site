@@ -7,7 +7,7 @@ type AdminLayoutProps = {
   title?: string;
   sectionLabel: string;
   loggedInAs?: string | null;
-  active: "dashboard" | "accounts" | "library" | "leads" | "analytics";
+  active: "dashboard" | "accounts" | "library" | "leads" | "analytics" | "settings";
   children: ReactNode;
 };
 
