@@ -327,6 +327,14 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
           ) : null}
         </div>
 
+        {brands.length === 0 && !loading ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            No brands are stored in the database yet. Public runtime can still fall back to env host config, but
+            brand-scoped writes should use the explicit brand sync flow before this becomes the long-term source of
+            truth.
+          </div>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-12">
           <section className="lg:col-span-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <div className="mb-3 flex items-center justify-between">

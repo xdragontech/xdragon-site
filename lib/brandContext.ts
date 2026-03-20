@@ -6,6 +6,7 @@ import { buildOrigin, getApiRequestHost, getApiRequestProtocol, normalizeHost } 
 export type BrandEnvironment = "production" | "preview";
 
 export type PublicBrandContext = {
+  brandId?: string;
   brandKey: string;
   brandName: string;
   status: BrandStatus | "ACTIVE";
@@ -57,6 +58,7 @@ export async function resolvePublicBrandContextForHost(host: string): Promise<Pu
   if (!runtime) return null;
 
   return {
+    brandId: runtime.brandId,
     brandKey: normalizeBrandKey(runtime.brandKey) || runtime.brandKey,
     brandName: runtime.brandName,
     status: runtime.status,

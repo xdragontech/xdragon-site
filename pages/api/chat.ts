@@ -692,6 +692,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const cc = getCfCountry(req);
 
           const raw = {
+            brandId: brand.brandId || null,
             brandKey: brand.brandKey,
             brandHost: brand.matchedHost,
             brandEnvironment: brand.environment,
@@ -710,6 +711,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           await prisma.leadEvent.create({
             data: {
+              ...(brand.brandId ? { brandId: brand.brandId } : {}),
               source: "CHAT",
               conversationId: cid || null,
               ip,
@@ -726,6 +728,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       await logLeadEvent("chat", {
+        brandId: brand.brandId || null,
         brandKey: brand.brandKey,
         brandHost: brand.matchedHost,
         brandEnvironment: brand.environment,

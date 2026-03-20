@@ -275,6 +275,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           source: "CONTACT",
           email: normalizedEmail,
           createdAt: { gte: dayStart, lt: dayEnd },
+          ...(brand.brandId
+            ? {
+                OR: [{ brandId: brand.brandId }, { brandId: null }],
+              }
+            : {}),
         },
         orderBy: { createdAt: "desc" },
       });
@@ -293,6 +298,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const updated = await prisma.lead.update({
           where: { id: existing.id },
           data: {
+            ...(brand.brandId ? { brandId: brand.brandId } : {}),
             name,
             email: normalizedEmail,
             ip,
@@ -302,6 +308,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       } else {
         const created = await prisma.lead.create({
           data: {
+            ...(brand.brandId ? { brandId: brand.brandId } : {}),
             source: "CONTACT",
             name,
             email: normalizedEmail,
@@ -315,6 +322,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (prisma?.leadEvent) {
         await prisma.leadEvent.create({
           data: {
+            ...(brand.brandId ? { brandId: brand.brandId } : {}),
             source: "CONTACT",
             leadId: leadId || undefined,
             ip,
@@ -327,6 +335,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
               email: normalizedEmail,
               phone: phone || null,
               message,
+              brandId: brand.brandId || null,
               brandKey: brand.brandKey,
               brandHost: brand.matchedHost,
               brandEnvironment: brand.environment,
@@ -343,6 +352,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     // Backup trail in Redis (if configured)
     logLeadEvent("contact", {
+      brandId: brand.brandId || null,
       brandKey: brand.brandKey,
       brandHost: brand.matchedHost,
       brandEnvironment: brand.environment,

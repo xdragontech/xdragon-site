@@ -54,6 +54,12 @@ function normalizeBrandKey(value: unknown): string {
     .toLowerCase();
 }
 
+function normalizeRecordId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
 function normalizeEditableHost(value: unknown): string {
   const normalized = normalizeHost(String(value || "").replace(/^https?:\/\//i, "").replace(/\/+$/, ""));
   if (normalized.includes("/") || normalized.includes("?") || normalized.includes("#") || normalized.includes(" ")) {
@@ -190,33 +196,7 @@ function fallbackBrandInput(): EditableBrandInput {
   };
 }
 
-export async function ensureSeedBrandFromEnv() {
-  const count = await prisma.brand.count();
-  if (count > 0) return;
-
-  const seed = fallbackBrandInput();
-  const hosts = buildHostRows(seed);
-
-  try {
-    await prisma.brand.create({
-      data: {
-        brandKey: seed.brandKey,
-        name: seed.name,
-        status: BrandStatus.ACTIVE,
-        hosts: {
-          create: hosts,
-        },
-      },
-    });
-  } catch (error: any) {
-    if (error?.code === "P2002") return;
-    throw error;
-  }
-}
-
 export async function listEditableBrands(search = ""): Promise<EditableBrandRecord[]> {
-  await ensureSeedBrandFromEnv();
-
   const brands = await prisma.brand.findMany({
     include: { hosts: true },
     orderBy: [{ createdAt: "asc" }],
@@ -294,6 +274,59 @@ export async function deleteEditableBrand(id: string): Promise<void> {
     throw new Error("Cannot delete the only brand while runtime fallback still exists");
   }
   await prisma.brand.delete({ where: { id } });
+}
+
+export async function resolveWriteBrandId(
+  raw:
+    | {
+        brandId?: unknown;
+        brandKey?: unknown;
+      }
+    | null
+    | undefined,
+  options?: {
+    allowSingleBrandFallback?: boolean;
+  }
+): Promise<string> {
+  const brandId = normalizeRecordId(raw?.brandId);
+  if (brandId) {
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { id: true },
+    });
+    if (!brand) throw new Error("Selected brand was not found");
+    return brand.id;
+  }
+
+  const brandKey = normalizeBrandKey(raw?.brandKey);
+  if (brandKey) {
+    const brand = await prisma.brand.findUnique({
+      where: { brandKey },
+      select: { id: true },
+    });
+    if (!brand) throw new Error("Selected brand was not found");
+    return brand.id;
+  }
+
+  if (!options?.allowSingleBrandFallback) {
+    throw new Error("Brand selection is required");
+  }
+
+  const brands = await prisma.brand.findMany({
+    select: { id: true },
+    orderBy: [{ createdAt: "asc" }],
+    take: 2,
+  });
+
+  if (brands.length === 0) {
+    throw new Error("No brand is configured. Run the brand sync before creating brand-scoped records.");
+  }
+
+  if (brands.length > 1) {
+    throw new Error("Brand selection is required once multiple brands exist.");
+  }
+
+  return brands[0].id;
 }
 
 function resolveFallbackBrandForHost(host: string): RuntimeBrandResolution | null {
