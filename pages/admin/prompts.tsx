@@ -1,11 +1,10 @@
 // pages/admin/library.tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Head from "next/head";
-import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { authOptions } from "../api/auth/[...nextauth]";
+import { requireBackofficePage } from "../../lib/backofficeAuth";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSidebar from "../../components/admin/AdminSidebar";
 
@@ -36,21 +35,8 @@ type ApiOkCats = { ok: true; categories: CategoryRow[] };
 type ApiErr = { ok: false; error: string };
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getServerSession(ctx.req, ctx.res, authOptions);
-
-  // Only allow ACTIVE admin users
-  const role = (((session as any)?.role || (session as any)?.user?.role) as string | undefined);
-  const status = (((session as any)?.status || (session as any)?.user?.status) as string | undefined);
-
-  if (!session || role !== "ADMIN" || status === "BLOCKED") {
-    const callbackUrl = encodeURIComponent("/admin/library");
-    return {
-      redirect: {
-        destination: `/admin/signin?callbackUrl=${callbackUrl}`,
-        permanent: false,
-      },
-    };
-  }
+  const auth = await requireBackofficePage(ctx, { callbackUrl: "/admin/library" });
+  if (!auth.ok) return auth.response;
 
   return { props: {} };
 };

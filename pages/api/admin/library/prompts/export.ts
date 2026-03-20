@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
-import { authOptions } from "../../../auth/[...nextauth]";
+import { requireBackofficeApi, resolveBackofficeReadFilter } from "../../../../../lib/backofficeAuth";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
@@ -31,12 +30,14 @@ function toCsv(rows: any[]) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user?.email) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const format = String(req.query.format || "csv").toLowerCase();
+  const where = await resolveBackofficeReadFilter(auth.principal, req.query as any);
 
   const prompts = await prisma.prompt.findMany({
+    where,
     orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }],
   });
 

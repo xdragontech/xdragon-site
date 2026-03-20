@@ -1,19 +1,15 @@
 // pages/api/admin/library/guide-categories/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
-import { authOptions } from "../../../auth/[...nextauth]";
-import { resolveWriteBrandId } from "../../../../../lib/brandRegistry";
+import {
+  requireBackofficeApi,
+  resolveBackofficeReadFilter,
+  resolveBackofficeWriteBrandId,
+} from "../../../../../lib/backofficeAuth";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-function isAdminSession(session: any) {
-  const role = session?.role ?? session?.user?.role;
-  const status = session?.status ?? session?.user?.status;
-  return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
-}
 
 function slugify(input: string) {
   return String(input || "")
@@ -25,8 +21,8 @@ function slugify(input: string) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions as any);
-  if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   // Backing model for Guide Categories is currently ArticleCategory. Fall back to GuideCategory if you rename later.
   const model: any = (prisma as any).articleCategory ?? (prisma as any).guideCategory;
@@ -34,7 +30,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "GET") {
+      const where = await resolveBackofficeReadFilter(auth.principal, req.query as any);
       const categories = await model.findMany({
+        where,
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         take: 500,
       });
@@ -56,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const created = await model.create({
         data: {
-          brandId: await resolveWriteBrandId(body, { allowSingleBrandFallback: true }),
+          brandId: await resolveBackofficeWriteBrandId(auth.principal, body, { allowSingleBrandFallback: true }),
           name,
           slug,
           sortOrder: 0,

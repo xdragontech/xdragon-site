@@ -1,18 +1,11 @@
 // pages/api/admin/library/guide-categories/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
-import { authOptions } from "../../../auth/[...nextauth]";
+import { assertBackofficeBrandAccess, requireBackofficeApi } from "../../../../../lib/backofficeAuth";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-function isAdminSession(session: any) {
-  const role = session?.role ?? session?.user?.role;
-  const status = session?.status ?? session?.user?.status;
-  return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
-}
 
 function slugify(input: string) {
   return String(input || "")
@@ -24,8 +17,8 @@ function slugify(input: string) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions as any);
-  if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const id = typeof req.query.id === "string" ? req.query.id : "";
   if (!id) return res.status(400).json({ ok: false, error: "Missing id" });
@@ -33,6 +26,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Backing model for Guide Categories is currently ArticleCategory. Fall back to GuideCategory if you rename later.
   const model: any = (prisma as any).articleCategory ?? (prisma as any).guideCategory;
   if (!model?.update) return res.status(500).json({ ok: false, error: "Guide category model not found" });
+
+  const existing = await model.findUnique({ where: { id }, select: { id: true, brandId: true } });
+  if (!existing) return res.status(404).json({ ok: false, error: "Category not found" });
+  assertBackofficeBrandAccess(auth.principal, existing.brandId);
 
   try {
     if (req.method === "PUT") {

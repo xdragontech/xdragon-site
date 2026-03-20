@@ -1,18 +1,11 @@
 // pages/api/admin/library/articles/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
-import { authOptions } from "../../../auth/[...nextauth]";
+import { assertBackofficeBrandAccess, requireBackofficeApi } from "../../../../../lib/backofficeAuth";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-function isAdminSession(session: any) {
-  const role = session?.role ?? session?.user?.role;
-  const status = session?.status ?? session?.user?.status;
-  return Boolean(session?.user && role === "ADMIN" && status !== "BLOCKED");
-}
 
 
 function normalizeSlug(input: string) {
@@ -31,11 +24,18 @@ function parseTags(value: any): string[] | undefined {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions as any);
-  if (!isAdminSession(session)) return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res);
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const id = typeof req.query.id === "string" ? req.query.id : "";
   if (!id) return res.status(400).json({ ok: false, error: "Missing id" });
+
+  const existing = await (prisma as any).article.findUnique({
+    where: { id },
+    select: { id: true, brandId: true },
+  });
+  if (!existing) return res.status(404).json({ ok: false, error: "Article not found" });
+  assertBackofficeBrandAccess(auth.principal, existing.brandId);
 
   try {
     if (req.method === "PUT") {
@@ -48,7 +48,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof body.content === "string") data.content = body.content.trim();
       if (typeof body.status === "string") data.status = body.status;
       if (body.categoryId === null) data.categoryId = null;
-      if (typeof body.categoryId === "string") data.categoryId = body.categoryId;
+      if (typeof body.categoryId === "string") {
+        const category = await (prisma as any).articleCategory.findUnique({
+          where: { id: body.categoryId },
+          select: { id: true, brandId: true },
+        });
+        if (!category) return res.status(400).json({ ok: false, error: "Category not found" });
+        assertBackofficeBrandAccess(auth.principal, category.brandId);
+        if (category.brandId !== existing.brandId) {
+          return res.status(400).json({ ok: false, error: "Category brand does not match the article brand" });
+        }
+        data.categoryId = body.categoryId;
+      }
 
       const tags = parseTags(body.tags);
       if (tags) data.tags = tags;

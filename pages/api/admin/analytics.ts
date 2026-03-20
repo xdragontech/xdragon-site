@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
+import { requireBackofficeApi } from "../../../lib/backofficeAuth";
 import { prisma } from "../../../lib/prisma";
 
 type Ok = {
@@ -15,19 +14,14 @@ type Err = { ok: false; error: string };
 
 type Resp = Ok | Err;
 
-function getSessionRole(session: any): string | null {
-  return (session?.role as string) || (session?.user?.role as string) || null;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse<Resp>) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const session = await getServerSession(req, res, authOptions as any);
-  const role = getSessionRole(session);
-  if (!session || role !== "ADMIN") return res.status(401).json({ ok: false, error: "Unauthorized" });
+  const auth = await requireBackofficeApi(req, res, { superadminOnly: true });
+  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const since = new Date();
   since.setDate(since.getDate() - 7);

@@ -3,6 +3,7 @@ import type { GetServerSidePropsContext, NextApiRequest, NextApiResponse } from 
 import { getServerSession } from "next-auth";
 import { authOptions } from "../pages/api/auth/[...nextauth]";
 import { prisma } from "./prisma";
+import { requireBackofficeApi, requireBackofficePage } from "./backofficeAuth";
 
 export async function getSessionServer(ctx: GetServerSidePropsContext) {
   return getServerSession(ctx.req, ctx.res, authOptions);
@@ -17,23 +18,11 @@ export async function requireUser(ctx: GetServerSidePropsContext) {
 }
 
 export async function requireAdmin(ctx: GetServerSidePropsContext) {
-  const { session, user } = await requireUser(ctx);
-  if (!session?.user?.email || !user) return { session: null, user: null, isAdmin: false };
-
-  const adminEmails =
-    process.env.ADMIN_EMAILS?.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) || [];
-  const isAdmin = user.role === "ADMIN" || adminEmails.includes(session.user.email.toLowerCase());
-  return { session, user, isAdmin };
+  const auth = await requireBackofficePage(ctx);
+  if (!auth.ok) return { session: null, user: null, isAdmin: false };
+  return { session: auth.session, user: auth.principal, isAdmin: true };
 }
 
 export async function requireAdminApi(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions);
-  const email = session?.user?.email?.toLowerCase();
-  if (!email) return { ok: false as const, session: null };
-
-  const adminEmails =
-    process.env.ADMIN_EMAILS?.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) || [];
-  if (!adminEmails.includes(email)) return { ok: false as const, session };
-
-  return { ok: true as const, session };
+  return requireBackofficeApi(req, res);
 }
