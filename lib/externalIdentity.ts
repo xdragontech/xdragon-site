@@ -2,22 +2,17 @@ import bcrypt from "bcryptjs";
 import {
   BrandStatus,
   ExternalUserStatus,
-  UserStatus,
   type Prisma,
-  type User,
 } from "@prisma/client";
 import type { NextApiRequest } from "next";
 import { prisma } from "./prisma";
 import { type PublicBrandContext, resolvePublicBrandContext } from "./brandContext";
 import {
   EXTERNAL_AUTH_SCOPE,
-  EXTERNAL_LEGACY_AUTH_SCOPE,
-  getAuthScope,
   getSessionBrandKey,
   isExternalSession,
 } from "./authScopes";
 import { getCfCountryIso2, getClientIp, getUserAgent, iso2ToCountryName } from "./requestIdentity";
-import { getBrandSiteConfig } from "./siteConfig";
 
 type ExternalUserWithBrand = Prisma.ExternalUserGetPayload<{
   include: {
@@ -31,11 +26,6 @@ type ExternalUserWithBrand = Prisma.ExternalUserGetPayload<{
     };
   };
 }>;
-
-type LegacyExternalSeed = Pick<
-  User,
-  "id" | "email" | "name" | "passwordHash" | "status" | "emailVerified" | "createdAt" | "lastLoginAt"
->;
 
 export type ExternalIdentityState = {
   id: string;
@@ -67,14 +57,6 @@ function normalizeBrandKey(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
   return normalized || null;
-}
-
-function getLegacyExternalBridgeBrandKey(): string {
-  return normalizeBrandKey(getBrandSiteConfig().brandKey) || "xdragon";
-}
-
-function canBridgeLegacyExternalUser(brandKey: string): boolean {
-  return normalizeBrandKey(brandKey) === getLegacyExternalBridgeBrandKey();
 }
 
 function requireBrandId(brand: Pick<PublicBrandContext, "brandId" | "brandKey">): string {
@@ -175,110 +157,6 @@ async function fetchExternalUserByBrandKeyAndEmail(brandKey: string, email: stri
   });
 }
 
-async function fetchEligibleLegacyExternalUser(email: string): Promise<LegacyExternalSeed | null> {
-  return prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      passwordHash: true,
-      status: true,
-      emailVerified: true,
-      createdAt: true,
-      lastLoginAt: true,
-    },
-  });
-}
-
-async function ensureExternalUserFromLegacy(
-  brand: Pick<PublicBrandContext, "brandId" | "brandKey" | "brandName">,
-  legacy: LegacyExternalSeed
-): Promise<ExternalUserWithBrand> {
-  const brandId = requireBrandId(brand);
-  const email = normalizeEmail(legacy.email);
-  const passwordHash = legacy.passwordHash;
-
-  if (!email || !passwordHash) {
-    throw new Error("Legacy external user is missing required credentials");
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.externalUser.findFirst({
-      where: {
-        brandId,
-        email,
-      },
-      include: {
-        brand: {
-          select: {
-            id: true,
-            brandKey: true,
-            name: true,
-            status: true,
-          },
-        },
-      },
-    });
-
-    if (existing) {
-      if (!existing.legacyUserId || existing.legacyUserId !== legacy.id) {
-        return tx.externalUser.update({
-          where: { id: existing.id },
-          data: { legacyUserId: existing.legacyUserId || legacy.id },
-          include: {
-            brand: {
-              select: {
-                id: true,
-                brandKey: true,
-                name: true,
-                status: true,
-              },
-            },
-          },
-        });
-      }
-      return existing;
-    }
-
-    return tx.externalUser.create({
-      data: {
-        brandId,
-        legacyUserId: legacy.id,
-        email,
-        name: legacy.name || null,
-        passwordHash,
-        emailVerified: legacy.emailVerified,
-        status: legacy.status === UserStatus.BLOCKED ? ExternalUserStatus.BLOCKED : ExternalUserStatus.ACTIVE,
-        createdAt: legacy.createdAt,
-        lastLoginAt: legacy.lastLoginAt,
-      },
-      include: {
-        brand: {
-          select: {
-            id: true,
-            brandKey: true,
-            name: true,
-            status: true,
-          },
-        },
-      },
-    });
-  });
-}
-
-async function maybeBridgeLegacyExternalUser(
-  brand: Pick<PublicBrandContext, "brandId" | "brandKey" | "brandName">,
-  email: string
-): Promise<ExternalUserWithBrand | null> {
-  if (!canBridgeLegacyExternalUser(brand.brandKey)) return null;
-
-  const legacy = await fetchEligibleLegacyExternalUser(email);
-  if (!legacy) return null;
-
-  return ensureExternalUserFromLegacy(brand, legacy);
-}
-
 async function recordExternalLogin(user: ExternalUserWithBrand, req: Pick<NextApiRequest, "headers">): Promise<void> {
   try {
     const ip = getClientIp(req);
@@ -307,7 +185,7 @@ async function recordExternalLogin(user: ExternalUserWithBrand, req: Pick<NextAp
   }
 }
 
-export async function findOrBridgeExternalUserByEmail(
+export async function findExternalUserByEmail(
   brand: Pick<PublicBrandContext, "brandId" | "brandKey" | "brandName">,
   email: string
 ): Promise<ExternalUserWithBrand | null> {
@@ -315,10 +193,7 @@ export async function findOrBridgeExternalUserByEmail(
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
 
-  const external = await fetchExternalUserByBrandAndEmail(brandId, normalizedEmail);
-  if (external) return external;
-
-  return maybeBridgeLegacyExternalUser(brand, normalizedEmail);
+  return fetchExternalUserByBrandAndEmail(brandId, normalizedEmail);
 }
 
 export async function authorizeExternalCredentials(
@@ -332,7 +207,7 @@ export async function authorizeExternalCredentials(
   const password = String(credentials?.password || "");
   if (!email || !password) return null;
 
-  const user = await findOrBridgeExternalUserByEmail(brand, email);
+  const user = await findExternalUserByEmail(brand, email);
   if (!user) return null;
   if (user.status === ExternalUserStatus.BLOCKED) return null;
   if (!user.emailVerified) return null;
@@ -347,7 +222,6 @@ export async function refreshExternalIdentity(sessionLike: {
   sub?: string | null;
   email?: string | null;
   brandKey?: string | null;
-  authScope?: string | null;
 }): Promise<ExternalAuthUser | null> {
   const tokenId = typeof sessionLike.sub === "string" ? sessionLike.sub : "";
   if (tokenId) {
@@ -385,31 +259,6 @@ export async function refreshExternalIdentity(sessionLike: {
     return toExternalAuthUser(matches[0]);
   }
 
-  if (matches.length === 0 && sessionLike.authScope === EXTERNAL_LEGACY_AUTH_SCOPE) {
-    const bridgeBrandKey = getLegacyExternalBridgeBrandKey();
-    const bridgeBrand = await prisma.brand.findUnique({
-      where: { brandKey: bridgeBrandKey },
-      select: {
-        id: true,
-        brandKey: true,
-        name: true,
-      },
-    });
-
-    if (bridgeBrand) {
-      const bridged = await maybeBridgeLegacyExternalUser(
-        {
-          brandId: bridgeBrand.id,
-          brandKey: bridgeBrand.brandKey,
-          brandName: bridgeBrand.name,
-        },
-        email
-      );
-
-      if (bridged) return toExternalAuthUser(bridged);
-    }
-  }
-
   return null;
 }
 
@@ -420,7 +269,6 @@ export async function getExternalIdentityFromSession(session: any): Promise<Exte
     sub: session?.user?.id || session?.id || session?.sub || null,
     email: session?.user?.email || session?.email || null,
     brandKey: getSessionBrandKey(session),
-    authScope: getAuthScope(session),
   });
 
   if (!hydrated) return null;
