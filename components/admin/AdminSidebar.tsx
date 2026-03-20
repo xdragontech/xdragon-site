@@ -19,11 +19,13 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
     "block w-full rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-500";
 
   const isOnLibraryRoute = router.pathname.startsWith("/admin/library") || router.pathname === "/admin/prompts";
+  const isOnSettingsRoute = router.pathname === "/admin/settings" || router.pathname.startsWith("/admin/settings/");
   const subItemClass = (href: string, aliases: string[] = []) =>
     subBase + ((router.pathname === href || aliases.includes(router.pathname)) ? " ring-2 ring-neutral-900/20" : "");
 
   // Show the tree whenever you're anywhere under /admin/library
   const showLibraryTree = isOnLibraryRoute || active === "library";
+  const showSettingsTree = isOnSettingsRoute || active === "settings";
 
   return (
     <aside className="lg:col-span-2">
@@ -62,9 +64,25 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
             )}
           </div>
 
-          <Link href="/admin/settings" className={itemClass("settings")}>
-            Settings
-          </Link>
+          <div className="space-y-2">
+            <Link href="/admin/settings" className={itemClass("settings")}>
+              Settings
+            </Link>
+
+            {showSettingsTree && (
+              <div className="space-y-2 pl-3">
+                <Link href="/admin/settings/brands" className={subItemClass("/admin/settings/brands")}>
+                  Brands
+                </Link>
+                <Link
+                  href="/admin/settings/configs"
+                  className={subItemClass("/admin/settings/configs", ["/admin/settings"])}
+                >
+                  Configs
+                </Link>
+              </div>
+            )}
+          </div>
         </nav>
       </div>
     </aside>

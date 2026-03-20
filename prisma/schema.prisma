@@ -23,6 +23,7 @@ enum BrandEnvironment {
 
 enum BrandHostKind {
   PUBLIC
+  ADMIN
   APEX
   ALIAS
 }

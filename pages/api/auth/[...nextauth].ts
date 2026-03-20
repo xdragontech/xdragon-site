@@ -11,7 +11,8 @@ import {
   getUserAgent,
   iso2ToCountryName,
 } from "../../../lib/requestIdentity";
-import { authCookieDomain, canonicalAdminHost, canonicalPublicHost, getAllowedHosts } from "../../../lib/siteConfig";
+import { getRuntimeAllowedHosts } from "../../../lib/brandRegistry";
+import { authCookieDomain } from "../../../lib/siteConfig";
 
 const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
 
@@ -231,7 +232,7 @@ export const authOptions: NextAuthOptions = {
         const host = target.hostname.toLowerCase();
         const baseHost = new URL(baseUrl).hostname.toLowerCase();
 
-        const allowedHosts = getAllowedHosts([baseHost, canonicalPublicHost(), canonicalAdminHost()]);
+        const allowedHosts = await getRuntimeAllowedHosts([baseHost]);
 
         if (allowedHosts.has(host)) return url;
       } catch {

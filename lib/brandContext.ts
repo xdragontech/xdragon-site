@@ -1,17 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getBrandSiteConfig } from "./siteConfig";
+import { BrandStatus } from "@prisma/client";
+import { resolveRuntimeBrandForHost } from "./brandRegistry";
 import { buildOrigin, getApiRequestHost, getApiRequestProtocol, normalizeHost } from "./requestHost";
 
 export type BrandEnvironment = "production" | "preview";
-export type BrandStatus = "ACTIVE";
 
 export type PublicBrandContext = {
   brandKey: string;
   brandName: string;
-  status: BrandStatus;
+  status: BrandStatus | "ACTIVE";
   environment: BrandEnvironment;
   matchedHost: string;
   canonicalPublicHost: string;
+  canonicalAdminHost: string;
   apexHost: string;
 };
 
@@ -51,53 +52,23 @@ export function canAccessBrand(scope: BackofficeBrandScope, brandKey: string | n
   return scope.allowedBrandKeys.includes(normalized);
 }
 
-export function resolvePublicBrandContextForHost(host: string): PublicBrandContext | null {
-  const cfg = getBrandSiteConfig();
-  const normalizedHost = normalizeHost(host);
-  const brandKey = normalizeBrandKey(cfg.brandKey) || "xdragon";
+export async function resolvePublicBrandContextForHost(host: string): Promise<PublicBrandContext | null> {
+  const runtime = await resolveRuntimeBrandForHost(host);
+  if (!runtime) return null;
 
-  if (!normalizedHost) return null;
-
-  if (normalizedHost === normalizeHost(cfg.production.publicHost)) {
-    return {
-      brandKey,
-      brandName: cfg.brandName,
-      status: "ACTIVE",
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: normalizeHost(cfg.production.publicHost),
-      apexHost: normalizeHost(cfg.apexHost),
-    };
-  }
-
-  if (normalizedHost === normalizeHost(cfg.preview.publicHost)) {
-    return {
-      brandKey,
-      brandName: cfg.brandName,
-      status: "ACTIVE",
-      environment: "preview",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: normalizeHost(cfg.preview.publicHost),
-      apexHost: normalizeHost(cfg.apexHost),
-    };
-  }
-
-  if (normalizedHost === normalizeHost(cfg.apexHost)) {
-    return {
-      brandKey,
-      brandName: cfg.brandName,
-      status: "ACTIVE",
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: normalizeHost(cfg.production.publicHost),
-      apexHost: normalizeHost(cfg.apexHost),
-    };
-  }
-
-  return null;
+  return {
+    brandKey: normalizeBrandKey(runtime.brandKey) || runtime.brandKey,
+    brandName: runtime.brandName,
+    status: runtime.status,
+    environment: runtime.environment,
+    matchedHost: normalizeHost(runtime.matchedHost),
+    canonicalPublicHost: normalizeHost(runtime.canonicalPublicHost),
+    canonicalAdminHost: normalizeHost(runtime.canonicalAdminHost),
+    apexHost: normalizeHost(runtime.apexHost),
+  };
 }
 
-export function resolvePublicBrandContext(req: NextApiRequest): PublicBrandContext | null {
+export async function resolvePublicBrandContext(req: NextApiRequest): Promise<PublicBrandContext | null> {
   return resolvePublicBrandContextForHost(getApiRequestHost(req));
 }
 
@@ -121,13 +92,18 @@ export type EnsuredPublicBrandRequest = {
   requestedBrandKey: string | null;
 };
 
-export function ensurePublicBrandRequest(
+export async function ensurePublicBrandRequest(
   req: NextApiRequest,
   res: NextApiResponse<any>
-): EnsuredPublicBrandRequest | null {
-  const brand = resolvePublicBrandContext(req);
+): Promise<EnsuredPublicBrandRequest | null> {
+  const brand = await resolvePublicBrandContext(req);
   if (!brand) {
     res.status(403).json({ ok: false, error: "Unknown brand host" });
+    return null;
+  }
+
+  if (brand.status !== BrandStatus.ACTIVE) {
+    res.status(403).json({ ok: false, error: "Brand is not active" });
     return null;
   }
 

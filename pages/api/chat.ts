@@ -407,7 +407,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const brandRequest = ensurePublicBrandRequest(req, res);
+  const brandRequest = await ensurePublicBrandRequest(req, res);
   if (!brandRequest) return;
 
   const { brand } = brandRequest;

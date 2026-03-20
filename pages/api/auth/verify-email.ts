@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  if (!ensurePublicBrandRequest(req, res)) return;
+  if (!(await ensurePublicBrandRequest(req, res))) return;
 
   try {
     const { token } = req.body || {};

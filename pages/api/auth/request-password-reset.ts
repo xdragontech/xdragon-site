@@ -48,7 +48,7 @@ async function sendResendEmail(params: { to: string; subject: string; text: stri
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
-  const brandRequest = ensurePublicBrandRequest(req, res);
+  const brandRequest = await ensurePublicBrandRequest(req, res);
   if (!brandRequest) return;
 
   const { brand } = brandRequest;
