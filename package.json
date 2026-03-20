@@ -21,6 +21,10 @@
     "brand:status:production": "./scripts/with-db-target.sh production node ./scripts/sync-brand-registry.js",
     "brand:sync:preview": "./scripts/with-db-target.sh preview node ./scripts/sync-brand-registry.js --apply",
     "brand:sync:production": "./scripts/with-db-target.sh production node ./scripts/sync-brand-registry.js --apply",
+    "identity:audit:preview": "./scripts/with-db-target.sh preview node ./scripts/sync-legacy-identities.js",
+    "identity:audit:production": "./scripts/with-db-target.sh production node ./scripts/sync-legacy-identities.js",
+    "identity:sync:preview": "./scripts/with-db-target.sh preview node ./scripts/sync-legacy-identities.js --apply",
+    "identity:sync:production": "./scripts/with-db-target.sh production node ./scripts/sync-legacy-identities.js --apply",
     "vercel-build": "prisma generate && next build"
   },
   "dependencies": {

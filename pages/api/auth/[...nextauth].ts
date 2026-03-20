@@ -144,7 +144,6 @@ export const authOptions: NextAuthOptions = {
           sub: typeof token.sub === "string" ? token.sub : null,
           email: typeof token.email === "string" ? token.email : null,
           brandKey: typeof (token as any).brandKey === "string" ? (token as any).brandKey : null,
-          authScope,
         });
 
         if (!refreshed) {

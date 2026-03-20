@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import { prisma } from "../../../lib/prisma";
 import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
-import { findOrBridgeExternalUserByEmail } from "../../../lib/externalIdentity";
+import { findExternalUserByEmail } from "../../../lib/externalIdentity";
 
 /**
  * POST /api/auth/request-password-reset
@@ -64,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const brandId = brand.brandId;
     if (!brandId) return res.status(200).json({ ok: true });
 
-    const user = await findOrBridgeExternalUserByEmail(brand, email);
+    const user = await findExternalUserByEmail(brand, email);
     if (!user || user.status === "BLOCKED") return res.status(200).json({ ok: true });
 
     // Raw token for the link; store a SHA-256 hash in DB

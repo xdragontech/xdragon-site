@@ -3,26 +3,10 @@ import {
   BackofficeRole,
   BackofficeUserStatus,
   BrandStatus,
-  UserRole,
-  UserStatus,
-  type BackofficeUser,
-  type Brand,
   type Prisma,
-  type User,
 } from "@prisma/client";
-import type { NextApiRequest } from "next";
 import { prisma } from "./prisma";
-import {
-  BACKOFFICE_AUTH_SCOPE,
-  EXTERNAL_LEGACY_AUTH_SCOPE,
-  getAuthScope,
-} from "./authScopes";
-import {
-  getCfCountryIso2,
-  getClientIp,
-  getUserAgent,
-  iso2ToCountryName,
-} from "./requestIdentity";
+import { BACKOFFICE_AUTH_SCOPE, getAuthScope } from "./authScopes";
 
 const XDADMIN_ID = "xdadmin";
 
@@ -47,8 +31,6 @@ type BackofficeUserWithAccess = Prisma.BackofficeUserGetPayload<{
     };
   };
 }>;
-
-type LegacyAdminSeed = Pick<User, "id" | "email" | "name" | "passwordHash" | "status" | "role" | "emailVerified">;
 
 export type BackofficeIdentityState = {
   id: string;
@@ -77,15 +59,6 @@ export type BackofficeAuthUser = {
   lastSelectedBrandKey: string | null;
 };
 
-export type ExternalLegacyAuthUser = {
-  id: string;
-  email?: string;
-  name?: string;
-  role: UserRole;
-  status: UserStatus;
-  authScope: typeof EXTERNAL_LEGACY_AUTH_SCOPE;
-};
-
 function normalizeEmail(value: unknown): string {
   return String(value || "")
     .trim()
@@ -96,24 +69,6 @@ function normalizeUsername(value: unknown): string {
   return String(value || "")
     .trim()
     .toLowerCase();
-}
-
-function usernameSeedFromEmail(email: string): string {
-  return email
-    .split("@")[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 32);
-}
-
-function normalizeUsernameSeed(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 32);
 }
 
 function toDisplayName(user: { username: string; email: string | null }) {
@@ -164,17 +119,6 @@ function toBackofficeAuthUser(state: BackofficeIdentityState): BackofficeAuthUse
   };
 }
 
-function toExternalLegacyAuthUser(user: Pick<User, "id" | "email" | "name" | "role" | "status">): ExternalLegacyAuthUser {
-  return {
-    id: user.id,
-    email: user.email || undefined,
-    name: user.name || undefined,
-    role: user.role,
-    status: user.status,
-    authScope: EXTERNAL_LEGACY_AUTH_SCOPE,
-  };
-}
-
 export function getXdAdminIdentity() {
   const username = normalizeUsername(process.env.XDADMIN_USERNAME || "xdadmin");
   const email = normalizeEmail(process.env.XDADMIN_EMAIL || "xdadmin@xdragon.tech");
@@ -218,25 +162,6 @@ async function listActiveBrandAccessRows(
   });
 }
 
-async function buildUniqueUsername(
-  tx: Pick<typeof prisma, "backofficeUser">,
-  preferred: string
-): Promise<string> {
-  const base = normalizeUsernameSeed(preferred) || "staff";
-  let candidate = base;
-
-  for (let suffix = 2; suffix < 1000; suffix += 1) {
-    const existing = await tx.backofficeUser.findUnique({
-      where: { username: candidate },
-      select: { id: true },
-    });
-    if (!existing) return candidate;
-    candidate = `${base}-${suffix}`;
-  }
-
-  throw new Error("Unable to allocate a unique backoffice username");
-}
-
 async function fetchBackofficeUserByIdentifier(identifier: string): Promise<BackofficeUserWithAccess | null> {
   return prisma.backofficeUser.findFirst({
     where: {
@@ -277,156 +202,6 @@ async function fetchBackofficeUserById(id: string): Promise<BackofficeUserWithAc
   });
 }
 
-async function fetchEligibleLegacyAdmin(email: string): Promise<LegacyAdminSeed | null> {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      passwordHash: true,
-      status: true,
-      role: true,
-      emailVerified: true,
-    },
-  });
-
-  if (!user?.email || !user.passwordHash) return null;
-  if (user.status === UserStatus.BLOCKED) return null;
-  if (!user.emailVerified) return null;
-  if (user.role !== UserRole.ADMIN && !isEnvAdminEmail(user.email)) return null;
-
-  return user;
-}
-
-async function ensureBackofficeUserFromLegacy(legacy: LegacyAdminSeed): Promise<BackofficeUserWithAccess> {
-  const email = normalizeEmail(legacy.email);
-  const passwordHash = legacy.passwordHash;
-  if (!email || !passwordHash) {
-    throw new Error("Legacy admin is missing required credentials");
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.backofficeUser.findUnique({
-      where: { email },
-      include: {
-        brandAccesses: {
-          include: {
-            brand: {
-              select: {
-                id: true,
-                brandKey: true,
-                status: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (existing) return existing;
-
-    const role = isEnvAdminEmail(email) ? BackofficeRole.SUPERADMIN : BackofficeRole.STAFF;
-    const username = await buildUniqueUsername(
-      tx,
-      usernameSeedFromEmail(email) || normalizeUsernameSeed(String(legacy.name || "")) || "staff"
-    );
-
-    const created = await tx.backofficeUser.create({
-      data: {
-        username,
-        email,
-        passwordHash,
-        role,
-        status: legacy.status === UserStatus.BLOCKED ? BackofficeUserStatus.BLOCKED : BackofficeUserStatus.ACTIVE,
-        lastLoginAt: null,
-      },
-    });
-
-    const brands = await listActiveBrandAccessRows(tx);
-    if (brands.length > 0) {
-      await tx.backofficeUserBrandAccess.createMany({
-        data: brands.map((brand) => ({
-          userId: created.id,
-          brandId: brand.id,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    const reloaded = await tx.backofficeUser.findUnique({
-      where: { id: created.id },
-      include: {
-        brandAccesses: {
-          include: {
-            brand: {
-              select: {
-                id: true,
-                brandKey: true,
-                status: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!reloaded) throw new Error("Failed to load bootstrapped backoffice user");
-    return reloaded;
-  });
-}
-
-export async function syncLegacyAdminsToBackoffice(): Promise<{ created: number }> {
-  const envAdminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL_LIST || process.env.ADMIN_USERS || "")
-    .split(/[,\s]+/)
-    .map((entry) => normalizeEmail(entry))
-    .filter(Boolean);
-
-  const whereClauses: Prisma.UserWhereInput[] = [{ role: UserRole.ADMIN }];
-  if (envAdminEmails.length > 0) {
-    whereClauses.push({ email: { in: envAdminEmails } });
-  }
-
-  const users = await prisma.user.findMany({
-    where: {
-      AND: [
-        { email: { not: null } },
-        { passwordHash: { not: null } },
-        { emailVerified: { not: null } },
-        { OR: whereClauses },
-      ],
-    },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      passwordHash: true,
-      status: true,
-      role: true,
-      emailVerified: true,
-    },
-    orderBy: [{ createdAt: "asc" }],
-  });
-
-  let created = 0;
-  for (const user of users) {
-    const email = normalizeEmail(user.email);
-    if (!email) continue;
-
-    const existing = await prisma.backofficeUser.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-
-    if (existing) continue;
-
-    await ensureBackofficeUserFromLegacy(user);
-    created += 1;
-  }
-
-  return { created };
-}
-
 export async function authorizeBackofficeCredentials(
   credentials: Record<string, unknown> | undefined
 ): Promise<BackofficeAuthUser | null> {
@@ -456,13 +231,6 @@ export async function authorizeBackofficeCredentials(
 
   let user = await fetchBackofficeUserByIdentifier(identifier);
 
-  if (!user && identifier.includes("@")) {
-    const legacy = await fetchEligibleLegacyAdmin(identifier);
-    if (legacy?.passwordHash && (await bcrypt.compare(password, legacy.passwordHash))) {
-      user = await ensureBackofficeUserFromLegacy(legacy);
-    }
-  }
-
   if (!user) return null;
   if (user.status === BackofficeUserStatus.BLOCKED) return null;
   if (!(await bcrypt.compare(password, user.passwordHash))) return null;
@@ -479,39 +247,6 @@ export async function authorizeBackofficeCredentials(
 
   return toBackofficeAuthUser(state);
 }
-
-export async function authorizeLegacyExternalCredentials(
-  credentials: Record<string, unknown> | undefined,
-  req: Pick<NextApiRequest, "headers">
-): Promise<ExternalLegacyAuthUser | null> {
-  const email = normalizeEmail(credentials?.email);
-  const password = String(credentials?.password || "");
-
-  if (!email || !password) return null;
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return null;
-  if (user.status === UserStatus.BLOCKED) return null;
-  if (!user.emailVerified) return null;
-  if (!user.passwordHash) return null;
-  if (!(await bcrypt.compare(password, user.passwordHash))) return null;
-
-  try {
-    const ip = getClientIp(req);
-    const countryIso2 = getCfCountryIso2(req);
-    const countryName = iso2ToCountryName(countryIso2);
-    const userAgent = getUserAgent(req);
-    await prisma.$transaction([
-      prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
-      prisma.loginEvent.create({ data: { userId: user.id, ip, userAgent, countryIso2, countryName } }),
-    ]);
-  } catch (error) {
-    console.warn("Legacy user LoginEvent write failed:", error);
-  }
-
-  return toExternalLegacyAuthUser(user);
-}
-
 export async function refreshBackofficeIdentity(sessionLike: { sub?: string | null; email?: string | null }): Promise<BackofficeAuthUser | null> {
   const xd = getXdAdminIdentity();
   const tokenEmail = normalizeEmail(sessionLike.email);
@@ -544,20 +279,6 @@ export async function refreshBackofficeIdentity(sessionLike: { sub?: string | nu
   }
 
   return toBackofficeAuthUser(state);
-}
-
-export async function refreshLegacyExternalIdentity(sessionLike: { email?: string | null }): Promise<ExternalLegacyAuthUser | null> {
-  const email = normalizeEmail(sessionLike.email);
-  if (!email) return null;
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, name: true, role: true, status: true },
-  });
-
-  if (!user) return null;
-
-  return toExternalLegacyAuthUser(user);
 }
 
 export async function getBackofficeIdentityFromSession(session: any): Promise<BackofficeIdentityState | null> {
