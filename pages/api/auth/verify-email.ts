@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import { prisma } from "../../../lib/prisma";
+import { ensurePublicBrandRequest } from "../../../lib/brandContext";
 
 /**
  * POST /api/auth/verify-email
@@ -19,6 +20,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
+
+  if (!ensurePublicBrandRequest(req, res)) return;
 
   try {
     const { token } = req.body || {};

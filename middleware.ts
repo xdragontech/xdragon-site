@@ -4,18 +4,14 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { adminHostFor, getAllowedHosts, getBrandSiteConfig, isAdminHost, publicHostFor } from "./lib/siteConfig";
-
-function getHost(req: NextRequest): string {
-  const xfHost = req.headers.get("x-forwarded-host") || "";
-  const host = (xfHost || req.headers.get("host") || "").split(",")[0].trim().toLowerCase();
-  return host;
-}
+import { resolvePublicBrandContextForHost } from "./lib/brandContext";
+import { getMiddlewareRequestHost } from "./lib/requestHost";
+import { adminHostFor, getAllowedHosts, isAdminHost, publicHostFor } from "./lib/siteConfig";
 
 export default function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
-  const host = getHost(req);
-  const cfg = getBrandSiteConfig();
+  const host = getMiddlewareRequestHost(req);
+  const brand = resolvePublicBrandContextForHost(host);
 
   // Never touch API routes. Also leave raw vercel preview domains alone.
   if (url.pathname.startsWith("/api") || host.endsWith(".vercel.app")) {
@@ -52,9 +48,9 @@ export default function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // Normalize apex to production www.
-  if (host === cfg.apexHost) {
-    url.hostname = cfg.production.publicHost;
+  // Normalize any public alias host to the canonical public host for the resolved brand.
+  if (!onAdminHost && brand && host !== brand.canonicalPublicHost) {
+    url.hostname = brand.canonicalPublicHost;
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }
