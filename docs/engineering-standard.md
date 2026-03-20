@@ -30,8 +30,9 @@ This is the working standard for every X Dragon change until the public site and
 1. Any reusable content or lead data must be scoped to a brand/site.
 2. New tables/features must define tenancy before they are considered reusable.
 3. Prisma changes require an explicit migration and rollback thought process.
-4. Backoffice users and external users must not be modeled as one credential domain once the brand migration begins.
-5. `brandId` is internal only; external-safe references should use `brandKey`.
+4. Never edit an already-applied migration to repair history. Restore missing migration directories or add forward fixes with idempotent SQL.
+5. Backoffice users and external users must not be modeled as one credential domain once the brand migration begins.
+6. `brandId` is internal only; external-safe references should use `brandKey`.
 
 ## Runtime rules
 1. Public API handlers must return structured JSON on failure.
