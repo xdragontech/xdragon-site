@@ -4,21 +4,92 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { adminHostFor, getAllowedHosts, getBrandSiteConfig, isAdminHost, publicHostFor } from "./lib/siteConfig";
+import { getMiddlewareRequestHost } from "./lib/requestHost";
+import { adminHostFor, getAllowedHosts, isAdminHost, publicHostFor } from "./lib/siteConfig";
 
-function getHost(req: NextRequest): string {
-  const xfHost = req.headers.get("x-forwarded-host") || "";
-  const host = (xfHost || req.headers.get("host") || "").split(",")[0].trim().toLowerCase();
-  return host;
+type MiddlewareRuntime = {
+  canonicalPublicHost: string;
+  canonicalAdminHost: string;
+  isAdminHost: boolean;
+};
+
+async function fetchMiddlewareRuntime(req: NextRequest, host: string): Promise<{ loaded: boolean; runtime: MiddlewareRuntime | null }> {
+  try {
+    const url = new URL("/api/internal/brand-runtime", req.nextUrl.origin);
+    url.searchParams.set("host", host);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        "x-xdragon-runtime": "middleware",
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) return { loaded: false, runtime: null };
+
+    const payload = await res.json();
+    const runtime = payload?.runtime;
+
+    if (!runtime) return { loaded: true, runtime: null };
+
+    return {
+      loaded: true,
+      runtime: {
+        canonicalPublicHost: String(runtime.canonicalPublicHost || ""),
+        canonicalAdminHost: String(runtime.canonicalAdminHost || ""),
+        isAdminHost: Boolean(runtime.isAdminHost),
+      },
+    };
+  } catch {
+    return { loaded: false, runtime: null };
+  }
 }
 
-export default function middleware(req: NextRequest) {
+export default async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
-  const host = getHost(req);
-  const cfg = getBrandSiteConfig();
+  const host = getMiddlewareRequestHost(req);
 
   // Never touch API routes. Also leave raw vercel preview domains alone.
   if (url.pathname.startsWith("/api") || host.endsWith(".vercel.app")) {
+    return NextResponse.next();
+  }
+
+  const runtimeState = await fetchMiddlewareRuntime(req, host);
+
+  if (runtimeState.loaded) {
+    const runtime = runtimeState.runtime;
+    if (!runtime) {
+      return NextResponse.next();
+    }
+
+    const isAdminPath = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
+    const isRootPath = url.pathname === "/" || url.pathname === "";
+    const onAdminHost = runtime.isAdminHost;
+
+    if (onAdminHost && isRootPath) {
+      url.pathname = "/admin/signin";
+      url.protocol = "https:";
+      return NextResponse.redirect(url, 308);
+    }
+
+    if (isAdminPath && !onAdminHost) {
+      url.hostname = runtime.canonicalAdminHost;
+      url.protocol = "https:";
+      return NextResponse.redirect(url, 308);
+    }
+
+    if (!isAdminPath && onAdminHost) {
+      url.hostname = runtime.canonicalPublicHost;
+      url.protocol = "https:";
+      return NextResponse.redirect(url, 308);
+    }
+
+    if (!onAdminHost && host !== runtime.canonicalPublicHost) {
+      url.hostname = runtime.canonicalPublicHost;
+      url.protocol = "https:";
+      return NextResponse.redirect(url, 308);
+    }
+
     return NextResponse.next();
   }
 
@@ -52,9 +123,9 @@ export default function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // Normalize apex to production www.
-  if (host === cfg.apexHost) {
-    url.hostname = cfg.production.publicHost;
+  // Normalize any public alias host to the canonical public host for the fallback env config.
+  if (!onAdminHost && host !== publicHostFor(host)) {
+    url.hostname = publicHostFor(host);
     url.protocol = "https:";
     return NextResponse.redirect(url, 308);
   }

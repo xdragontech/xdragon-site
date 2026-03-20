@@ -30,6 +30,9 @@ This is the working standard for every X Dragon change until the public site and
 1. Any reusable content or lead data must be scoped to a brand/site.
 2. New tables/features must define tenancy before they are considered reusable.
 3. Prisma changes require an explicit migration and rollback thought process.
+4. Never edit an already-applied migration to repair history. Restore missing migration directories or add forward fixes with idempotent SQL.
+5. Backoffice users and external users must not be modeled as one credential domain once the brand migration begins.
+6. `brandId` is internal only; external-safe references should use `brandKey`.
 
 ## Runtime rules
 1. Public API handlers must return structured JSON on failure.
@@ -38,6 +41,8 @@ This is the working standard for every X Dragon change until the public site and
 4. Auth/session shape must be normalized in one place and consumed consistently.
 5. Host/domain routing rules must flow through shared site config, not be duplicated across pages and middleware.
 6. If a lead is durably captured, notification failures should degrade to deferred follow-up rather than user-visible loss.
+7. Public brand context must resolve from host server-side; client-sent brand identifiers are cross-checks only.
+8. Brand-specific email flows must fail safely and must not fall back across brands.
 
 ## Deployment rules
 1. `feature/*` -> PR -> `staging` -> QA -> PR -> `main`
@@ -50,6 +55,8 @@ This is the working standard for every X Dragon change until the public site and
 - Does this preserve staging/prod isolation?
 - Does this create a multi-brand data problem later?
 - Does this change need QA steps or env documentation updates?
+- Does this mix backoffice and external identity concerns that should stay separate?
+- Does this trust client-provided brand context where host/session validation should be authoritative?
 
 ## Minimum QA for user-facing changes
 - public landing page loads correctly
@@ -64,3 +71,8 @@ Stop and clarify before merging if a change:
 - changes auth/cookie/domain behavior across environments
 - adds multi-brand implications without a tenancy plan
 - hides a broken env contract behind silent failures
+
+## Reference docs
+- [`docs/refactor-roadmap.md`](./refactor-roadmap.md)
+- [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)

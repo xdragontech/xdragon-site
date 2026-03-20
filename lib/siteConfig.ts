@@ -95,8 +95,3 @@ export function authCookieDomain(): string | undefined {
   if (process.env.VERCEL_ENV !== "production") return undefined;
   return process.env.AUTH_COOKIE_DOMAIN || `.${getBrandSiteConfig().apexHost}`;
 }
-
-export function shouldRenderPublicChat(pathname: string): boolean {
-  const hiddenPrefixes = ["/admin", "/auth", "/tools", "/prompts", "/guides", "/resources"];
-  return !hiddenPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}

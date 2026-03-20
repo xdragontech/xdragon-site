@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Resend } from "resend";
+import { ensurePublicBrandRequest } from "../../lib/brandContext";
 
 type PrismaMod = { prisma?: any; default?: any };
 
@@ -117,6 +118,7 @@ type RateLimitConfig = {
   name: string; // route name
   perMinute: number;
   perHour: number;
+  scopeKey?: string | null;
 };
 
 async function enforceRateLimit(
@@ -135,8 +137,9 @@ async function enforceRateLimit(
     const minuteWindow = Math.floor(now / 60_000);
     const hourWindow = Math.floor(now / 3_600_000);
 
-    const minuteKey = `rl:${cfg.name}:m:${minuteWindow}:${ip}`;
-    const hourKey = `rl:${cfg.name}:h:${hourWindow}:${ip}`;
+    const scope = cfg.scopeKey ? `${cfg.scopeKey}:` : "";
+    const minuteKey = `rl:${cfg.name}:${scope}m:${minuteWindow}:${ip}`;
+    const hourKey = `rl:${cfg.name}:${scope}h:${hourWindow}:${ip}`;
 
     const minuteCount = await upstashIncr(minuteKey);
     if (minuteCount === 1) await upstashExpire(minuteKey, 60);
@@ -228,7 +231,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const _rlOk = await enforceRateLimit(req, res, { name: "contact", perMinute: 5, perHour: 40 });
+  const brandRequest = await ensurePublicBrandRequest(req, res);
+  if (!brandRequest) return;
+
+  const { brand } = brandRequest;
+
+  const _rlOk = await enforceRateLimit(req, res, {
+    name: "contact",
+    perMinute: 5,
+    perHour: 40,
+    scopeKey: brand.brandKey,
+  });
   if (!_rlOk) return;
 
   const name = cleanStr(req.body?.name, 200);
@@ -262,6 +275,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           source: "CONTACT",
           email: normalizedEmail,
           createdAt: { gte: dayStart, lt: dayEnd },
+          ...(brand.brandId
+            ? {
+                OR: [{ brandId: brand.brandId }, { brandId: null }],
+              }
+            : {}),
         },
         orderBy: { createdAt: "desc" },
       });
@@ -280,6 +298,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const updated = await prisma.lead.update({
           where: { id: existing.id },
           data: {
+            ...(brand.brandId ? { brandId: brand.brandId } : {}),
             name,
             email: normalizedEmail,
             ip,
@@ -289,6 +308,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       } else {
         const created = await prisma.lead.create({
           data: {
+            ...(brand.brandId ? { brandId: brand.brandId } : {}),
             source: "CONTACT",
             name,
             email: normalizedEmail,
@@ -302,6 +322,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (prisma?.leadEvent) {
         await prisma.leadEvent.create({
           data: {
+            ...(brand.brandId ? { brandId: brand.brandId } : {}),
             source: "CONTACT",
             leadId: leadId || undefined,
             ip,
@@ -314,6 +335,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
               email: normalizedEmail,
               phone: phone || null,
               message,
+              brandId: brand.brandId || null,
+              brandKey: brand.brandKey,
+              brandHost: brand.matchedHost,
+              brandEnvironment: brand.environment,
             },
           },
         });
@@ -327,6 +352,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     // Backup trail in Redis (if configured)
     logLeadEvent("contact", {
+      brandId: brand.brandId || null,
+      brandKey: brand.brandKey,
+      brandHost: brand.matchedHost,
+      brandEnvironment: brand.environment,
       name,
       email,
       phone: phone || null,
@@ -349,8 +378,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const resend = new Resend(RESEND_API_KEY);
 
-    const subject = `New contact request — ${name}`;
+    const subject = `${brand.brandName}: New contact request — ${name}`;
     const text = [
+      `Brand: ${brand.brandName} (${brand.brandKey})`,
+      "",
       "New website contact request:",
       "",
       `Name: ${name}`,

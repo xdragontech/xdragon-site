@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import { prisma } from "../../../lib/prisma";
+import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
 
 /**
  * POST /api/auth/request-password-reset
@@ -11,17 +12,6 @@ import { prisma } from "../../../lib/prisma";
  */
 function sha256(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
-}
-
-function getBaseUrl(req: NextApiRequest) {
-  const envUrl =
-    process.env.NEXTAUTH_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-  if (envUrl) return envUrl.replace(/\/$/, "");
-
-  const proto = (req.headers["x-forwarded-proto"] as string) || "http";
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
-  return `${proto}://${host}`;
 }
 
 async function sendResendEmail(params: { to: string; subject: string; text: string; html?: string }) {
@@ -58,6 +48,11 @@ async function sendResendEmail(params: { to: string; subject: string; text: stri
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
+  const brandRequest = await ensurePublicBrandRequest(req, res);
+  if (!brandRequest) return;
+
+  const { brand } = brandRequest;
+
   const emailRaw = (req.body?.email || "").toString().trim();
   const email = emailRaw.toLowerCase();
 
@@ -82,12 +77,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       data: { identifier: email, token: tokenHash, expires },
     });
 
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = getCanonicalPublicOrigin(req, brand);
     const link = `${baseUrl}/auth/reset-password?email=${encodeURIComponent(email)}&token=${rawToken}`;
 
-    const subject = "Reset your X Dragon Tools password";
+    const subject = `Reset your ${brand.brandName} password`;
     const text = [
-      "We received a request to reset your password for X Dragon Tools.",
+      `We received a request to reset your password for ${brand.brandName}.`,
       "",
       "Use the link below to set a new password:",
       link,
@@ -100,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const html = `
       <div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5">
         <h2 style="margin:0 0 12px">Reset your password</h2>
-        <p>We received a request to reset your password for <strong>X Dragon Tools</strong>.</p>
+        <p>We received a request to reset your password for <strong>${brand.brandName}</strong>.</p>
         <p><a href="${link}" style="display:inline-block;padding:10px 14px;background:#111;color:#fff;border-radius:12px;text-decoration:none">Reset Password</a></p>
         <p style="color:#444">If the button doesn’t work, copy and paste this URL into your browser:</p>
         <p><a href="${link}">${link}</a></p>

@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:preview": "./scripts/with-db-target.sh preview next dev",
+    "dev:production": "./scripts/with-db-target.sh production next dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
@@ -11,6 +13,14 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "db:status:preview": "./scripts/with-db-target.sh preview npx prisma migrate status",
+    "db:status:production": "./scripts/with-db-target.sh production npx prisma migrate status",
+    "db:deploy:preview": "./scripts/with-db-target.sh preview npx prisma migrate deploy",
+    "db:deploy:production": "./scripts/with-db-target.sh production npx prisma migrate deploy",
+    "brand:status:preview": "./scripts/with-db-target.sh preview node ./scripts/sync-brand-registry.js",
+    "brand:status:production": "./scripts/with-db-target.sh production node ./scripts/sync-brand-registry.js",
+    "brand:sync:preview": "./scripts/with-db-target.sh preview node ./scripts/sync-brand-registry.js --apply",
+    "brand:sync:production": "./scripts/with-db-target.sh production node ./scripts/sync-brand-registry.js --apply",
     "vercel-build": "prisma generate && next build"
   },
   "dependencies": {

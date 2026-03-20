@@ -9,11 +9,19 @@ This is the working plan for splitting the current single Next.js app into:
 
 This roadmap is intentionally incremental. We do not change layout/design unless explicitly approved.
 
+## Companion docs
+- [`docs/engineering-standard.md`](./engineering-standard.md)
+- [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
+- [`docs/staging-qa-checklist.md`](./staging-qa-checklist.md)
+
 ## Current reality
 - The repo is one Pages Router app serving both marketing and admin/resource flows.
 - Public brand content, host rules, auth rules, and admin behavior are still coupled.
 - The current schema is single-tenant. There is no brand/site dimension yet.
-- The staging blockers are `/api/chat`, `/api/contact`, favicon, and final QA discipline.
+- The current identity model still mixes backoffice/admin concerns and public user concerns in one user system.
+- Recent stabilization work resolved the immediate chat/contact deployment failures.
+- The next structural blockers are brand context, identity separation, and brand-aware data modeling.
 
 ## Non-negotiable guardrails
 - No direct pushes to `main` or `staging`.
@@ -73,9 +81,12 @@ Exit criteria:
 - content, leads, and analytics are scoped to a brand/site
 - admin permissions can resolve brand access explicitly
 - no global content tables remain for reusable back office features
+- backoffice identities and external identities are no longer modeled as one shared user domain
 
 Tasks:
 - add `Brand` and related scoping to content/leads/auth-facing data
+- split backoffice and external identity models according to the contract doc
+- follow the additive migration sequence in the schema split plan before any destructive cleanup
 - define migration plan for current X Dragon data
 - make back office queries brand-aware by default
 
@@ -104,8 +115,8 @@ Tasks:
 ## Immediate recommendations
 1. Do not split repos yet. First remove coupling inside the current codebase so the split is mechanical, not speculative.
 2. Introduce brand/tenant scoping before claiming the back office is reusable. Without it, a second brand will contaminate content and lead data.
-3. Restore SSR/SSG for the public site after hydration bugs are fixed at the component level. A JS-only marketing home page is not production-grade.
-4. Remove global public concerns from `_app` for admin/resources routes. That is a hard boundary violation.
+3. Split backoffice and external identity domains before expanding multi-brand auth. One shared user model will hard-code the wrong assumptions.
+4. Restore SSR/SSG for the public site after hydration bugs are fixed at the component level. A JS-only marketing home page is not production-grade.
 
 ## Definition of done for every refactor ticket
 - no layout/design drift

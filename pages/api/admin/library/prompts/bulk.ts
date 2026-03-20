@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
 import { authOptions } from "../../../auth/[...nextauth]";
+import { resolveWriteBrandId } from "../../../../../lib/brandRegistry";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
@@ -52,11 +53,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ ok: false, error: "No rows" });
 
       const status = (defaultStatus || "DRAFT") as PromptStatus;
+      const fallbackBrandId = await resolveWriteBrandId(req.body ?? {}, { allowSingleBrandFallback: true });
 
       const created = await prisma.$transaction(
         rows.map((r) =>
           prisma.prompt.create({
             data: {
+              brandId: typeof r.brandId === "string" && r.brandId.trim() ? r.brandId.trim() : fallbackBrandId,
               title: String(r.title || r.name || "").trim(),
               description: r.description ? String(r.description) : null,
               content: String(r.content || r.prompt || "").trim(),

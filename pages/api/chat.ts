@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
+import { ensurePublicBrandRequest } from "../../lib/brandContext";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -111,6 +112,7 @@ type RateLimitConfig = {
   name: string; // route name
   perMinute: number;
   perHour: number;
+  scopeKey?: string | null;
 };
 
 async function enforceRateLimit(
@@ -129,8 +131,9 @@ async function enforceRateLimit(
     const minuteWindow = Math.floor(now / 60_000);
     const hourWindow = Math.floor(now / 3_600_000);
 
-    const minuteKey = `rl:${cfg.name}:m:${minuteWindow}:${ip}`;
-    const hourKey = `rl:${cfg.name}:h:${hourWindow}:${ip}`;
+    const scope = cfg.scopeKey ? `${cfg.scopeKey}:` : "";
+    const minuteKey = `rl:${cfg.name}:${scope}m:${minuteWindow}:${ip}`;
+    const hourKey = `rl:${cfg.name}:${scope}h:${hourWindow}:${ip}`;
 
     const minuteCount = await upstashIncr(minuteKey);
     if (minuteCount === 1) await upstashExpire(minuteKey, 60);
@@ -325,6 +328,8 @@ function formatPhoneDisplay(e164: string | null): string | null {
  * If lead.email exists, it will be used as replyTo; otherwise replyTo is omitted.
  */
 async function maybeEmailLeadSummary(args: {
+  brandName: string;
+  brandKey: string;
   lead: Lead;
   conversationId?: string;
   lastUserMessage: string;
@@ -361,9 +366,10 @@ async function maybeEmailLeadSummary(args: {
         }`
       : `email: ${args.lead.email || "n/a"} / phone: ${args.lead.phone || "n/a"}`;
 
-  const subject = `X Dragon chat lead: ${who} (${where})`;
+  const subject = `${args.brandName} chat lead: ${who} (${where})`;
 
   const lines = [
+    `Brand: ${args.brandName} (${args.brandKey})`,
     `Conversation: ${args.conversationId || "n/a"}`,
     `ReturnId: ${args.returnId || "n/a"}`,
     "",
@@ -401,7 +407,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const _rlOk = await enforceRateLimit(req, res, { name: "chat", perMinute: 20, perHour: 200 });
+  const brandRequest = await ensurePublicBrandRequest(req, res);
+  if (!brandRequest) return;
+
+  const { brand } = brandRequest;
+
+  const _rlOk = await enforceRateLimit(req, res, {
+    name: "chat",
+    perMinute: 20,
+    perHour: 200,
+    scopeKey: brand.brandKey,
+  });
   if (!_rlOk) return;
 
   try {
@@ -620,6 +636,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (hasInvalidEmailAttempt && mergedLead.preferred_contact === "email" && !mergedLead.phone) {
         try {
           await maybeEmailLeadSummary({
+            brandName: brand.brandName,
+            brandKey: brand.brandKey,
             lead: { ...mergedLead, email: invalidEmailAttempt },
             conversationId,
             lastUserMessage: lastUser,
@@ -635,6 +653,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (validReady) {
         try {
           emailed = await maybeEmailLeadSummary({
+            brandName: brand.brandName,
+            brandKey: brand.brandKey,
             lead: mergedLead,
             conversationId,
             lastUserMessage: lastUser,
@@ -672,6 +692,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const cc = getCfCountry(req);
 
           const raw = {
+            brandId: brand.brandId || null,
+            brandKey: brand.brandKey,
+            brandHost: brand.matchedHost,
+            brandEnvironment: brand.environment,
             conversationId: cid || null,
             returnId,
             lead: mergedLead,
@@ -687,6 +711,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           await prisma.leadEvent.create({
             data: {
+              ...(brand.brandId ? { brandId: brand.brandId } : {}),
               source: "CHAT",
               conversationId: cid || null,
               ip,
@@ -703,6 +728,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       await logLeadEvent("chat", {
+        brandId: brand.brandId || null,
+        brandKey: brand.brandKey,
+        brandHost: brand.matchedHost,
+        brandEnvironment: brand.environment,
         ts: new Date().toISOString(),
         ip: getClientIp(req),
         ua: String(req.headers["user-agent"] || ""),

@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
+import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
 
 /**
  * Password signup + email verification
@@ -37,20 +38,7 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function baseUrl(req: NextApiRequest) {
-  // Prefer NEXTAUTH_URL/NEXT_PUBLIC_SITE_URL if set; otherwise infer from request.
-  const env =
-    process.env.NEXTAUTH_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "";
-  if (env) return env.replace(/\/$/, "");
-
-  const proto = (req.headers["x-forwarded-proto"] as string) || "https";
-  const host = req.headers.host || "localhost:3000";
-  return `${proto}://${host}`;
-}
-
-async function sendVerifyEmail(params: { to: string; url: string }) {
+async function sendVerifyEmail(params: { to: string; url: string; brandName: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn("RESEND_API_KEY not set; skipping verification email");
@@ -63,9 +51,9 @@ async function sendVerifyEmail(params: { to: string; url: string }) {
     process.env.EMAIL_FROM ||
     "X Dragon <hello@xdragon.tech>";
 
-  const subject = "Verify your email to access X Dragon Tools";
+  const subject = `Verify your email to access ${params.brandName}`;
   const text = [
-    "Thanks for signing up for X Dragon Tools.",
+    `Thanks for signing up for ${params.brandName}.`,
     "",
     "Verify your email to activate your account:",
     params.url,
@@ -95,6 +83,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
+
+  const brandRequest = await ensurePublicBrandRequest(req, res);
+  if (!brandRequest) return;
+
+  const { brand } = brandRequest;
 
   try {
     const email = cleanEmail(req.body?.email);
@@ -140,10 +133,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         expires: expiresAt,
       },
     });
-const verifyUrl = `${baseUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
+    const verifyUrl = `${getCanonicalPublicOrigin(req, brand)}/auth/verify?token=${encodeURIComponent(token)}`;
 
     // Best-effort email
-    await sendVerifyEmail({ to: email, url: verifyUrl });
+    await sendVerifyEmail({ to: email, url: verifyUrl, brandName: brand.brandName });
 
     return res.status(200).json({ ok: true });
   } catch (err: any) {

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../lib/prisma";
+import { ensurePublicBrandRequest } from "../../../lib/brandContext";
 
 /**
  * POST /api/auth/reset-password
@@ -17,6 +18,8 @@ function isStrongEnough(pw: string) {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+
+  if (!(await ensurePublicBrandRequest(req, res))) return;
 
   const emailRaw = (req.body?.email || "").toString().trim();
   const tokenRaw = (req.body?.token || "").toString().trim();
