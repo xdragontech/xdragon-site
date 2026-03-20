@@ -92,6 +92,7 @@ export function canonicalAdminHost(currentHost?: string): string {
 }
 
 export function authCookieDomain(): string | undefined {
-  if (process.env.VERCEL_ENV !== "production") return undefined;
-  return process.env.AUTH_COOKIE_DOMAIN || `.${getBrandSiteConfig().apexHost}`;
+  // Backoffice and public auth now use separate hosts and separate identity domains.
+  // Keep auth cookies host-only so production does not depend on a shared subdomain cookie.
+  return undefined;
 }
