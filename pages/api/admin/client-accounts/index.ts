@@ -1,50 +1,34 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { prisma } from "../../../../lib/prisma";
 import { requireAdminApi } from "../../../../lib/auth";
+import {
+  createManagedExternalUser,
+  listManagedExternalUsers,
+} from "../../../../lib/externalAdminUsers";
+
+function json(res: NextApiResponse, status: number, payload: any) {
+  return res.status(status).json(payload);
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
-  if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
-  if (auth.principal.role !== "SUPERADMIN") return res.status(403).json({ ok: false, error: "Forbidden" });
+  if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
+  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  try {
+    if (req.method === "GET") {
+      const users = await listManagedExternalUsers();
+      return json(res, 200, { ok: true, users });
+    }
+
+    if (req.method === "POST") {
+      const user = await createManagedExternalUser(req.body || {});
+      return json(res, 200, { ok: true, user });
+    }
+
+    res.setHeader("Allow", "GET, POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  } catch (error: any) {
+    const message = typeof error?.message === "string" ? error.message : "Server error";
+    return json(res, 400, { ok: false, error: message });
   }
-
-  const users = await prisma.externalUser.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      status: true,
-      emailVerified: true,
-      createdAt: true,
-      lastLoginAt: true,
-      legacyUserId: true,
-      brand: {
-        select: {
-          brandKey: true,
-          name: true,
-        },
-      },
-    },
-  });
-
-  return res.status(200).json({
-    ok: true,
-    users: users.map((user) => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      brandKey: user.brand.brandKey,
-      brandName: user.brand.name,
-      status: user.status,
-      emailVerifiedAt: user.emailVerified ? user.emailVerified.toISOString() : null,
-      createdAt: user.createdAt.toISOString(),
-      lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
-      legacyLinked: Boolean(user.legacyUserId),
-    })),
-  });
 }

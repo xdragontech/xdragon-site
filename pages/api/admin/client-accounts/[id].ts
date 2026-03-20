@@ -1,6 +1,13 @@
+import { ExternalUserStatus } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
-import { prisma } from "../../../../lib/prisma";
 import { requireAdminApi } from "../../../../lib/auth";
+import {
+  deleteManagedExternalUser,
+  getManagedExternalUser,
+  markManagedExternalUserVerified,
+  setManagedExternalUserStatus,
+  updateManagedExternalUser,
+} from "../../../../lib/externalAdminUsers";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
@@ -14,69 +21,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
   if (!id) return json(res, 400, { ok: false, error: "Missing id" });
 
-  const target = await prisma.externalUser.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      status: true,
-      emailVerified: true,
-      createdAt: true,
-      lastLoginAt: true,
-      legacyUserId: true,
-      brand: {
-        select: {
-          brandKey: true,
-          name: true,
-        },
-      },
-    },
-  });
-
-  if (!target) return json(res, 404, { ok: false, error: "Client account not found" });
-
-  if (req.method === "GET") {
-    return json(res, 200, {
-      ok: true,
-      user: {
-        id: target.id,
-        name: target.name,
-        email: target.email,
-        brandKey: target.brand.brandKey,
-        brandName: target.brand.name,
-        status: target.status,
-        emailVerifiedAt: target.emailVerified ? target.emailVerified.toISOString() : null,
-        createdAt: target.createdAt.toISOString(),
-        lastLoginAt: target.lastLoginAt ? target.lastLoginAt.toISOString() : null,
-        legacyLinked: Boolean(target.legacyUserId),
-      },
-    });
-  }
-
-  if (req.method === "DELETE") {
-    await prisma.externalUser.delete({ where: { id } });
-    return json(res, 200, { ok: true });
-  }
-
-  if (req.method === "PATCH" || req.method === "POST") {
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-    const action = String(body.action || "").toLowerCase();
-
-    if (action !== "block" && action !== "unblock") {
-      return json(res, 400, { ok: false, error: "Unsupported action" });
+  try {
+    if (req.method === "GET") {
+      const user = await getManagedExternalUser(id);
+      if (!user) return json(res, 404, { ok: false, error: "Client account not found" });
+      return json(res, 200, { ok: true, user });
     }
 
-    const status = action === "block" ? "BLOCKED" : "ACTIVE";
+    if (req.method === "DELETE") {
+      await deleteManagedExternalUser(id);
+      return json(res, 200, { ok: true });
+    }
 
-    await prisma.externalUser.update({
-      where: { id },
-      data: { status },
-    });
+    if (req.method === "PATCH" || req.method === "POST") {
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+      const action = String(body.action || "").toLowerCase();
 
-    return json(res, 200, { ok: true });
+      if (action === "block" || action === "unblock") {
+        const user = await setManagedExternalUserStatus(
+          id,
+          action === "block" ? ExternalUserStatus.BLOCKED : ExternalUserStatus.ACTIVE
+        );
+        return json(res, 200, { ok: true, user });
+      }
+
+      if (action === "verify") {
+        const user = await markManagedExternalUserVerified(id);
+        return json(res, 200, { ok: true, user });
+      }
+
+      const user = await updateManagedExternalUser(id, body);
+      return json(res, 200, { ok: true, user });
+    }
+
+    res.setHeader("Allow", "GET, PATCH, POST, DELETE");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  } catch (error: any) {
+    const message = typeof error?.message === "string" ? error.message : "Server error";
+    return json(res, 400, { ok: false, error: message });
   }
-
-  res.setHeader("Allow", "GET, PATCH, POST, DELETE");
-  return json(res, 405, { ok: false, error: "Method not allowed" });
 }
