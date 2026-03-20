@@ -1,7 +1,7 @@
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
 import { getServerSession } from "next-auth/next";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { canonicalAdminHost, getAllowedHosts } from "../../lib/siteConfig";
@@ -86,8 +86,20 @@ export default function AdminCommandSignIn() {
         return;
       }
 
-      if (res.ok && res.url) {
-        window.location.href = res.url;
+      if (res.ok) {
+        const session = await getSession();
+        if (!isBackofficeSession(session)) {
+          setError(
+            "Signed in, but your admin session was not established. This is usually a cookie or canonical-domain mismatch. " +
+              `Use https://${recommendedAdminHost} and verify NEXTAUTH_URL plus host config in Vercel.`
+          );
+          return;
+        }
+
+        const target =
+          callbackUrl ||
+          (getBackofficeRole(session) === "SUPERADMIN" ? "/admin/dashboard" : "/admin/library");
+        window.location.assign(target);
         return;
       }
 

@@ -438,8 +438,8 @@ export function collectDerivedRuntimeConfig(): RuntimeStatusItem[] {
     },
     {
       label: "Auth Cookie Domain",
-      value: authCookieDomain() || "Unset",
-      note: "Production-only by current runtime logic.",
+      value: authCookieDomain() || "Host-only",
+      note: "Auth cookies are intentionally host-only so public and backoffice sessions do not depend on a shared subdomain cookie.",
     },
   ];
 }
