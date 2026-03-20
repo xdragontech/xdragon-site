@@ -14,16 +14,16 @@ type Props = {
  */
 export default function LibraryCardHeader({ title, description, actionsTop, actionsBottom }: Props) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1 className="text-lg font-semibold">{title}</h1>
         {description ? <p className="mt-1 text-sm text-neutral-600">{description}</p> : null}
       </div>
 
       {(actionsTop || actionsBottom) ? (
-        <div className="flex flex-col items-start gap-2 sm:items-end">
-          {actionsTop ? <div className="flex items-center justify-end gap-2 whitespace-nowrap">{actionsTop}</div> : null}
-          {actionsBottom ? <div className="flex items-center justify-end gap-2 whitespace-nowrap">{actionsBottom}</div> : null}
+        <div className="flex max-w-full flex-col items-start gap-2 sm:items-end">
+          {actionsTop ? <div className="flex max-w-full flex-wrap items-center justify-start gap-2 sm:justify-end">{actionsTop}</div> : null}
+          {actionsBottom ? <div className="flex max-w-full flex-wrap items-center justify-start gap-2 sm:justify-end">{actionsBottom}</div> : null}
         </div>
       ) : null}
     </div>

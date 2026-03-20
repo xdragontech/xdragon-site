@@ -564,11 +564,6 @@ export default function StaffAccountsPage({
             <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <LibraryCardHeader
                 title={isNewStaff ? "New Staff Account" : selectedUser ? selectedUser.username : "Staff Account"}
-                description={
-                  isNewStaff
-                    ? "Create a new backoffice account with explicit role and brand access."
-                    : "Edit the selected staff account. Password changes are optional."
-                }
                 actionsTop={
                   <>
                     {!isNewStaff && selectedUser ? (
@@ -578,7 +573,7 @@ export default function StaffAccountsPage({
                         className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
                         disabled={Boolean(linkBusy)}
                       >
-                        {linkBusy === "reset" ? "Generating…" : "Generate Reset Link"}
+                        {linkBusy === "reset" ? "Generating…" : "Password Reset"}
                       </button>
                     ) : null}
                     {isNewStaff ? (
