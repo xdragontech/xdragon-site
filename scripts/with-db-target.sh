@@ -38,10 +38,31 @@ fi
 load_env_file() {
   local file="$1"
   if [[ -f "${file}" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "${file}"
-    set +a
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+      line="${line%$'\r'}"
+
+      if [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]]; then
+        continue
+      fi
+
+      if [[ "${line}" != *=* ]]; then
+        continue
+      fi
+
+      local key="${line%%=*}"
+      local value="${line#*=}"
+
+      key="${key#"${key%%[![:space:]]*}"}"
+      key="${key%"${key##*[![:space:]]}"}"
+
+      if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
+        value="${value:1:${#value}-2}"
+      elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+
+      export "${key}=${value}"
+    done < "${file}"
   fi
 }
 
