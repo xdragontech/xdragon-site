@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import {
   BackofficeRole,
@@ -6,9 +7,12 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { isProtectedBackofficeIdentity } from "./backofficeIdentity";
+import { MIN_BACKOFFICE_PASSWORD_LENGTH } from "./backofficePasswordPolicy";
 import { prisma } from "./prisma";
 
-const MIN_BACKOFFICE_PASSWORD_LENGTH = 10;
+const BACKOFFICE_RESET_TOKEN_BYTES = 32;
+const BACKOFFICE_INVITE_TTL_MS = 72 * 60 * 60 * 1000;
+const BACKOFFICE_RESET_TTL_MS = 30 * 60 * 1000;
 
 type ManagedBackofficeUserPayload = Prisma.BackofficeUserGetPayload<{
   include: {
@@ -51,6 +55,15 @@ export type ManagedBackofficeUserRecord = {
   protected: boolean;
 };
 
+export type ManagedBackofficePasswordLink = {
+  kind: "invite" | "reset";
+  url: string;
+  expiresAt: string;
+  userId: string;
+  username: string;
+  email: string | null;
+};
+
 type StaffUserInput = {
   username?: unknown;
   email?: unknown;
@@ -91,6 +104,14 @@ function parseRole(value: unknown): BackofficeRole {
 
 function isValidPassword(password: string) {
   return password.length >= MIN_BACKOFFICE_PASSWORD_LENGTH;
+}
+
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
+function randomPassword(length = 32) {
+  return crypto.randomBytes(length).toString("base64url");
 }
 
 function toManagedBackofficeUserRecord(user: ManagedBackofficeUserPayload): ManagedBackofficeUserRecord {
@@ -344,6 +365,85 @@ export async function createManagedBackofficeUser(input: StaffUserInput): Promis
   return toManagedBackofficeUserRecord(created);
 }
 
+export async function createManagedBackofficeInvite(input: StaffUserInput): Promise<ManagedBackofficeUserRecord> {
+  const username = normalizeUsername(input.username);
+  const email = normalizeOptionalEmail(input.email);
+  const role = parseRole(input.role || BackofficeRole.STAFF);
+  const requestedBrandIds = normalizeBrandIds(input.brandIds);
+
+  if (!username) throw new Error("Username is required");
+
+  await ensureUniqueUsername(username);
+  await ensureUniqueEmail(email);
+
+  const brands = role === BackofficeRole.STAFF ? await resolveAllowedBrandRecords(requestedBrandIds) : [];
+  if (role === BackofficeRole.STAFF && brands.length === 0) {
+    throw new Error("Staff accounts must be assigned to at least one brand");
+  }
+
+  const passwordHash = await bcrypt.hash(randomPassword(), 12);
+
+  const created = await prisma.$transaction(async (tx) => {
+    const user = await tx.backofficeUser.create({
+      data: {
+        username,
+        email,
+        passwordHash,
+        role,
+        status: BackofficeUserStatus.ACTIVE,
+        lastSelectedBrandKey: role === BackofficeRole.STAFF ? brands[0]?.brandKey || null : null,
+      },
+      include: {
+        brandAccesses: {
+          include: {
+            brand: {
+              select: {
+                id: true,
+                brandKey: true,
+                name: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (role === BackofficeRole.STAFF && brands.length > 0) {
+      await tx.backofficeUserBrandAccess.createMany({
+        data: brands.map((brand) => ({
+          userId: user.id,
+          brandId: brand.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const reloaded = await tx.backofficeUser.findUnique({
+      where: { id: user.id },
+      include: {
+        brandAccesses: {
+          include: {
+            brand: {
+              select: {
+                id: true,
+                brandKey: true,
+                name: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!reloaded) throw new Error("Failed to load created staff account");
+    return reloaded;
+  });
+
+  return toManagedBackofficeUserRecord(created);
+}
+
 export async function updateManagedBackofficeUser(
   actorId: string,
   userId: string,
@@ -494,4 +594,110 @@ export async function deleteManagedBackofficeUser(actorId: string, userId: strin
   await prisma.backofficeUser.delete({
     where: { id: existing.id },
   });
+}
+
+export async function createManagedBackofficePasswordLink(
+  userId: string,
+  kind: "invite" | "reset",
+  baseUrl: string
+): Promise<ManagedBackofficePasswordLink> {
+  const user = await prisma.backofficeUser.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      status: true,
+    },
+  });
+
+  if (!user) throw new Error("Staff account not found");
+  if (user.status === BackofficeUserStatus.BLOCKED) {
+    throw new Error("Blocked staff accounts cannot receive password links");
+  }
+
+  const rawToken = crypto.randomBytes(BACKOFFICE_RESET_TOKEN_BYTES).toString("hex");
+  const tokenHash = sha256(rawToken);
+  const expiresAt = new Date(Date.now() + (kind === "invite" ? BACKOFFICE_INVITE_TTL_MS : BACKOFFICE_RESET_TTL_MS));
+
+  await prisma.backofficePasswordResetToken.deleteMany({
+    where: { identifier: user.id },
+  });
+
+  await prisma.backofficePasswordResetToken.create({
+    data: {
+      identifier: user.id,
+      token: tokenHash,
+      expires: expiresAt,
+    },
+  });
+
+  const url = `${baseUrl}/admin/reset-password?id=${encodeURIComponent(user.id)}&token=${rawToken}`;
+
+  return {
+    kind,
+    url,
+    expiresAt: expiresAt.toISOString(),
+    userId: user.id,
+    username: user.username,
+    email: user.email || null,
+  };
+}
+
+export async function consumeManagedBackofficePasswordReset(input: {
+  userId?: unknown;
+  token?: unknown;
+  password?: unknown;
+}) {
+  const userId = String(input.userId || "").trim();
+  const rawToken = String(input.token || "").trim();
+  const password = String(input.password || "");
+
+  if (!userId || !rawToken) {
+    throw new Error("Missing user id or token");
+  }
+
+  if (!isValidPassword(password)) {
+    throw new Error(`Password must be at least ${MIN_BACKOFFICE_PASSWORD_LENGTH} characters`);
+  }
+
+  const tokenHash = sha256(rawToken);
+
+  const record = await prisma.backofficePasswordResetToken.findFirst({
+    where: {
+      identifier: userId,
+      token: tokenHash,
+    },
+  });
+
+  if (!record) throw new Error("Invalid or expired token");
+
+  if (record.expires.getTime() < Date.now()) {
+    await prisma.backofficePasswordResetToken.deleteMany({
+      where: { identifier: userId },
+    });
+    throw new Error("Invalid or expired token");
+  }
+
+  const user = await prisma.backofficeUser.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!user) throw new Error("Invalid or expired token");
+  if (user.status === BackofficeUserStatus.BLOCKED) throw new Error("Account blocked");
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await prisma.$transaction([
+    prisma.backofficeUser.update({
+      where: { id: userId },
+      data: { passwordHash },
+    }),
+    prisma.backofficePasswordResetToken.deleteMany({
+      where: { identifier: userId },
+    }),
+  ]);
 }

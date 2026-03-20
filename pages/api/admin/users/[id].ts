@@ -2,11 +2,14 @@ import { BackofficeUserStatus } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
 import {
+  createManagedBackofficePasswordLink,
   deleteManagedBackofficeUser,
   getManagedBackofficeUser,
   setManagedBackofficeUserStatus,
   updateManagedBackofficeUser,
 } from "../../../../lib/backofficeAdminUsers";
+import { buildOrigin, getApiRequestHost, getApiRequestProtocol } from "../../../../lib/requestHost";
+import { canonicalAdminHost } from "../../../../lib/siteConfig";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
@@ -43,6 +46,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           action === "block" ? BackofficeUserStatus.BLOCKED : BackofficeUserStatus.ACTIVE
         );
         return json(res, 200, { ok: true, user });
+      }
+
+      if (action === "generateresetlink") {
+        const origin = buildOrigin(getApiRequestProtocol(req), canonicalAdminHost(getApiRequestHost(req)));
+        const invite = await createManagedBackofficePasswordLink(id, "reset", origin);
+        return json(res, 200, { ok: true, invite });
       }
 
       const user = await updateManagedBackofficeUser(auth.principal.id, id, body);
