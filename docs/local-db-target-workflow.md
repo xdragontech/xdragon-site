@@ -7,10 +7,10 @@ Required files:
 - `.env.local`
   - Keep shared local secrets here.
   - Do not rely on it for the active database target.
-- `.env.preview.local`
-  - Set `XD_POSTGRESS=<preview database connection string>`
-- `.env.production.local`
-  - Set `XD_POSTGRESS=<production database connection string>`
+- `.env.db.preview.local`
+  - Set `XD_POSTGRES=<preview database connection string>`
+- `.env.db.production.local`
+  - Set `XD_POSTGRES=<production database connection string>`
 
 The repo includes `scripts/with-db-target.sh` to inject the correct database URL for a command without editing `.env.local` each time.
 
@@ -34,5 +34,5 @@ You can also run arbitrary commands:
 Safety notes:
 
 - The wrapper unsets legacy `DATABASE_URL` before executing the command.
-- The wrapper fails if `XD_POSTGRESS` is missing from the selected target file.
+- The wrapper fails if `XD_POSTGRES` is missing from the selected target file.
 - Preview and production database commands should be treated as explicit choices, not a shared default.
