@@ -1,5 +1,5 @@
 // prisma/schema.prisma
-// Requires XD_POSTGRESS (Postgres)
+// Requires XD_POSTGRES (Postgres)
 
 generator client {
   provider = "prisma-client-js"
@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("XD_POSTGRESS")
+  url      = env("XD_POSTGRES")
 }
 
 enum BrandStatus {

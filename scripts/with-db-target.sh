@@ -27,11 +27,11 @@ case "${TARGET}" in
     ;;
 esac
 
-TARGET_ENV_FILE="${ROOT_DIR}/.env.${TARGET}.local"
+TARGET_ENV_FILE="${ROOT_DIR}/.env.db.${TARGET}.local"
 
 if [[ ! -f "${TARGET_ENV_FILE}" ]]; then
   echo "Missing ${TARGET_ENV_FILE}" >&2
-  echo "Create it with XD_POSTGRESS=<connection string>." >&2
+  echo "Create it with XD_POSTGRES=<connection string>." >&2
   exit 1
 fi
 
@@ -70,10 +70,10 @@ load_env_file "${ROOT_DIR}/.env"
 load_env_file "${ROOT_DIR}/.env.local"
 load_env_file "${TARGET_ENV_FILE}"
 
-unset DATABASE_URL || true
+unset DATABASE_URL XD_POSTGRESS || true
 
-if [[ -z "${XD_POSTGRESS:-}" ]]; then
-  echo "XD_POSTGRESS is not set after loading ${TARGET_ENV_FILE}" >&2
+if [[ -z "${XD_POSTGRES:-}" ]]; then
+  echo "XD_POSTGRES is not set after loading ${TARGET_ENV_FILE}" >&2
   exit 1
 fi
 

@@ -164,7 +164,7 @@ const ENV_GROUPS: Array<{
     description: "Database and external service credentials used by runtime flows.",
     items: [
       {
-        key: "XD_POSTGRESS",
+        key: "XD_POSTGRES",
         label: "Database URL (Primary)",
         description: "Primary Postgres connection string now used by Prisma and runtime database checks.",
         kind: "databaseUrl",
