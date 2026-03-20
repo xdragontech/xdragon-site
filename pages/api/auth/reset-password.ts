@@ -19,7 +19,9 @@ function isStrongEnough(pw: string) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
-  if (!(await ensurePublicBrandRequest(req, res))) return;
+  const brandRequest = await ensurePublicBrandRequest(req, res);
+  if (!brandRequest) return;
+  const { brand } = brandRequest;
 
   const emailRaw = (req.body?.email || "").toString().trim();
   const tokenRaw = (req.body?.token || "").toString().trim();
@@ -37,27 +39,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const tokenHash = sha256(tokenRaw);
 
-    const rec = await prisma.passwordResetToken.findFirst({
-      where: { identifier: email, token: tokenHash },
+    const brandId = brand.brandId;
+    if (!brandId) return res.status(500).json({ ok: false, error: "Brand is missing a persisted brand record" });
+
+    const rec = await prisma.externalPasswordResetToken.findFirst({
+      where: { brandId, identifier: email, token: tokenHash },
     });
 
     if (!rec) return res.status(400).json({ ok: false, error: "Invalid or expired token" });
     if (rec.expires.getTime() < Date.now()) {
-      await prisma.passwordResetToken.deleteMany({ where: { identifier: email } });
+      await prisma.externalPasswordResetToken.deleteMany({ where: { brandId, identifier: email } });
       return res.status(400).json({ ok: false, error: "Invalid or expired token" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.externalUser.findFirst({
+      where: {
+        brandId,
+        email,
+      },
+    });
     if (!user) return res.status(400).json({ ok: false, error: "Invalid or expired token" });
     if (user.status === "BLOCKED") return res.status(403).json({ ok: false, error: "Account blocked" });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.update({
-      where: { email },
+    await prisma.externalUser.update({
+      where: { id: user.id },
       data: { passwordHash },
     });
 
-    await prisma.passwordResetToken.deleteMany({ where: { identifier: email } });
+    await prisma.externalPasswordResetToken.deleteMany({ where: { brandId, identifier: email } });
 
     return res.status(200).json({ ok: true });
   } catch (err) {
