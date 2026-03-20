@@ -2,22 +2,20 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { prisma } from "../../../lib/prisma";
 import { getRuntimeAllowedHosts } from "../../../lib/brandRegistry";
 import { authCookieDomain } from "../../../lib/siteConfig";
 import {
   BACKOFFICE_AUTH_SCOPE,
   BACKOFFICE_CREDENTIALS_PROVIDER_ID,
+  EXTERNAL_AUTH_SCOPE,
   EXTERNAL_CREDENTIALS_PROVIDER_ID,
   EXTERNAL_LEGACY_AUTH_SCOPE,
 } from "../../../lib/authScopes";
 import {
   authorizeBackofficeCredentials,
-  authorizeLegacyExternalCredentials,
   refreshBackofficeIdentity,
-  refreshLegacyExternalIdentity,
 } from "../../../lib/backofficeIdentity";
+import { authorizeExternalCredentials, refreshExternalIdentity } from "../../../lib/externalIdentity";
 
 const IS_PREVIEW = process.env.VERCEL_ENV === "preview";
 
@@ -44,8 +42,6 @@ function cookieOptions({ httpOnly = true }: { httpOnly?: boolean } = {}) {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-
   // Credentials sign-in requires JWT strategy in NextAuth v4.
   session: { strategy: "jwt" },
 
@@ -80,7 +76,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, req) {
-        return authorizeLegacyExternalCredentials(credentials, req as NextApiRequest);
+        return authorizeExternalCredentials(credentials, req as NextApiRequest);
       },
     }),
     CredentialsProvider({
@@ -106,6 +102,7 @@ export const authOptions: NextAuthOptions = {
         (token as any).status = (user as any).status;
         (token as any).authScope = (user as any).authScope;
         (token as any).backofficeRole = (user as any).backofficeRole || null;
+        (token as any).brandKey = (user as any).brandKey || null;
         (token as any).username = (user as any).username || null;
         (token as any).allowedBrandKeys = (user as any).allowedBrandKeys || [];
         (token as any).allowedBrandIds = (user as any).allowedBrandIds || [];
@@ -134,6 +131,7 @@ export const authOptions: NextAuthOptions = {
         (token as any).status = refreshed.status;
         (token as any).authScope = refreshed.authScope;
         (token as any).backofficeRole = refreshed.backofficeRole;
+        (token as any).brandKey = null;
         (token as any).username = refreshed.username;
         (token as any).allowedBrandKeys = refreshed.allowedBrandKeys;
         (token as any).allowedBrandIds = refreshed.allowedBrandIds;
@@ -141,9 +139,12 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
-      if (authScope === EXTERNAL_LEGACY_AUTH_SCOPE && token.email) {
-        const refreshed = await refreshLegacyExternalIdentity({
+      if (authScope === EXTERNAL_AUTH_SCOPE || authScope === EXTERNAL_LEGACY_AUTH_SCOPE) {
+        const refreshed = await refreshExternalIdentity({
+          sub: typeof token.sub === "string" ? token.sub : null,
           email: typeof token.email === "string" ? token.email : null,
+          brandKey: typeof (token as any).brandKey === "string" ? (token as any).brandKey : null,
+          authScope,
         });
 
         if (!refreshed) {
@@ -157,6 +158,7 @@ export const authOptions: NextAuthOptions = {
         (token as any).role = refreshed.role;
         (token as any).status = refreshed.status;
         (token as any).authScope = refreshed.authScope;
+        (token as any).brandKey = refreshed.brandKey;
       }
 
       return token;
@@ -178,6 +180,7 @@ export const authOptions: NextAuthOptions = {
       (sessionUser as any).status = (token as any).status || "ACTIVE";
       (sessionUser as any).authScope = (token as any).authScope || null;
       (sessionUser as any).backofficeRole = (token as any).backofficeRole || null;
+      (sessionUser as any).brandKey = (token as any).brandKey || null;
       (sessionUser as any).username = (token as any).username || null;
       (sessionUser as any).allowedBrandKeys = Array.isArray((token as any).allowedBrandKeys)
         ? (token as any).allowedBrandKeys
@@ -188,6 +191,7 @@ export const authOptions: NextAuthOptions = {
       (session as any).status = (token as any).status || "ACTIVE";
       (session as any).authScope = (token as any).authScope || null;
       (session as any).backofficeRole = (token as any).backofficeRole || null;
+      (session as any).brandKey = (token as any).brandKey || null;
       (session as any).allowedBrandKeys = Array.isArray((token as any).allowedBrandKeys)
         ? (token as any).allowedBrandKeys
         : [];

@@ -1,9 +1,13 @@
 export const BACKOFFICE_AUTH_SCOPE = "BACKOFFICE" as const;
+export const EXTERNAL_AUTH_SCOPE = "EXTERNAL" as const;
 export const EXTERNAL_LEGACY_AUTH_SCOPE = "EXTERNAL_LEGACY" as const;
 export const BACKOFFICE_CREDENTIALS_PROVIDER_ID = "backoffice-credentials" as const;
 export const EXTERNAL_CREDENTIALS_PROVIDER_ID = "credentials" as const;
 
-export type AuthScope = typeof BACKOFFICE_AUTH_SCOPE | typeof EXTERNAL_LEGACY_AUTH_SCOPE;
+export type AuthScope =
+  | typeof BACKOFFICE_AUTH_SCOPE
+  | typeof EXTERNAL_AUTH_SCOPE
+  | typeof EXTERNAL_LEGACY_AUTH_SCOPE;
 
 function readValue(source: any, key: string): any {
   if (!source || typeof source !== "object") return undefined;
@@ -14,7 +18,9 @@ function readValue(source: any, key: string): any {
 
 export function getAuthScope(source: any): AuthScope | null {
   const scope = readValue(source, "authScope");
-  return scope === BACKOFFICE_AUTH_SCOPE || scope === EXTERNAL_LEGACY_AUTH_SCOPE ? scope : null;
+  return scope === BACKOFFICE_AUTH_SCOPE || scope === EXTERNAL_AUTH_SCOPE || scope === EXTERNAL_LEGACY_AUTH_SCOPE
+    ? scope
+    : null;
 }
 
 export function getSessionRole(source: any): string | null {
@@ -47,6 +53,11 @@ export function getSessionUsername(source: any): string | null {
   return typeof username === "string" && username ? username : null;
 }
 
+export function getSessionBrandKey(source: any): string | null {
+  const brandKey = readValue(source, "brandKey");
+  return typeof brandKey === "string" && brandKey ? brandKey.trim().toLowerCase() : null;
+}
+
 export function getAllowedBrandKeys(source: any): string[] {
   const raw = readValue(source, "allowedBrandKeys");
   if (!Array.isArray(raw)) return [];
@@ -59,6 +70,11 @@ export function isBackofficeSession(source: any): boolean {
   return getAuthScope(source) === BACKOFFICE_AUTH_SCOPE && getSessionStatus(source) !== "BLOCKED";
 }
 
+export function isExternalSession(source: any): boolean {
+  const scope = getAuthScope(source);
+  return (scope === EXTERNAL_AUTH_SCOPE || scope === EXTERNAL_LEGACY_AUTH_SCOPE) && getSessionStatus(source) !== "BLOCKED";
+}
+
 export function isExternalLegacySession(source: any): boolean {
-  return getAuthScope(source) === EXTERNAL_LEGACY_AUTH_SCOPE && getSessionStatus(source) !== "BLOCKED";
+  return isExternalSession(source);
 }

@@ -2,8 +2,9 @@
 import type { GetServerSidePropsContext, NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../pages/api/auth/[...nextauth]";
-import { prisma } from "./prisma";
 import { requireBackofficeApi, requireBackofficePage } from "./backofficeAuth";
+import { getExternalIdentityFromSession } from "./externalIdentity";
+import { isExternalSession } from "./authScopes";
 
 export async function getSessionServer(ctx: GetServerSidePropsContext) {
   return getServerSession(ctx.req, ctx.res, authOptions);
@@ -13,7 +14,9 @@ export async function requireUser(ctx: GetServerSidePropsContext) {
   const session = await getSessionServer(ctx);
   if (!session?.user?.email) return { session: null, user: null };
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+  if (!isExternalSession(session)) return { session: null, user: null };
+
+  const user = await getExternalIdentityFromSession(session);
   return { session, user };
 }
 

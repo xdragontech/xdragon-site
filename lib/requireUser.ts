@@ -3,7 +3,8 @@ import type { GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 import { authOptions } from "../pages/api/auth/[...nextauth]";
-import { prisma } from "./prisma";
+import { getExternalIdentityFromSession } from "./externalIdentity";
+import { isExternalSession } from "./authScopes";
 
 /**
  * A helper for Pages Router SSR that returns BOTH `session` and `user` keys
@@ -12,7 +13,7 @@ import { prisma } from "./prisma";
  */
 export type RequireUserResult = {
   session: Session | null;
-  user: Awaited<ReturnType<typeof prisma.user.findUnique>> | null;
+  user: Awaited<ReturnType<typeof getExternalIdentityFromSession>> | null;
   redirectTo?: string;
 };
 
@@ -24,7 +25,11 @@ export async function requireUser(ctx: GetServerSidePropsContext): Promise<Requi
     return { session: null, user: null, redirectTo: "/auth/signin" };
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  if (!isExternalSession(session)) {
+    return { session: null, user: null, redirectTo: "/auth/signin" };
+  }
+
+  const user = await getExternalIdentityFromSession(session);
 
   // If user record missing or blocked, treat as not signed in
   if (!user || user.status === "BLOCKED") {

@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
 import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
+import { findOrBridgeExternalUserByEmail } from "../../../lib/externalIdentity";
 
 /**
  * Password signup + email verification
@@ -101,7 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(400).json({ ok: false, error: "Password must be at least 8 characters" });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await findOrBridgeExternalUserByEmail(brand, email);
     if (existing) {
       // Avoid leaking whether account exists; respond ok.
       return res.status(200).json({ ok: true });
@@ -110,13 +111,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const passwordHash = await bcrypt.hash(password, 12);
 
     // Create user (fields assumed to exist in your Prisma schema)
-    const user = await prisma.user.create({
+    const brandId = brand.brandId;
+    if (!brandId) {
+      return res.status(500).json({ ok: false, error: "Brand is missing a persisted brand record" });
+    }
+
+    await prisma.externalUser.create({
       data: {
+        brandId,
         email,
         name,
         passwordHash,
         status: "ACTIVE",
-        role: "USER",
         // emailVerified is kept null until verified
         emailVerified: null,
       },
@@ -126,8 +132,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await prisma.emailVerificationToken.create({
+    await prisma.externalEmailVerificationToken.create({
       data: {
+        brandId,
         identifier: email,
         token,
         expires: expiresAt,

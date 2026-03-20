@@ -21,27 +21,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  if (!(await ensurePublicBrandRequest(req, res))) return;
+  const brandRequest = await ensurePublicBrandRequest(req, res);
+  if (!brandRequest) return;
+  const { brand } = brandRequest;
 
   try {
     const { token } = req.body || {};
     const raw = typeof token === "string" ? token.trim() : "";
     if (!raw) return res.status(400).json({ ok: false, error: "Missing token" });
+    if (!brand.brandId) return res.status(500).json({ ok: false, error: "Brand is missing a persisted brand record" });
 
     // Try raw token match first
-    let rec = await prisma.emailVerificationToken.findUnique({ where: { token: raw } });
+    let rec = await prisma.externalEmailVerificationToken.findFirst({
+      where: {
+        brandId: brand.brandId,
+        token: raw,
+      },
+    });
 
     // If not found, try sha256(token) (in case you store hashes)
     if (!rec) {
       const hashed = crypto.createHash("sha256").update(raw).digest("hex");
-      rec = await prisma.emailVerificationToken.findUnique({ where: { token: hashed } });
+      rec = await prisma.externalEmailVerificationToken.findFirst({
+        where: {
+          brandId: brand.brandId,
+          token: hashed,
+        },
+      });
     }
 
     if (!rec) return res.status(400).json({ ok: false, error: "Invalid verification token" });
 
     if (rec.expires < new Date()) {
       // Delete expired token
-      await prisma.emailVerificationToken.delete({ where: { token: rec.token } }).catch(() => {});
+      await prisma.externalEmailVerificationToken.delete({ where: { token: rec.token } }).catch(() => {});
       return res.status(410).json({ ok: false, error: "Verification token expired" });
     }
 
@@ -50,13 +63,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!email) return res.status(400).json({ ok: false, error: "Token missing identifier" });
 
     // Mark verified
-    await prisma.user.update({
-      where: { email },
+    await prisma.externalUser.updateMany({
+      where: {
+        brandId: brand.brandId,
+        email,
+      },
       data: { emailVerified: new Date(), status: "ACTIVE" },
     });
 
     // Burn token
-    await prisma.emailVerificationToken.delete({ where: { token: rec.token } }).catch(() => {});
+    await prisma.externalEmailVerificationToken.delete({ where: { token: rec.token } }).catch(() => {});
 
     return res.status(200).json({ ok: true });
   } catch (err: any) {
