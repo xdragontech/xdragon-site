@@ -97,7 +97,12 @@ function toExternalIdentityState(user: ExternalUserWithBrand): ExternalIdentityS
 }
 
 function isExternalUserAccessible(user: ExternalUserWithBrand | null | undefined): user is ExternalUserWithBrand {
-  return Boolean(user && user.brand.status === BrandStatus.ACTIVE);
+  return Boolean(
+    user &&
+      user.brand.status === BrandStatus.ACTIVE &&
+      user.status === ExternalUserStatus.ACTIVE &&
+      user.emailVerified
+  );
 }
 
 function toExternalAuthUser(user: ExternalUserWithBrand): ExternalAuthUser {
