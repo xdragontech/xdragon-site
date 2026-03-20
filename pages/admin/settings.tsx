@@ -34,7 +34,7 @@ type SettingsPageProps = {
 };
 
 async function loadDatabaseStatus(): Promise<DatabaseStatus> {
-  const databaseUrl = process.env.DATABASE_URL?.trim() || null;
+  const databaseUrl = process.env.XD_POSTGRESS?.trim() || null;
   const parsedUrl = summarizeDatabaseUrl(databaseUrl);
 
   if (!databaseUrl) {
@@ -277,6 +277,10 @@ export default function SettingsPage({
             </div>
 
             <div className="mt-4 text-xs text-neutral-600">
+              <span className="font-semibold text-neutral-700">Configured Variable:</span> XD_POSTGRESS
+            </div>
+
+            <div className="mt-2 text-xs text-neutral-600">
               <span className="font-semibold text-neutral-700">Database URL Fingerprint:</span>{" "}
               {databaseStatus.fingerprint || "Unavailable"}
             </div>
