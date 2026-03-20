@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { PrismaClient } from "@prisma/client";
 import { authOptions } from "../../../auth/[...nextauth]";
+import { resolveWriteBrandId } from "../../../../../lib/brandRegistry";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
@@ -77,6 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const created = await (prisma as any).article.create({
         data: {
+          brandId: await resolveWriteBrandId(body, { allowSingleBrandFallback: true }),
           title,
           slug,
           summary,
