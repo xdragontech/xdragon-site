@@ -1,16 +1,17 @@
 # X Dragon Refactor Roadmap
 
 ## Purpose
-This is the working plan for splitting the current single Next.js app into:
+This is the working plan for splitting the current X Dragon platform into:
 
-1. a public website app
-2. a reusable back office app
-3. shared packages that can support multiple brands safely
+1. a brand-specific public website repo
+2. a reusable back office repo
+3. a versioned service contract between them
 
 This roadmap is intentionally incremental. We do not change layout/design unless explicitly approved.
 
 ## Companion docs
 - [`docs/engineering-standard.md`](./engineering-standard.md)
+- [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
@@ -20,11 +21,11 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 
 ## Current reality
 - The repo is one Pages Router app serving both marketing and admin/resource flows.
-- Brand, host, and identity foundations now exist in the database and runtime.
-- Public and backoffice auth are separated, but the repo is still one deployable application.
-- Brand-scoped runtime and service behavior are not fully complete until database host routing and brand email config are fully authoritative.
+- Brand, host, identity, and bootstrap foundations now exist in the database and runtime.
+- Public and backoffice auth are separated, but the repo is still one deployable application and one codebase.
+- The real target is no longer “one repo, two apps.” It is “two repos with a stable service contract.”
 - Recent stabilization work resolved the immediate chat/contact deployment failures.
-- The next structural blockers are authoritative DB brand runtime, brand-scoped service config, and the real app split.
+- The next structural blocker is the repo split and service-contract definition.
 
 ## Non-negotiable guardrails
 - No direct pushes to `main` or `staging`.
@@ -34,26 +35,21 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 - Reusable back office code must not depend on X Dragon domain names, branding, or public-site widgets.
 
 ## Target architecture
-### Apps
-- `apps/public-site`
-  - marketing pages
-  - chat/contact/public forms
-  - brand-specific layout, theme, copy, assets
-- `apps/backoffice`
-  - admin shell
-  - user/admin operations
-  - content management
-  - analytics/leads
-- `packages/shared-data`
-  - Prisma schema, data access, migrations
-- `packages/shared-auth`
-  - session/auth helpers, host-safe redirect rules, guards
-- `packages/shared-contracts`
-  - validation, DTOs, API contracts
-- `packages/shared-ui`
-  - only primitives that are genuinely shared
-- `packages/brand-config`
-  - brand registry, domains, asset references, feature flags
+### Repos
+- `xdragon-site`
+  - brand-specific public website
+  - public authenticated user UI
+  - BFF/proxy integration layer to `command`
+  - brand-specific layout, theme, copy, and assets
+- `command`
+  - admin UI module/app
+  - public API module/app
+  - shared core packages for data, auth, brand runtime, and service contracts
+
+### Shared contract
+- OpenAPI is the source of truth
+- human docs layer on top of OpenAPI
+- integration credential and forwarded user session remain separate trust layers
 
 ## Phase plan
 ### Phase 0: Stabilize staging and lock standards
@@ -93,34 +89,35 @@ Tasks:
 - define migration plan for current X Dragon data
 - make back office queries brand-aware by default
 
-### Phase 3: Split into separate apps in one repo
+### Phase 3: Split into separate repos with a stable service contract
 Exit criteria:
-- public site and back office can deploy independently
-- shared packages own common logic
-- host routing no longer depends on one app handling both domains
+- `xdragon-site` and `command` exist as separate repos
+- `command` admin UI and API are separate modules/apps
+- `xdragon-site` integrates through documented APIs instead of shared runtime code
 
 Tasks:
-- convert to a monorepo only after the internal boundaries are proven
-- move public app first or back office first based on lower-risk extraction seam
-- preserve current Vercel/Git workflow during the split
+- define the initial service contract before moving repos
+- extract `command` first because the admin/API ownership boundary is the cleanest reusable seam
+- keep `/auth`, `/tools`, `/prompts`, and `/guides` with the public website; they are brand-user surfaces, not reusable backoffice surfaces
+- preserve the current Git/Vercel workflow while the X Dragon install is being separated
 
-### Phase 4: Package the back office for reuse
+### Phase 4: Package the back office installation and onboarding flow
 Exit criteria:
-- a new brand can be provisioned mostly through config and seeded data
-- brand-specific assets/copy are outside the reusable back office
-- onboarding a second site does not require code edits in core back office modules
+- a new install can be provisioned mostly through config and seeded data
+- brand-specific assets/copy are outside reusable back office modules
+- onboarding a second install does not require code edits in core modules
 
 Tasks:
-- define brand bootstrap checklist
-- define required env contract per app
+- define install/bootstrap checklist
+- define required env contract for `xdragon-site` and `command`
 - define extension points for content types, lead flows, and admin modules
 - define a first-run setup page for new installs to collect initial users and base system information
 
 ## Immediate recommendations
-1. Make the database brand registry authoritative before any further packaging work. Runtime host fallback is incompatible with a reusable multi-brand backoffice.
-2. Make brand-scoped email config live before calling the platform multi-brand complete. Global email config still leaks single-brand assumptions.
-3. Formalize the protected bootstrap superadmin/install flow before packaging work. Reuse is not safe while bootstrap and recovery behavior are still implicit.
-4. Split the public and backoffice apps only after the remaining shared runtime truth is database-driven. That keeps the extraction mechanical instead of speculative.
+1. Treat the next split ticket as a repo/service-contract ticket, not a pathname extraction ticket.
+2. Freeze the initial `command` API surface before moving runtime into a new repo.
+3. Keep `/auth`, `/tools`, `/prompts`, and `/guides` with the public website. They are external-user surfaces, not reusable backoffice surfaces.
+4. Separate public and backoffice auth route/config ownership before repo extraction. Reusing the current combined auth route would preserve the wrong coupling.
 
 ## Definition of done for every refactor ticket
 - no layout/design drift
