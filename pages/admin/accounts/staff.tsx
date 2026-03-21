@@ -1,4 +1,4 @@
-import { BackofficeRole, BackofficeUserStatus, BrandStatus } from "@prisma/client";
+import { BackofficeMfaMethod, BackofficeRole, BackofficeUserStatus, BrandStatus } from "@prisma/client";
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../../components/admin/AdminLayout";
@@ -13,6 +13,10 @@ type StaffAccountRecord = {
   email: string | null;
   role: BackofficeRole;
   status: BackofficeUserStatus;
+  mfaMethod: BackofficeMfaMethod | null;
+  mfaState: "DISABLED" | "PENDING" | "ENABLED";
+  mfaEnabledAt: string | null;
+  mfaRecoveryCodesGeneratedAt: string | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -101,6 +105,17 @@ function RolePill({ role }: { role: BackofficeRole }) {
       : "border-sky-200 bg-sky-50 text-sky-700";
 
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>{role}</span>;
+}
+
+function MfaPill({ state }: { state: StaffAccountRecord["mfaState"] }) {
+  const cls =
+    state === "ENABLED"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : state === "PENDING"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-neutral-200 bg-neutral-50 text-neutral-600";
+
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>MFA {state}</span>;
 }
 
 export const getServerSideProps: GetServerSideProps<StaffAccountsPageProps> = async (ctx) => {
@@ -207,6 +222,8 @@ export default function StaffAccountsPage({
         user.status,
         user.brandKeys.join(" "),
         user.brandNames.join(" "),
+        user.mfaState,
+        user.mfaMethod || "",
       ]
         .join(" ")
         .toLowerCase()
@@ -543,6 +560,7 @@ export default function StaffAccountsPage({
                         <div className="flex flex-col items-end gap-2">
                           <RolePill role={user.role} />
                           <StatusPill status={user.status} />
+                          <MfaPill state={user.mfaState} />
                         </div>
                       </div>
 
@@ -633,6 +651,37 @@ export default function StaffAccountsPage({
                       This is a protected admin account. Role, block, delete, and email changes are restricted.
                     </div>
                   ) : null}
+
+                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-semibold text-neutral-900">Authenticator App MFA</h2>
+                        <p className="mt-1 text-sm text-neutral-600">
+                          MFA groundwork is active for staff accounts, but login enforcement is not enabled yet.
+                        </p>
+                      </div>
+                      {selectedUser ? <MfaPill state={selectedUser.mfaState} /> : null}
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
+                      <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Method</div>
+                        <div className="mt-2 text-sm text-neutral-800">
+                          {selectedUser?.mfaMethod === BackofficeMfaMethod.AUTHENTICATOR_APP ? "Authenticator App" : "Not configured"}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Enabled</div>
+                        <div className="mt-2 text-sm text-neutral-800">{selectedUser ? fmtDate(selectedUser.mfaEnabledAt) : "—"}</div>
+                      </div>
+                      <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Recovery Codes</div>
+                        <div className="mt-2 text-sm text-neutral-800">
+                          {selectedUser ? fmtDate(selectedUser.mfaRecoveryCodesGeneratedAt) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   {generatedLink ? (
                     <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
