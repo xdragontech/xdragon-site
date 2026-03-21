@@ -659,6 +659,38 @@ export async function createManagedBackofficePasswordLink(
   };
 }
 
+export async function resetManagedBackofficeUserMfa(userId: string): Promise<ManagedBackofficeUserRecord> {
+  const existing = await findManagedBackofficeUserById(userId);
+  if (!existing) throw new Error("Staff account not found");
+
+  const updated = await prisma.backofficeUser.update({
+    where: { id: existing.id },
+    data: {
+      mfaMethod: null,
+      mfaEnabledAt: null,
+      mfaSecretEncrypted: null,
+      mfaRecoveryCodesEncrypted: null,
+      mfaRecoveryCodesGeneratedAt: null,
+    },
+    include: {
+      brandAccesses: {
+        include: {
+          brand: {
+            select: {
+              id: true,
+              brandKey: true,
+              name: true,
+              status: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return toManagedBackofficeUserRecord(updated);
+}
+
 export async function consumeManagedBackofficePasswordReset(input: {
   userId?: unknown;
   token?: unknown;

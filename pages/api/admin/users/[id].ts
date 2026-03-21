@@ -5,6 +5,7 @@ import {
   createManagedBackofficePasswordLink,
   deleteManagedBackofficeUser,
   getManagedBackofficeUser,
+  resetManagedBackofficeUserMfa,
   setManagedBackofficeUserStatus,
   updateManagedBackofficeUser,
 } from "../../../../lib/backofficeAdminUsers";
@@ -52,6 +53,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const origin = buildOrigin(getApiRequestProtocol(req), canonicalAdminHost(getApiRequestHost(req)));
         const invite = await createManagedBackofficePasswordLink(id, "reset", origin);
         return json(res, 200, { ok: true, invite });
+      }
+
+      if (action === "resetmfa") {
+        const user = await resetManagedBackofficeUserMfa(id);
+        return json(res, 200, { ok: true, user });
       }
 
       const user = await updateManagedBackofficeUser(auth.principal.id, id, body);

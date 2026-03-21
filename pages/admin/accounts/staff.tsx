@@ -144,7 +144,7 @@ export default function StaffAccountsPage({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [busyAction, setBusyAction] = useState<"block" | "unblock" | "delete" | null>(null);
+  const [busyAction, setBusyAction] = useState<"block" | "unblock" | "delete" | "resetmfa" | null>(null);
   const [linkBusy, setLinkBusy] = useState<"invite" | "reset" | null>(null);
   const [generatedLink, setGeneratedLink] = useState<GeneratedStaffLink | null>(null);
   const [err, setErr] = useState("");
@@ -350,11 +350,18 @@ export default function StaffAccountsPage({
     }
   }
 
-  async function runAction(action: "block" | "unblock" | "delete") {
+  async function runAction(action: "block" | "unblock" | "delete" | "resetmfa") {
     if (!selectedUser) return;
 
     if (action === "delete") {
       const ok = window.confirm(`Delete staff account "${selectedUser.username}"? This cannot be undone.`);
+      if (!ok) return;
+    }
+
+    if (action === "resetmfa") {
+      const ok = window.confirm(
+        `Clear authenticator MFA for "${selectedUser.username}"? They will need to set it up again if they want MFA enabled.`
+      );
       if (!ok) return;
     }
 
@@ -374,7 +381,13 @@ export default function StaffAccountsPage({
       const body = await res.json().catch(() => null);
       if (!res.ok || !body?.ok) throw new Error(body?.error || "Request failed");
 
-      toast("success", action === "delete" ? "Staff account deleted." : "Staff account updated.");
+      const successMessage =
+        action === "delete"
+          ? "Staff account deleted."
+          : action === "resetmfa"
+            ? "Authenticator MFA cleared."
+            : "Staff account updated.";
+      toast("success", successMessage);
       await loadData(action === "delete" ? null : selectedUser.id);
     } catch (error: any) {
       const message = error?.message || "Request failed";
@@ -657,10 +670,22 @@ export default function StaffAccountsPage({
                       <div>
                         <h2 className="text-sm font-semibold text-neutral-900">Authenticator App MFA</h2>
                         <p className="mt-1 text-sm text-neutral-600">
-                          MFA groundwork is active for staff accounts, but login enforcement is not enabled yet.
+                          Staff users enroll their own authenticator app from Settings / Security. Superadmins can clear the setup here if it needs to be reset.
                         </p>
                       </div>
-                      {selectedUser ? <MfaPill state={selectedUser.mfaState} /> : null}
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {selectedUser ? <MfaPill state={selectedUser.mfaState} /> : null}
+                        {selectedUser && selectedUser.mfaState !== "DISABLED" ? (
+                          <button
+                            type="button"
+                            onClick={() => void runAction("resetmfa")}
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
+                            disabled={Boolean(busyAction)}
+                          >
+                            {busyAction === "resetmfa" ? "Resetting…" : "Reset MFA"}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-3">
