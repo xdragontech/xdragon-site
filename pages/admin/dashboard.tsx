@@ -503,7 +503,6 @@ function WorldHeatMapCard({
 export const getServerSideProps: GetServerSideProps<DashboardProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/dashboard",
-    superadminOnly: true,
   });
   if (!auth.ok) return auth.response;
 

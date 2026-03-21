@@ -1,3 +1,4 @@
+import { BackofficeRole } from "@prisma/client";
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { requireBackofficePage } from "../../../lib/backofficeAuth";
@@ -34,6 +35,7 @@ type BrandForm = {
 
 type BrandsPageProps = {
   loggedInAs: string | null;
+  canManageBrands: boolean;
 };
 
 const NEW_BRAND_ID = "__new__";
@@ -80,13 +82,13 @@ function normalizeBrandForm(form: BrandForm) {
 export const getServerSideProps: GetServerSideProps<BrandsPageProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/settings/brands",
-    superadminOnly: true,
   });
   if (!auth.ok) return auth.response;
 
   return {
     props: {
       loggedInAs: auth.loggedInAs,
+      canManageBrands: auth.principal.role === BackofficeRole.SUPERADMIN,
     },
   };
 };
@@ -102,7 +104,10 @@ function StatusPill({ status }: { status: BrandStatus }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>{status}</span>;
 }
 
-export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function BrandsPage({
+  loggedInAs,
+  canManageBrands,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { toast } = useToast();
 
   const [brands, setBrands] = useState<BrandRecord[]>([]);
@@ -277,13 +282,14 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
       </button>
       <button
         onClick={startNewBrand}
+        disabled={!canManageBrands}
         className="rounded-full border border-neutral-200 bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
       >
         Add Brand
       </button>
       <button
         onClick={deleteBrand}
-        disabled={!selectedBrand || deleting}
+        disabled={!canManageBrands || !selectedBrand || deleting}
         className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50 disabled:opacity-50"
       >
         {deleting ? "Deleting…" : "Delete Brand"}
@@ -304,6 +310,12 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
           <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
             Brand routing is now driven from the database. The current env values are only a fallback when no Brand records exist yet.
           </div>
+
+          {!canManageBrands ? (
+            <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+              You can view live brand routing here, but only superadmins can create, edit, or delete brands.
+            </div>
+          ) : null}
 
           <div className="mt-5">
             <input
@@ -385,6 +397,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
               </div>
             ) : (
               <>
+                <fieldset disabled={!canManageBrands} className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700">Brand Key</label>
@@ -392,7 +405,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                       value={form.brandKey}
                       onChange={(event) => updateField("brandKey", event.target.value)}
                       placeholder="xdragon"
-                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                     />
                   </div>
                   <div>
@@ -401,7 +414,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                       value={form.name}
                       onChange={(event) => updateField("name", event.target.value)}
                       placeholder="X Dragon"
-                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                     />
                   </div>
                   <div>
@@ -409,7 +422,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                     <select
                       value={form.status}
                       onChange={(event) => updateField("status", event.target.value as BrandStatus)}
-                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                     >
                       <option value="SETUP_PENDING">SETUP_PENDING</option>
                       <option value="ACTIVE">ACTIVE</option>
@@ -422,7 +435,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                       value={form.apexHost}
                       onChange={(event) => updateField("apexHost", event.target.value)}
                       placeholder="xdragon.tech"
-                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                      className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                     />
                   </div>
                 </div>
@@ -437,7 +450,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                           value={form.productionPublicHost}
                           onChange={(event) => updateField("productionPublicHost", event.target.value)}
                           placeholder="www.xdragon.tech"
-                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         />
                       </div>
                       <div>
@@ -446,7 +459,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                           value={form.productionAdminHost}
                           onChange={(event) => updateField("productionAdminHost", event.target.value)}
                           placeholder="admin.xdragon.tech"
-                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         />
                       </div>
                     </div>
@@ -461,7 +474,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                           value={form.previewPublicHost}
                           onChange={(event) => updateField("previewPublicHost", event.target.value)}
                           placeholder="staging.xdragon.tech"
-                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         />
                       </div>
                       <div>
@@ -470,7 +483,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                           value={form.previewAdminHost}
                           onChange={(event) => updateField("previewAdminHost", event.target.value)}
                           placeholder="stg-admin.xdragon.tech"
-                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10"
+                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         />
                       </div>
                     </div>
@@ -487,7 +500,7 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                 <div className="mt-6 flex flex-wrap gap-3">
                   <button
                     onClick={saveBrand}
-                    disabled={saving || !isDirty}
+                    disabled={!canManageBrands || saving || !isDirty}
                     className="rounded-full border border-neutral-200 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {saving ? "Saving…" : isNewBrand ? "Create Brand" : "Save Changes"}
@@ -502,12 +515,13 @@ export default function BrandsPage({ loggedInAs }: InferGetServerSidePropsType<t
                         setErr("");
                       }
                     }}
-                    disabled={!isDirty}
+                    disabled={!canManageBrands || !isDirty}
                     className="rounded-full border border-neutral-200 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-900 hover:bg-neutral-50 disabled:opacity-50"
                   >
                     Reset
                   </button>
                 </div>
+                </fieldset>
 
                 {!isNewBrand && selectedBrand ? (
                   <div className="mt-4 text-xs text-neutral-500">

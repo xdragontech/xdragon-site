@@ -136,49 +136,6 @@ const ENV_GROUPS: Array<{
     ],
   },
   {
-    key: "admin",
-    title: "Backoffice Auth & Access",
-    description: "Backoffice login and admin access settings currently used by the app.",
-    items: [
-      {
-        key: "XDADMIN_USERNAME",
-        label: "Primary Admin Username",
-        description: "Credential username for the bootstrap admin account.",
-        kind: "plain",
-      },
-      {
-        key: "XDADMIN_EMAIL",
-        label: "Primary Admin Email",
-        description: "Email for the bootstrap admin account.",
-        kind: "plain",
-      },
-      {
-        key: "XDADMIN_PASSWORD",
-        label: "Primary Admin Password",
-        description: "Password for the bootstrap admin account.",
-        kind: "secret",
-      },
-      {
-        key: "ADMIN_EMAILS",
-        label: "Admin Emails",
-        description: "Comma-separated admin allowlist used by current auth logic.",
-        kind: "plain",
-      },
-      {
-        key: "ADMIN_EMAIL_LIST",
-        label: "Admin Email List",
-        description: "Legacy alias for admin allowlist input.",
-        kind: "plain",
-      },
-      {
-        key: "ADMIN_USERS",
-        label: "Admin Users",
-        description: "Legacy alias for admin allowlist input.",
-        kind: "plain",
-      },
-    ],
-  },
-  {
     key: "services",
     title: "Data & Service Integrations",
     description: "Database and external service credentials used by runtime flows.",

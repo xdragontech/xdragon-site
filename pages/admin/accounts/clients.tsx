@@ -1,4 +1,4 @@
-import { BrandStatus, ExternalUserStatus } from "@prisma/client";
+import { BackofficeRole, BrandStatus, ExternalUserStatus } from "@prisma/client";
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../../components/admin/AdminLayout";
@@ -46,6 +46,7 @@ type ClientForm = {
 
 type ClientAccountsPageProps = {
   loggedInAs: string | null;
+  canManageClients: boolean;
 };
 
 const NEW_CLIENT_ID = "__new__";
@@ -104,19 +105,20 @@ function VerificationPill({ verified }: { verified: boolean }) {
 export const getServerSideProps: GetServerSideProps<ClientAccountsPageProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/accounts/clients",
-    superadminOnly: true,
   });
   if (!auth.ok) return auth.response;
 
   return {
     props: {
       loggedInAs: auth.loggedInAs,
+      canManageClients: auth.principal.role === BackofficeRole.SUPERADMIN,
     },
   };
 };
 
 export default function ClientAccountsPage({
   loggedInAs,
+  canManageClients,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { toast } = useToast();
 
@@ -158,8 +160,8 @@ export default function ClientAccountsPage({
       setBrands(nextBrands);
 
       if (nextUsers.length === 0) {
-        setSelectedId(NEW_CLIENT_ID);
-        setForm(blankClientForm(nextBrands));
+        setSelectedId(canManageClients ? NEW_CLIENT_ID : null);
+        setForm(canManageClients ? blankClientForm(nextBrands) : null);
         return;
       }
 
@@ -380,12 +382,19 @@ export default function ClientAccountsPage({
                     type="button"
                     onClick={startNewClient}
                     className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+                    disabled={!canManageClients}
                   >
                     Add Client
                   </button>
                 </>
               }
             />
+
+            {!canManageClients ? (
+              <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+                Client accounts are scoped to your assigned brands. Only superadmins can create, edit, verify, block, or delete them right now.
+              </div>
+            ) : null}
 
             <div className="mt-4">
               <input
@@ -458,7 +467,7 @@ export default function ClientAccountsPage({
                         type="button"
                         onClick={() => void runAction("verify")}
                         className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
-                        disabled={Boolean(busyAction)}
+                        disabled={!canManageClients || Boolean(busyAction)}
                       >
                         Mark Verified
                       </button>
@@ -472,7 +481,7 @@ export default function ClientAccountsPage({
                             ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
                             : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
                         }`}
-                        disabled={Boolean(busyAction)}
+                        disabled={!canManageClients || Boolean(busyAction)}
                       >
                         {selectedUser.status === ExternalUserStatus.ACTIVE ? "Block" : "Unblock"}
                       </button>
@@ -482,7 +491,7 @@ export default function ClientAccountsPage({
                         type="button"
                         onClick={() => void runAction("delete")}
                         className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
-                        disabled={Boolean(busyAction)}
+                        disabled={!canManageClients || Boolean(busyAction)}
                       >
                         Delete
                       </button>
@@ -491,7 +500,7 @@ export default function ClientAccountsPage({
                       type="button"
                       onClick={() => void saveClient()}
                       className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-                      disabled={!form || saving || !isDirty}
+                      disabled={!canManageClients || !form || saving || !isDirty}
                     >
                       {saving ? "Saving…" : isNewClient ? "Create Client" : "Save Changes"}
                     </button>
@@ -505,13 +514,14 @@ export default function ClientAccountsPage({
                 </div>
               ) : (
                 <div className="mt-6 space-y-6">
+                  <fieldset disabled={!canManageClients} className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="block">
                       <div className="mb-2 text-sm font-medium text-neutral-700">Client Name</div>
                       <input
                         value={form.name}
                         onChange={(event) => updateField("name", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder="Grant Rogers"
                       />
                     </label>
@@ -521,7 +531,7 @@ export default function ClientAccountsPage({
                       <input
                         value={form.email}
                         onChange={(event) => updateField("email", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder="client@example.com"
                       />
                     </label>
@@ -533,7 +543,7 @@ export default function ClientAccountsPage({
                       <select
                         value={form.brandId}
                         onChange={(event) => updateField("brandId", event.target.value)}
-                        disabled={Boolean(selectedUser && !selectedUser.canReassignBrand)}
+                        disabled={!canManageClients || Boolean(selectedUser && !selectedUser.canReassignBrand)}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                       >
                         <option value="">Select a brand</option>
@@ -563,7 +573,7 @@ export default function ClientAccountsPage({
                         type="password"
                         value={form.password}
                         onChange={(event) => updateField("password", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder={isNewClient ? "Minimum 8 characters" : "Leave blank to keep current password"}
                       />
                     </label>
@@ -574,7 +584,7 @@ export default function ClientAccountsPage({
                         type="password"
                         value={form.confirmPassword}
                         onChange={(event) => updateField("confirmPassword", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder="Repeat password"
                       />
                     </label>
@@ -586,7 +596,7 @@ export default function ClientAccountsPage({
                         type="checkbox"
                         checked={form.markEmailVerified}
                         onChange={(event) => updateField("markEmailVerified", event.target.checked)}
-                        className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-500"
+                        className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-500 disabled:cursor-not-allowed"
                       />
                       <span>
                         <span className="block font-medium text-neutral-900">Mark email as verified on create</span>
@@ -646,6 +656,7 @@ export default function ClientAccountsPage({
                       <div className="mt-2 text-sm text-neutral-800">{selectedUser ? fmtDate(selectedUser.lastLoginAt) : "—"}</div>
                     </div>
                   </div>
+                  </fieldset>
                 </div>
               )}
             </div>

@@ -9,7 +9,6 @@ function json(res: NextApiResponse, status: number, payload: any) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
   if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
-  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
   try {
     if (req.method === "GET") {
@@ -19,6 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
+      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
       const brand = await createEditableBrand(req.body || {});
       return json(res, 200, { ok: true, brand });
     }
