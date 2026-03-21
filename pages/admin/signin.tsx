@@ -55,6 +55,11 @@ export default function AdminCommandSignIn() {
     const q = router.query.error;
     return typeof q === "string" ? prettyAuthError(q) : null;
   }, [router.query.error]);
+  const resetNotice = useMemo(() => {
+    return router.query.reset === "1"
+      ? "Password updated. Sign in with your new backoffice password."
+      : null;
+  }, [router.query.reset]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -148,6 +153,12 @@ export default function AdminCommandSignIn() {
             {error ? (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                 {error}
+              </div>
+            ) : null}
+
+            {!error && resetNotice ? (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {resetNotice}
               </div>
             ) : null}
 

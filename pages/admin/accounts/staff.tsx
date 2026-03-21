@@ -1,4 +1,4 @@
-import { BackofficeRole, BackofficeUserStatus, BrandStatus } from "@prisma/client";
+import { BackofficeMfaMethod, BackofficeRole, BackofficeUserStatus, BrandStatus } from "@prisma/client";
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../../components/admin/AdminLayout";
@@ -13,6 +13,10 @@ type StaffAccountRecord = {
   email: string | null;
   role: BackofficeRole;
   status: BackofficeUserStatus;
+  mfaMethod: BackofficeMfaMethod | null;
+  mfaState: "DISABLED" | "PENDING" | "ENABLED";
+  mfaEnabledAt: string | null;
+  mfaRecoveryCodesGeneratedAt: string | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -41,6 +45,15 @@ type StaffForm = {
 
 type StaffAccountsPageProps = {
   loggedInAs: string | null;
+};
+
+type GeneratedStaffLink = {
+  kind: "invite" | "reset";
+  url: string;
+  expiresAt: string;
+  userId: string;
+  username: string;
+  email: string | null;
 };
 
 const NEW_STAFF_ID = "__new__";
@@ -94,6 +107,17 @@ function RolePill({ role }: { role: BackofficeRole }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>{role}</span>;
 }
 
+function MfaPill({ state }: { state: StaffAccountRecord["mfaState"] }) {
+  const cls =
+    state === "ENABLED"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : state === "PENDING"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-neutral-200 bg-neutral-50 text-neutral-600";
+
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}>MFA {state}</span>;
+}
+
 export const getServerSideProps: GetServerSideProps<StaffAccountsPageProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/accounts/staff",
@@ -121,6 +145,8 @@ export default function StaffAccountsPage({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyAction, setBusyAction] = useState<"block" | "unblock" | "delete" | null>(null);
+  const [linkBusy, setLinkBusy] = useState<"invite" | "reset" | null>(null);
+  const [generatedLink, setGeneratedLink] = useState<GeneratedStaffLink | null>(null);
   const [err, setErr] = useState("");
 
   async function loadData(nextSelectedId?: string | null) {
@@ -153,6 +179,7 @@ export default function StaffAccountsPage({
       if (nextUsers.length === 0) {
         setSelectedId(NEW_STAFF_ID);
         setForm(blankStaffForm());
+        setGeneratedLink(null);
         return;
       }
 
@@ -160,6 +187,7 @@ export default function StaffAccountsPage({
       if (desiredId === NEW_STAFF_ID) {
         setSelectedId(NEW_STAFF_ID);
         setForm(blankStaffForm());
+        setGeneratedLink(null);
         return;
       }
 
@@ -168,6 +196,7 @@ export default function StaffAccountsPage({
 
       setSelectedId(selected.id);
       setForm(cloneStaffForm(selected));
+      setGeneratedLink((current) => (current && current.userId === selected.id ? current : null));
     } catch (error: any) {
       const message = error?.message || "Failed to load staff accounts";
       setErr(message);
@@ -193,6 +222,8 @@ export default function StaffAccountsPage({
         user.status,
         user.brandKeys.join(" "),
         user.brandNames.join(" "),
+        user.mfaState,
+        user.mfaMethod || "",
       ]
         .join(" ")
         .toLowerCase()
@@ -218,12 +249,14 @@ export default function StaffAccountsPage({
   function startNewStaff() {
     setSelectedId(NEW_STAFF_ID);
     setForm(blankStaffForm());
+    setGeneratedLink(null);
     setErr("");
   }
 
   function selectUser(user: StaffAccountRecord) {
     setSelectedId(user.id);
     setForm(cloneStaffForm(user));
+    setGeneratedLink((current) => (current && current.userId === user.id ? current : null));
     setErr("");
   }
 
@@ -352,6 +385,101 @@ export default function StaffAccountsPage({
     }
   }
 
+  async function copyGeneratedLink() {
+    if (!generatedLink?.url) return;
+
+    try {
+      await navigator.clipboard.writeText(generatedLink.url);
+      toast("success", "Link copied to clipboard.");
+    } catch {
+      toast("error", "Failed to copy link.");
+    }
+  }
+
+  async function createInvite() {
+    if (!form || !isNewStaff) return;
+
+    if (!form.username.trim()) {
+      const message = "Username is required";
+      setErr(message);
+      toast("error", message);
+      return;
+    }
+
+    if (form.password || form.confirmPassword) {
+      const message = "Clear the manual password fields when creating an invite-based account";
+      setErr(message);
+      toast("error", message);
+      return;
+    }
+
+    if (form.role === BackofficeRole.STAFF && form.brandIds.length === 0) {
+      const message = "Staff accounts must be assigned to at least one brand";
+      setErr(message);
+      toast("error", message);
+      return;
+    }
+
+    setLinkBusy("invite");
+    setErr("");
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "createInvite",
+          username: form.username,
+          email: form.email,
+          role: form.role,
+          brandIds: form.role === BackofficeRole.STAFF ? form.brandIds : [],
+        }),
+      });
+
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) throw new Error(body?.error || "Failed to create invite");
+
+      const savedId = body?.user?.id || null;
+      const invite = body?.invite || null;
+      toast("success", "Invite link created.");
+      await loadData(savedId);
+      setGeneratedLink(invite);
+    } catch (error: any) {
+      const message = error?.message || "Failed to create invite";
+      setErr(message);
+      toast("error", message);
+    } finally {
+      setLinkBusy(null);
+    }
+  }
+
+  async function generateResetLink() {
+    if (!selectedUser) return;
+
+    setLinkBusy("reset");
+    setErr("");
+
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generateResetLink" }),
+      });
+
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) throw new Error(body?.error || "Failed to generate reset link");
+
+      setGeneratedLink(body?.invite || null);
+      toast("success", "Reset link created.");
+    } catch (error: any) {
+      const message = error?.message || "Failed to generate reset link";
+      setErr(message);
+      toast("error", message);
+    } finally {
+      setLinkBusy(null);
+    }
+  }
+
   return (
     <AdminLayout title="Admin • Staff Accounts" sectionLabel="Accounts" loggedInAs={loggedInAs} active="accounts">
       <section className="space-y-6">
@@ -432,6 +560,7 @@ export default function StaffAccountsPage({
                         <div className="flex flex-col items-end gap-2">
                           <RolePill role={user.role} />
                           <StatusPill status={user.status} />
+                          <MfaPill state={user.mfaState} />
                         </div>
                       </div>
 
@@ -453,13 +582,28 @@ export default function StaffAccountsPage({
             <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <LibraryCardHeader
                 title={isNewStaff ? "New Staff Account" : selectedUser ? selectedUser.username : "Staff Account"}
-                description={
-                  isNewStaff
-                    ? "Create a new backoffice account with explicit role and brand access."
-                    : "Edit the selected staff account. Password changes are optional."
-                }
                 actionsTop={
                   <>
+                    {!isNewStaff && selectedUser ? (
+                      <button
+                        type="button"
+                        onClick={() => void generateResetLink()}
+                        className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
+                        disabled={Boolean(linkBusy)}
+                      >
+                        {linkBusy === "reset" ? "Generating…" : "Password Reset"}
+                      </button>
+                    ) : null}
+                    {isNewStaff ? (
+                      <button
+                        type="button"
+                        onClick={() => void createInvite()}
+                        className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                        disabled={!form || saving || linkBusy === "invite"}
+                      >
+                        {linkBusy === "invite" ? "Generating…" : "Create & Invite"}
+                      </button>
+                    ) : null}
                     {!isNewStaff && selectedUser ? (
                       <button
                         type="button"
@@ -488,7 +632,7 @@ export default function StaffAccountsPage({
                       type="button"
                       onClick={() => void saveStaff()}
                       className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-                      disabled={!form || saving || !isDirty}
+                      disabled={!form || saving || linkBusy === "invite" || !isDirty}
                     >
                       {saving ? "Saving…" : isNewStaff ? "Create Staff" : "Save Changes"}
                     </button>
@@ -505,6 +649,64 @@ export default function StaffAccountsPage({
                   {selectedUser?.protected ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                       This is a protected admin account. Role, block, delete, and email changes are restricted.
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-semibold text-neutral-900">Authenticator App MFA</h2>
+                        <p className="mt-1 text-sm text-neutral-600">
+                          MFA groundwork is active for staff accounts, but login enforcement is not enabled yet.
+                        </p>
+                      </div>
+                      {selectedUser ? <MfaPill state={selectedUser.mfaState} /> : null}
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
+                      <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Method</div>
+                        <div className="mt-2 text-sm text-neutral-800">
+                          {selectedUser?.mfaMethod === BackofficeMfaMethod.AUTHENTICATOR_APP ? "Authenticator App" : "Not configured"}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Enabled</div>
+                        <div className="mt-2 text-sm text-neutral-800">{selectedUser ? fmtDate(selectedUser.mfaEnabledAt) : "—"}</div>
+                      </div>
+                      <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Recovery Codes</div>
+                        <div className="mt-2 text-sm text-neutral-800">
+                          {selectedUser ? fmtDate(selectedUser.mfaRecoveryCodesGeneratedAt) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {generatedLink ? (
+                    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-sm font-semibold text-sky-900">
+                            {generatedLink.kind === "invite" ? "Invite Link Ready" : "Reset Link Ready"}
+                          </div>
+                          <div className="mt-1 text-sm text-sky-800">
+                            Share this one-time link with <span className="font-medium">{generatedLink.username}</span>.
+                            {generatedLink.email ? ` Account email: ${generatedLink.email}.` : " No email is set on this account."}
+                          </div>
+                          <div className="mt-3 rounded-xl border border-sky-200 bg-white px-3 py-3 text-xs text-sky-900 break-all">
+                            {generatedLink.url}
+                          </div>
+                          <div className="mt-2 text-xs text-sky-700">Expires {fmtDate(generatedLink.expiresAt)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void copyGeneratedLink()}
+                          className="rounded-xl border border-sky-300 bg-white px-3 py-2 text-sm font-semibold text-sky-900 hover:bg-sky-100"
+                        >
+                          Copy Link
+                        </button>
+                      </div>
                     </div>
                   ) : null}
 

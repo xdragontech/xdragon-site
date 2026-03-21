@@ -451,11 +451,6 @@ export default function ClientAccountsPage({
             <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <LibraryCardHeader
                 title={isNewClient ? "New Client Account" : selectedUser ? selectedUser.email : "Client Account"}
-                description={
-                  isNewClient
-                    ? "Create a brand-scoped external account for the public website."
-                    : "Edit the selected client account. Password changes are optional."
-                }
                 actionsTop={
                   <>
                     {!isNewClient && selectedUser && !selectedUser.emailVerifiedAt ? (
