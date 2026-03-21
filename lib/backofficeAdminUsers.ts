@@ -1,12 +1,14 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import {
+  BackofficeMfaMethod,
   BackofficeRole,
   BackofficeUserStatus,
   BrandStatus,
   type Prisma,
 } from "@prisma/client";
 import { isProtectedBackofficeIdentity } from "./backofficeIdentity";
+import { deriveBackofficeMfaState, type BackofficeMfaState } from "./backofficeMfa";
 import { MIN_BACKOFFICE_PASSWORD_LENGTH } from "./backofficePasswordPolicy";
 import { prisma } from "./prisma";
 
@@ -44,6 +46,10 @@ export type ManagedBackofficeUserRecord = {
   email: string | null;
   role: BackofficeRole;
   status: BackofficeUserStatus;
+  mfaMethod: BackofficeMfaMethod | null;
+  mfaState: BackofficeMfaState;
+  mfaEnabledAt: string | null;
+  mfaRecoveryCodesGeneratedAt: string | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -125,6 +131,15 @@ function toManagedBackofficeUserRecord(user: ManagedBackofficeUserPayload): Mana
     email: user.email || null,
     role: user.role,
     status: user.status,
+    mfaMethod: user.mfaMethod || null,
+    mfaState: deriveBackofficeMfaState({
+      mfaMethod: user.mfaMethod,
+      mfaEnabledAt: user.mfaEnabledAt,
+      mfaSecretEncrypted: user.mfaSecretEncrypted,
+      mfaRecoveryCodesEncrypted: user.mfaRecoveryCodesEncrypted,
+    }),
+    mfaEnabledAt: user.mfaEnabledAt ? user.mfaEnabledAt.toISOString() : null,
+    mfaRecoveryCodesGeneratedAt: user.mfaRecoveryCodesGeneratedAt ? user.mfaRecoveryCodesGeneratedAt.toISOString() : null,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,

@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { getBackofficeMfaIssuer, isBackofficeMfaEncryptionReady } from "../backofficeMfa";
 import { authCookieDomain, canonicalAdminHost, canonicalPublicHost, getAllowedHosts, getBrandSiteConfig } from "../siteConfig";
 
 type EnvValueKind = "plain" | "secret" | "databaseUrl";
@@ -118,6 +119,18 @@ const ENV_GROUPS: Array<{
         key: "NEXTAUTH_SECRET",
         label: "NextAuth Secret",
         description: "Secret used to sign NextAuth cookies and tokens.",
+        kind: "secret",
+      },
+      {
+        key: "BACKOFFICE_MFA_ISSUER",
+        label: "Backoffice MFA Issuer",
+        description: "Issuer label used for authenticator-app enrollment.",
+        kind: "plain",
+      },
+      {
+        key: "BACKOFFICE_MFA_ENCRYPTION_KEY",
+        label: "Backoffice MFA Encryption Key",
+        description: "Encryption key required before authenticator-app secrets and recovery codes can be stored safely.",
         kind: "secret",
       },
     ],
@@ -440,6 +453,16 @@ export function collectDerivedRuntimeConfig(): RuntimeStatusItem[] {
       label: "Auth Cookie Domain",
       value: authCookieDomain() || "Host-only",
       note: "Auth cookies are intentionally host-only so public and backoffice sessions do not depend on a shared subdomain cookie.",
+    },
+    {
+      label: "Backoffice MFA Issuer",
+      value: getBackofficeMfaIssuer(),
+      note: "Authenticator-app issuer label that will be used for staff MFA enrollment.",
+    },
+    {
+      label: "Backoffice MFA Encryption",
+      value: isBackofficeMfaEncryptionReady() ? "Ready" : "Missing key",
+      note: "A dedicated encryption key is required before authenticator secrets and recovery codes can be activated.",
     },
   ];
 }
