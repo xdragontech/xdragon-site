@@ -6,7 +6,15 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { canonicalAdminHost, getAllowedHosts } from "../../lib/siteConfig";
 import { authOptions } from "../api/auth/[...nextauth]";
-import { BACKOFFICE_CREDENTIALS_PROVIDER_ID, getBackofficeRole, isBackofficeSession } from "../../lib/authScopes";
+import {
+  BACKOFFICE_CREDENTIALS_PROVIDER_ID,
+  isBackofficeSession,
+  requiresBackofficeMfaChallenge,
+} from "../../lib/authScopes";
+import {
+  hasVerifiedBackofficeMfaForRequest,
+  resolveBackofficePostAuthDestination,
+} from "../../lib/backofficeAuth";
 
 function allowedHosts(): Set<string> {
   return getAllowedHosts();
@@ -101,9 +109,12 @@ export default function AdminCommandSignIn() {
           return;
         }
 
-        const target =
-          callbackUrl ||
-          (getBackofficeRole(session) === "SUPERADMIN" ? "/admin/dashboard" : "/admin/library");
+        const target = callbackUrl || resolveBackofficePostAuthDestination(session);
+        if (requiresBackofficeMfaChallenge(session)) {
+          window.location.assign(`/admin/mfa?callbackUrl=${encodeURIComponent(target)}`);
+          return;
+        }
+
         window.location.assign(target);
         return;
       }
@@ -211,7 +222,16 @@ export default function AdminCommandSignIn() {
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
   if (isBackofficeSession(session)) {
-    const destination = getBackofficeRole(session) === "SUPERADMIN" ? "/admin/dashboard" : "/admin/library";
+    const destination = resolveBackofficePostAuthDestination(session);
+    if (requiresBackofficeMfaChallenge(session) && !hasVerifiedBackofficeMfaForRequest(ctx.req, session)) {
+      return {
+        redirect: {
+          destination: `/admin/mfa?callbackUrl=${encodeURIComponent(destination)}`,
+          permanent: false,
+        },
+      };
+    }
+
     return {
       redirect: {
         destination,

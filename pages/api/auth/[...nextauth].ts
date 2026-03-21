@@ -1,4 +1,5 @@
 // pages/api/auth/[...nextauth].ts
+import crypto from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -95,6 +96,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        const backofficeMfaState = (user as any).authScope === BACKOFFICE_AUTH_SCOPE ? (user as any).mfaState || "DISABLED" : "DISABLED";
         token.sub = user.id;
         token.email = user.email;
         token.name = user.name;
@@ -110,6 +112,8 @@ export const authOptions: NextAuthOptions = {
         (token as any).allowedBrandKeys = (user as any).allowedBrandKeys || [];
         (token as any).allowedBrandIds = (user as any).allowedBrandIds || [];
         (token as any).lastSelectedBrandKey = (user as any).lastSelectedBrandKey || null;
+        (token as any).backofficeMfaChallenge =
+          backofficeMfaState === "ENABLED" ? crypto.randomUUID() : null;
       }
 
       const authScope = (token as any).authScope;
@@ -127,6 +131,7 @@ export const authOptions: NextAuthOptions = {
           (token as any).mfaEnabledAt = null;
           (token as any).allowedBrandKeys = [];
           (token as any).allowedBrandIds = [];
+          (token as any).backofficeMfaChallenge = null;
           return token;
         }
 
@@ -145,6 +150,12 @@ export const authOptions: NextAuthOptions = {
         (token as any).allowedBrandKeys = refreshed.allowedBrandKeys;
         (token as any).allowedBrandIds = refreshed.allowedBrandIds;
         (token as any).lastSelectedBrandKey = refreshed.lastSelectedBrandKey;
+        (token as any).backofficeMfaChallenge =
+          refreshed.mfaState === "ENABLED"
+            ? (typeof (token as any).backofficeMfaChallenge === "string" && (token as any).backofficeMfaChallenge
+                ? (token as any).backofficeMfaChallenge
+                : crypto.randomUUID())
+            : null;
         return token;
       }
 
@@ -191,6 +202,9 @@ export const authOptions: NextAuthOptions = {
       (sessionUser as any).mfaMethod = (token as any).mfaMethod || null;
       (sessionUser as any).mfaState = (token as any).mfaState || "DISABLED";
       (sessionUser as any).mfaEnabledAt = (token as any).mfaEnabledAt || null;
+      (sessionUser as any).backofficeMfaRequired =
+        (token as any).authScope === BACKOFFICE_AUTH_SCOPE && (token as any).mfaState === "ENABLED";
+      (sessionUser as any).backofficeMfaChallenge = (token as any).backofficeMfaChallenge || null;
       (sessionUser as any).brandKey = (token as any).brandKey || null;
       (sessionUser as any).username = (token as any).username || null;
       (sessionUser as any).allowedBrandKeys = Array.isArray((token as any).allowedBrandKeys)
@@ -205,6 +219,9 @@ export const authOptions: NextAuthOptions = {
       (session as any).mfaMethod = (token as any).mfaMethod || null;
       (session as any).mfaState = (token as any).mfaState || "DISABLED";
       (session as any).mfaEnabledAt = (token as any).mfaEnabledAt || null;
+      (session as any).backofficeMfaRequired =
+        (token as any).authScope === BACKOFFICE_AUTH_SCOPE && (token as any).mfaState === "ENABLED";
+      (session as any).backofficeMfaChallenge = (token as any).backofficeMfaChallenge || null;
       (session as any).brandKey = (token as any).brandKey || null;
       (session as any).allowedBrandKeys = Array.isArray((token as any).allowedBrandKeys)
         ? (token as any).allowedBrandKeys
