@@ -43,6 +43,7 @@ This is the working standard for every X Dragon change until the public site and
 6. If a lead is durably captured, notification failures should degrade to deferred follow-up rather than user-visible loss.
 7. Public brand context must resolve from host server-side; client-sent brand identifiers are cross-checks only.
 8. Brand-specific email flows must fail safely and must not fall back across brands.
+9. Protected bootstrap superadmin provisioning must be explicit, env-driven, and idempotent; deploy startup must not silently rotate protected-account credentials.
 
 ## Deployment rules
 1. `feature/*` -> PR -> `staging` -> QA -> PR -> `main`
@@ -75,4 +76,5 @@ Stop and clarify before merging if a change:
 ## Reference docs
 - [`docs/refactor-roadmap.md`](./refactor-roadmap.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
