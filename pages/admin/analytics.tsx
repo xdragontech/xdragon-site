@@ -1,3 +1,4 @@
+import { BackofficeRole } from "@prisma/client";
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { requireBackofficePage } from "../../lib/backofficeAuth";
 import { useEffect, useState } from "react";
@@ -19,16 +20,21 @@ type AnalyticsPayload = {
   updatedAt: string;
 };
 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
+type AnalyticsPageProps = {
+  loggedInAs: string | null;
+  canManageGeo: boolean;
+};
+
+export const getServerSideProps: GetServerSideProps<AnalyticsPageProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/analytics",
-    superadminOnly: true,
   });
   if (!auth.ok) return auth.response;
 
   return {
     props: {
       loggedInAs: auth.loggedInAs,
+      canManageGeo: auth.principal.role === BackofficeRole.SUPERADMIN,
     },
   };
 };
@@ -43,7 +49,10 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
-export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function AnalyticsPage({
+  loggedInAs,
+  canManageGeo,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { toast } = useToast();
 
   const [data, setData] = useState<AnalyticsPayload | null>(null);
@@ -131,6 +140,12 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
           actionsTop={topActions}
         />
 
+        {!canManageGeo ? (
+          <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+            You have read-only access to analytics. Geo backfill remains restricted to superadmins.
+          </div>
+        ) : null}
+
         {err ? (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{err}</div>
         ) : null}
@@ -173,7 +188,7 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
               <button
                 type="button"
                 onClick={previewGeoBackfill}
-                disabled={geoLoading}
+                disabled={geoLoading || !canManageGeo}
                 className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-neutral-50 disabled:opacity-60"
               >
                 {geoLoading ? "Working…" : "Preview"}
@@ -181,7 +196,7 @@ export default function AnalyticsPage({ loggedInAs }: InferGetServerSidePropsTyp
               <button
                 type="button"
                 onClick={runGeoBackfill}
-                disabled={geoLoading}
+                disabled={geoLoading || !canManageGeo}
                 className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-60"
               >
                 {geoLoading ? "Working…" : "Run backfill"}

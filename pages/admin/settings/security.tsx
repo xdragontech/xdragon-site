@@ -59,6 +59,8 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<"start" | "verify" | "cancel" | null>(null);
   const [code, setCode] = useState("");
+  const [qrCodeSrc, setQrCodeSrc] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   async function loadStatus() {
     setLoading(true);
@@ -80,6 +82,48 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
   useEffect(() => {
     void loadStatus();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (status?.state !== "PENDING" || !status.otpAuthUrl) {
+      setQrCodeSrc(null);
+      setQrLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setQrLoading(true);
+    import("qrcode")
+      .then((QRCode) =>
+        QRCode.toDataURL(status.otpAuthUrl || "", {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 240,
+          color: {
+            dark: "#171717",
+            light: "#FFFFFF",
+          },
+        })
+      )
+      .then((src) => {
+        if (active) {
+          setQrCodeSrc(src);
+          setQrLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setQrCodeSrc(null);
+          setQrLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [status?.otpAuthUrl, status?.state]);
 
   async function runAction(action: "start" | "verify" | "cancel") {
     if (action === "verify" && !code.trim()) {
@@ -133,7 +177,7 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <LibraryCardHeader
             title="Security"
-            description="Set up your own authenticator-app MFA for backoffice access. Enforcement is not active yet, but this is the enrollment path we will use."
+            description="Set up your own authenticator-app MFA for backoffice access. Once enabled, new backoffice sign-ins must complete this second step."
             actionsTop={
               <button
                 type="button"
@@ -210,6 +254,26 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
                     <div className="rounded-2xl border border-neutral-200 bg-white p-5">
                       <div className="text-sm font-semibold text-neutral-900">Authenticator Details</div>
                       <div className="mt-4 space-y-4">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Scan With Authenticator App</div>
+                          <div className="mt-3 flex min-h-[256px] items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                            {qrCodeSrc ? (
+                              <img
+                                src={qrCodeSrc}
+                                alt="Authenticator setup QR code"
+                                className="h-60 w-60 rounded-xl border border-neutral-200 bg-white p-2"
+                              />
+                            ) : qrLoading ? (
+                              <div className="max-w-xs text-center text-sm text-neutral-500">
+                                Generating QR code…
+                              </div>
+                            ) : (
+                              <div className="max-w-xs text-center text-sm text-neutral-500">
+                                QR code unavailable. Use the manual setup key below instead.
+                              </div>
+                            )}
+                          </div>
+                        </div>
                         <div>
                           <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Issuer</div>
                           <div className="mt-2 text-sm text-neutral-900">{status.issuer}</div>
@@ -299,7 +363,7 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                   <div className="text-sm font-semibold text-emerald-900">Authenticator MFA Enabled</div>
                   <p className="mt-2 text-sm text-emerald-800">
-                    Your backoffice account is enrolled with an authenticator app. Login enforcement is not active yet, but this account is ready.
+                    Your backoffice account is enrolled with an authenticator app. New backoffice sign-ins now require the authenticator or a recovery code.
                   </p>
                 </div>
               ) : null}

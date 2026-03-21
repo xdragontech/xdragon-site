@@ -300,7 +300,8 @@ export async function getManagedBackofficeUser(id: string): Promise<ManagedBacko
 export async function createManagedBackofficeUser(input: StaffUserInput): Promise<ManagedBackofficeUserRecord> {
   const username = normalizeUsername(input.username);
   const email = normalizeOptionalEmail(input.email);
-  const role = parseRole(input.role || BackofficeRole.STAFF);
+  const requestedRole = parseRole(input.role || BackofficeRole.STAFF);
+  const role = isProtectedBackofficeIdentity(email, username) ? BackofficeRole.SUPERADMIN : requestedRole;
   const password = String(input.password || "");
   const requestedBrandIds = normalizeBrandIds(input.brandIds);
 
@@ -383,7 +384,8 @@ export async function createManagedBackofficeUser(input: StaffUserInput): Promis
 export async function createManagedBackofficeInvite(input: StaffUserInput): Promise<ManagedBackofficeUserRecord> {
   const username = normalizeUsername(input.username);
   const email = normalizeOptionalEmail(input.email);
-  const role = parseRole(input.role || BackofficeRole.STAFF);
+  const requestedRole = parseRole(input.role || BackofficeRole.STAFF);
+  const role = isProtectedBackofficeIdentity(email, username) ? BackofficeRole.SUPERADMIN : requestedRole;
   const requestedBrandIds = normalizeBrandIds(input.brandIds);
 
   if (!username) throw new Error("Username is required");
@@ -469,7 +471,7 @@ export async function updateManagedBackofficeUser(
 
   const username = normalizeUsername(input.username ?? existing.username);
   const email = normalizeOptionalEmail(input.email ?? existing.email);
-  const role = parseRole(input.role || existing.role);
+  const requestedRole = parseRole(input.role || existing.role);
   const password = String(input.password || "");
   const requestedBrandIds =
     input.brandIds === undefined ? existing.brandAccesses.map((access) => access.brand.id) : normalizeBrandIds(input.brandIds);
@@ -480,13 +482,14 @@ export async function updateManagedBackofficeUser(
 
   const isSelf = actorId === existing.id;
   const isProtected = isProtectedBackofficeIdentity(existing.email, existing.username);
+  const role = isProtected ? BackofficeRole.SUPERADMIN : requestedRole;
 
   if (isSelf && role !== existing.role) {
     throw new Error("You cannot change your own role");
   }
 
-  if (isProtected && role !== existing.role) {
-    throw new Error("Protected admin roles cannot be changed");
+  if (isProtected && requestedRole !== BackofficeRole.SUPERADMIN) {
+    throw new Error("Protected bootstrap account must remain SUPERADMIN");
   }
 
   if (isProtected && email !== (existing.email || null)) {
@@ -657,6 +660,38 @@ export async function createManagedBackofficePasswordLink(
     username: user.username,
     email: user.email || null,
   };
+}
+
+export async function resetManagedBackofficeUserMfa(userId: string): Promise<ManagedBackofficeUserRecord> {
+  const existing = await findManagedBackofficeUserById(userId);
+  if (!existing) throw new Error("Staff account not found");
+
+  const updated = await prisma.backofficeUser.update({
+    where: { id: existing.id },
+    data: {
+      mfaMethod: null,
+      mfaEnabledAt: null,
+      mfaSecretEncrypted: null,
+      mfaRecoveryCodesEncrypted: null,
+      mfaRecoveryCodesGeneratedAt: null,
+    },
+    include: {
+      brandAccesses: {
+        include: {
+          brand: {
+            select: {
+              id: true,
+              brandKey: true,
+              name: true,
+              status: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return toManagedBackofficeUserRecord(updated);
 }
 
 export async function consumeManagedBackofficePasswordReset(input: {

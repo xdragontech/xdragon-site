@@ -10,7 +10,9 @@ import { deriveBackofficeMfaState, type BackofficeMfaState } from "./backofficeM
 import { prisma } from "./prisma";
 import { BACKOFFICE_AUTH_SCOPE, getAuthScope } from "./authScopes";
 
-const XDADMIN_ID = "xdadmin";
+// Permanent protected bootstrap identity for backoffice recovery/initial setup.
+// Provisioning and password rotation policy will be formalized separately.
+const PROTECTED_BACKOFFICE_EMAIL = "grant@xdragon.tech";
 
 type BrandAccessRow = {
   id: string;
@@ -47,7 +49,6 @@ export type BackofficeIdentityState = {
   allowedBrandKeys: string[];
   lastSelectedBrandKey: string | null;
   displayName: string;
-  isEnvSuperadmin: boolean;
 };
 
 export type BackofficeAuthUser = {
@@ -83,6 +84,10 @@ function toDisplayName(user: { username: string; email: string | null }) {
   return user.email || user.username;
 }
 
+function resolveBackofficeRole(role: BackofficeRole, email: string | null | undefined, username: string | null | undefined) {
+  return isProtectedBackofficeIdentity(email, username) ? BackofficeRole.SUPERADMIN : role;
+}
+
 function getAccessibleBrands(rows: Array<{ brand: BrandAccessRow }>): BrandAccessRow[] {
   return rows
     .map((row) => row.brand)
@@ -93,12 +98,13 @@ function toBackofficeIdentityState(user: BackofficeUserWithAccess): BackofficeId
   const accessibleBrands = getAccessibleBrands(user.brandAccesses);
   const allowedBrandIds = accessibleBrands.map((brand) => brand.id);
   const allowedBrandKeys = accessibleBrands.map((brand) => brand.brandKey);
+  const role = resolveBackofficeRole(user.role, user.email, user.username);
 
   return {
     id: user.id,
     email: user.email || null,
     username: user.username,
-    role: user.role,
+    role,
     status: user.status,
     mfaMethod: user.mfaMethod || null,
     mfaState: deriveBackofficeMfaState({
@@ -115,7 +121,6 @@ function toBackofficeIdentityState(user: BackofficeUserWithAccess): BackofficeId
         ? user.lastSelectedBrandKey
         : null,
     displayName: toDisplayName(user),
-    isEnvSuperadmin: false,
   };
 }
 
@@ -138,47 +143,13 @@ function toBackofficeAuthUser(state: BackofficeIdentityState): BackofficeAuthUse
   };
 }
 
-export function getXdAdminIdentity() {
-  const username = normalizeUsername(process.env.XDADMIN_USERNAME || "xdadmin");
-  const email = normalizeEmail(process.env.XDADMIN_EMAIL || "xdadmin@xdragon.tech");
-  const password = process.env.XDADMIN_PASSWORD || "";
-  return { id: XDADMIN_ID, username, email, password };
+export function getProtectedBackofficeEmail() {
+  return PROTECTED_BACKOFFICE_EMAIL;
 }
 
-export function isEnvAdminEmail(email: string | null | undefined): boolean {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return false;
-
-  const raw = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL_LIST || process.env.ADMIN_USERS || "";
-  const allowed = new Set(
-    raw
-      .split(/[,\s]+/)
-      .map((entry) => normalizeEmail(entry))
-      .filter(Boolean)
-  );
-
-  return allowed.has(normalized);
-}
-
-export function isProtectedBackofficeIdentity(email: string | null | undefined, username: string | null | undefined): boolean {
+export function isProtectedBackofficeIdentity(email: string | null | undefined, _username: string | null | undefined): boolean {
   const normalizedEmail = normalizeEmail(email);
-  const normalizedUsername = normalizeUsername(username);
-  const xd = getXdAdminIdentity();
-
-  return Boolean(
-    (normalizedEmail && (normalizedEmail === xd.email || isEnvAdminEmail(normalizedEmail))) ||
-    (normalizedUsername && normalizedUsername === xd.username)
-  );
-}
-
-async function listActiveBrandAccessRows(
-  tx: Pick<typeof prisma, "brand"> = prisma
-): Promise<Array<{ id: string; brandKey: string }>> {
-  return tx.brand.findMany({
-    where: { status: { not: BrandStatus.DISABLED } },
-    orderBy: [{ createdAt: "asc" }],
-    select: { id: true, brandKey: true },
-  });
+  return Boolean(normalizedEmail && normalizedEmail === getProtectedBackofficeEmail());
 }
 
 async function fetchBackofficeUserByIdentifier(identifier: string): Promise<BackofficeUserWithAccess | null> {
@@ -230,27 +201,6 @@ export async function authorizeBackofficeCredentials(
 
   if (!identifier || !password) return null;
 
-  const xd = getXdAdminIdentity();
-  if (identifier === xd.username || identifier === xd.email) {
-    if (!xd.password || password !== xd.password) return null;
-    const brands = await listActiveBrandAccessRows();
-    return toBackofficeAuthUser({
-      id: XDADMIN_ID,
-      email: xd.email,
-      username: xd.username,
-      role: BackofficeRole.SUPERADMIN,
-      status: BackofficeUserStatus.ACTIVE,
-      mfaMethod: null,
-      mfaState: "DISABLED",
-      mfaEnabledAt: null,
-      allowedBrandIds: brands.map((brand) => brand.id),
-      allowedBrandKeys: brands.map((brand) => brand.brandKey),
-      lastSelectedBrandKey: brands[0]?.brandKey || null,
-      displayName: xd.email,
-      isEnvSuperadmin: true,
-    });
-  }
-
   let user = await fetchBackofficeUserByIdentifier(identifier);
 
   if (!user) return null;
@@ -270,28 +220,7 @@ export async function authorizeBackofficeCredentials(
   return toBackofficeAuthUser(state);
 }
 export async function refreshBackofficeIdentity(sessionLike: { sub?: string | null; email?: string | null }): Promise<BackofficeAuthUser | null> {
-  const xd = getXdAdminIdentity();
-  const tokenEmail = normalizeEmail(sessionLike.email);
   const tokenId = String(sessionLike.sub || "");
-
-  if (tokenId === XDADMIN_ID || tokenEmail === xd.email) {
-    const brands = await listActiveBrandAccessRows();
-    return toBackofficeAuthUser({
-      id: XDADMIN_ID,
-      email: xd.email,
-      username: xd.username,
-      role: BackofficeRole.SUPERADMIN,
-      status: BackofficeUserStatus.ACTIVE,
-      mfaMethod: null,
-      mfaState: "DISABLED",
-      mfaEnabledAt: null,
-      allowedBrandIds: brands.map((brand) => brand.id),
-      allowedBrandKeys: brands.map((brand) => brand.brandKey),
-      lastSelectedBrandKey: brands[0]?.brandKey || null,
-      displayName: xd.email,
-      isEnvSuperadmin: true,
-    });
-  }
 
   if (!tokenId) return null;
 
@@ -329,6 +258,5 @@ export async function getBackofficeIdentityFromSession(session: any): Promise<Ba
     allowedBrandKeys: hydrated.allowedBrandKeys,
     lastSelectedBrandKey: hydrated.lastSelectedBrandKey,
     displayName: hydrated.name,
-    isEnvSuperadmin: hydrated.id === XDADMIN_ID,
   };
 }

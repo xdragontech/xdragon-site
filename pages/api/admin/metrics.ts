@@ -219,7 +219,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const auth = await requireBackofficeApi(req, res, { superadminOnly: true });
+  const auth = await requireBackofficeApi(req, res);
   if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const period = parsePeriod(req.query.period);
@@ -229,71 +229,112 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const signups = Array(labels.length).fill(0) as number[];
   const logins = Array(labels.length).fill(0) as number[];
 
-  // Fetch counts for signups and logins.
-  // NOTE: We only pull timestamp + geo identity columns and aggregate in JS to keep the endpoint simple.
-  const [legacyUsers, externalUsers, legacyEvents, externalEvents] = await Promise.all([
-    prisma.user.findMany({
-      where: { createdAt: { gte: start, lte: end } },
-      select: { id: true, createdAt: true },
-    }),
-    prisma.externalUser.findMany({
-      where: { createdAt: { gte: start, lte: end } },
-      select: { id: true, legacyUserId: true, createdAt: true },
-    }),
-    prisma.loginEvent.findMany({
-      where: { createdAt: { gte: start, lte: end } },
-      // Prefer Cloudflare-derived geo fields captured at login time.
-      // This keeps dashboard geo stable even if third-party IP geo is down.
-      select: { userId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.externalLoginEvent.findMany({
-      where: { createdAt: { gte: start, lte: end } },
-      select: { externalUserId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const isSuperadmin = auth.principal.role === "SUPERADMIN";
 
-  const migratedLegacyIds = new Set(
-    externalUsers
-      .map((user) => user.legacyUserId)
-      .filter((value): value is string => Boolean(value))
-  );
+  // Superadmins retain the full historical dashboard view.
+  // Staff are intentionally scoped to brand-aware external identity data only because legacy auth rows are not safely tenant-scoped.
+  let signupRows: SignupRow[] = [];
+  let events: LoginMetricEvent[] = [];
 
-  const signupRows: SignupRow[] = [
-    ...legacyUsers
-      .filter((user) => !migratedLegacyIds.has(user.id))
-      .map((user) => ({
+  if (isSuperadmin) {
+    const [legacyUsers, externalUsers, legacyEvents, externalEvents] = await Promise.all([
+      prisma.user.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { id: true, createdAt: true },
+      }),
+      prisma.externalUser.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { id: true, legacyUserId: true, createdAt: true },
+      }),
+      prisma.loginEvent.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { userId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.externalLoginEvent.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { externalUserId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    const migratedLegacyIds = new Set(
+      externalUsers
+        .map((user) => user.legacyUserId)
+        .filter((value): value is string => Boolean(value))
+    );
+
+    signupRows = [
+      ...legacyUsers
+        .filter((user) => !migratedLegacyIds.has(user.id))
+        .map((user) => ({
+          id: user.id,
+          createdAt: user.createdAt,
+          kind: "legacy" as const,
+        })),
+      ...externalUsers.map((user) => ({
         id: user.id,
         createdAt: user.createdAt,
-        kind: "legacy" as const,
+        kind: "external" as const,
+        legacyUserId: user.legacyUserId || null,
       })),
-    ...externalUsers.map((user) => ({
+    ];
+
+    events = [
+      ...legacyEvents.map((event) => ({
+        source: "legacy" as const,
+        principalId: event.userId,
+        createdAt: event.createdAt,
+        ip: event.ip,
+        countryIso2: event.countryIso2 || null,
+        countryName: event.countryName || null,
+      })),
+      ...externalEvents.map((event) => ({
+        source: "external" as const,
+        principalId: event.externalUserId,
+        createdAt: event.createdAt,
+        ip: event.ip,
+        countryIso2: event.countryIso2 || null,
+        countryName: event.countryName || null,
+      })),
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  } else {
+    const [externalUsers, externalEvents] = await Promise.all([
+      prisma.externalUser.findMany({
+        where: {
+          brandId: { in: auth.principal.allowedBrandIds },
+          createdAt: { gte: start, lte: end },
+        },
+        select: { id: true, legacyUserId: true, createdAt: true },
+      }),
+      prisma.externalLoginEvent.findMany({
+        where: {
+          brandId: { in: auth.principal.allowedBrandIds },
+          createdAt: { gte: start, lte: end },
+        },
+        select: { externalUserId: true, createdAt: true, ip: true, countryIso2: true, countryName: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    signupRows = externalUsers.map((user) => ({
       id: user.id,
       createdAt: user.createdAt,
       kind: "external" as const,
       legacyUserId: user.legacyUserId || null,
-    })),
-  ];
+    }));
 
-  const events: LoginMetricEvent[] = [
-    ...legacyEvents.map((event) => ({
-      source: "legacy" as const,
-      principalId: event.userId,
-      createdAt: event.createdAt,
-      ip: event.ip,
-      countryIso2: event.countryIso2 || null,
-      countryName: event.countryName || null,
-    })),
-    ...externalEvents.map((event) => ({
-      source: "external" as const,
-      principalId: event.externalUserId,
-      createdAt: event.createdAt,
-      ip: event.ip,
-      countryIso2: event.countryIso2 || null,
-      countryName: event.countryName || null,
-    })),
-  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    events = externalEvents
+      .map((event) => ({
+        source: "external" as const,
+        principalId: event.externalUserId,
+        createdAt: event.createdAt,
+        ip: event.ip,
+        countryIso2: event.countryIso2 || null,
+        countryName: event.countryName || null,
+      }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
 
   for (const u of signupRows) {
     const idx = bucketIndex(period, start, u.createdAt);
@@ -365,7 +406,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const rawIps = Array.from(rawSet.values()).slice(0, 50); // guardrail
         const iso2 = geo.iso2 ? geo.iso2.trim().toUpperCase() : null;
         const name = country;
-        if (rawIps.length && (iso2 || name)) {
+        if (isSuperadmin && rawIps.length && (iso2 || name)) {
           // eslint-disable-next-line no-await-in-loop
           await Promise.all([
             prisma.loginEvent.updateMany({

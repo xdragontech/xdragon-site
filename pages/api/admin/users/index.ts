@@ -16,7 +16,6 @@ function json(res: NextApiResponse, status: number, payload: any) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
   if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
-  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
   try {
     if (req.method === "GET") {
@@ -25,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
+      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
       const action = String(body.action || "").toLowerCase();
 

@@ -45,6 +45,7 @@ type StaffForm = {
 
 type StaffAccountsPageProps = {
   loggedInAs: string | null;
+  canManageStaff: boolean;
 };
 
 type GeneratedStaffLink = {
@@ -121,19 +122,20 @@ function MfaPill({ state }: { state: StaffAccountRecord["mfaState"] }) {
 export const getServerSideProps: GetServerSideProps<StaffAccountsPageProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/accounts/staff",
-    superadminOnly: true,
   });
   if (!auth.ok) return auth.response;
 
   return {
     props: {
       loggedInAs: auth.loggedInAs,
+      canManageStaff: auth.principal.role === BackofficeRole.SUPERADMIN,
     },
   };
 };
 
 export default function StaffAccountsPage({
   loggedInAs,
+  canManageStaff,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { toast } = useToast();
 
@@ -144,7 +146,7 @@ export default function StaffAccountsPage({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [busyAction, setBusyAction] = useState<"block" | "unblock" | "delete" | null>(null);
+  const [busyAction, setBusyAction] = useState<"block" | "unblock" | "delete" | "resetmfa" | null>(null);
   const [linkBusy, setLinkBusy] = useState<"invite" | "reset" | null>(null);
   const [generatedLink, setGeneratedLink] = useState<GeneratedStaffLink | null>(null);
   const [err, setErr] = useState("");
@@ -177,8 +179,8 @@ export default function StaffAccountsPage({
       setBrands(nextBrands);
 
       if (nextUsers.length === 0) {
-        setSelectedId(NEW_STAFF_ID);
-        setForm(blankStaffForm());
+        setSelectedId(canManageStaff ? NEW_STAFF_ID : null);
+        setForm(canManageStaff ? blankStaffForm() : null);
         setGeneratedLink(null);
         return;
       }
@@ -350,11 +352,18 @@ export default function StaffAccountsPage({
     }
   }
 
-  async function runAction(action: "block" | "unblock" | "delete") {
+  async function runAction(action: "block" | "unblock" | "delete" | "resetmfa") {
     if (!selectedUser) return;
 
     if (action === "delete") {
       const ok = window.confirm(`Delete staff account "${selectedUser.username}"? This cannot be undone.`);
+      if (!ok) return;
+    }
+
+    if (action === "resetmfa") {
+      const ok = window.confirm(
+        `Clear authenticator MFA for "${selectedUser.username}"? They will need to set it up again if they want MFA enabled.`
+      );
       if (!ok) return;
     }
 
@@ -374,7 +383,13 @@ export default function StaffAccountsPage({
       const body = await res.json().catch(() => null);
       if (!res.ok || !body?.ok) throw new Error(body?.error || "Request failed");
 
-      toast("success", action === "delete" ? "Staff account deleted." : "Staff account updated.");
+      const successMessage =
+        action === "delete"
+          ? "Staff account deleted."
+          : action === "resetmfa"
+            ? "Authenticator MFA cleared."
+            : "Staff account updated.";
+      toast("success", successMessage);
       await loadData(action === "delete" ? null : selectedUser.id);
     } catch (error: any) {
       const message = error?.message || "Request failed";
@@ -506,12 +521,19 @@ export default function StaffAccountsPage({
                     type="button"
                     onClick={startNewStaff}
                     className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+                    disabled={!canManageStaff}
                   >
                     Add Staff
                   </button>
                 </>
               }
             />
+
+            {!canManageStaff ? (
+              <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+                Staff accounts are visible here for review, but only superadmins can create, edit, block, delete, reset MFA, or issue password links.
+              </div>
+            ) : null}
 
             <div className="mt-4">
               <input
@@ -589,7 +611,7 @@ export default function StaffAccountsPage({
                         type="button"
                         onClick={() => void generateResetLink()}
                         className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
-                        disabled={Boolean(linkBusy)}
+                        disabled={!canManageStaff || Boolean(linkBusy)}
                       >
                         {linkBusy === "reset" ? "Generating…" : "Password Reset"}
                       </button>
@@ -599,7 +621,7 @@ export default function StaffAccountsPage({
                         type="button"
                         onClick={() => void createInvite()}
                         className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                        disabled={!form || saving || linkBusy === "invite"}
+                        disabled={!canManageStaff || !form || saving || linkBusy === "invite"}
                       >
                         {linkBusy === "invite" ? "Generating…" : "Create & Invite"}
                       </button>
@@ -613,7 +635,7 @@ export default function StaffAccountsPage({
                             ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
                             : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
                         }`}
-                        disabled={Boolean(busyAction)}
+                        disabled={!canManageStaff || Boolean(busyAction)}
                       >
                         {selectedUser.status === BackofficeUserStatus.ACTIVE ? "Block" : "Unblock"}
                       </button>
@@ -623,7 +645,7 @@ export default function StaffAccountsPage({
                         type="button"
                         onClick={() => void runAction("delete")}
                         className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
-                        disabled={Boolean(busyAction)}
+                        disabled={!canManageStaff || Boolean(busyAction)}
                       >
                         Delete
                       </button>
@@ -632,7 +654,7 @@ export default function StaffAccountsPage({
                       type="button"
                       onClick={() => void saveStaff()}
                       className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-                      disabled={!form || saving || linkBusy === "invite" || !isDirty}
+                      disabled={!canManageStaff || !form || saving || linkBusy === "invite" || !isDirty}
                     >
                       {saving ? "Saving…" : isNewStaff ? "Create Staff" : "Save Changes"}
                     </button>
@@ -657,10 +679,22 @@ export default function StaffAccountsPage({
                       <div>
                         <h2 className="text-sm font-semibold text-neutral-900">Authenticator App MFA</h2>
                         <p className="mt-1 text-sm text-neutral-600">
-                          MFA groundwork is active for staff accounts, but login enforcement is not enabled yet.
+                          Staff users enroll their own authenticator app from Settings / Security. Superadmins can clear the setup here if it needs to be reset.
                         </p>
                       </div>
-                      {selectedUser ? <MfaPill state={selectedUser.mfaState} /> : null}
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {selectedUser ? <MfaPill state={selectedUser.mfaState} /> : null}
+                        {selectedUser && selectedUser.mfaState !== "DISABLED" ? (
+                          <button
+                            type="button"
+                            onClick={() => void runAction("resetmfa")}
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-100"
+                            disabled={!canManageStaff || Boolean(busyAction)}
+                          >
+                            {busyAction === "resetmfa" ? "Resetting…" : "Reset MFA"}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -710,13 +744,14 @@ export default function StaffAccountsPage({
                     </div>
                   ) : null}
 
+                  <fieldset disabled={!canManageStaff} className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="block">
                       <div className="mb-2 text-sm font-medium text-neutral-700">Username</div>
                       <input
                         value={form.username}
                         onChange={(event) => updateField("username", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder="grant"
                       />
                     </label>
@@ -726,7 +761,7 @@ export default function StaffAccountsPage({
                       <input
                         value={form.email}
                         onChange={(event) => updateField("email", event.target.value)}
-                        disabled={Boolean(selectedUser?.protected)}
+                        disabled={!canManageStaff || Boolean(selectedUser?.protected)}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder="grant@xdragon.tech"
                       />
@@ -739,7 +774,7 @@ export default function StaffAccountsPage({
                       <select
                         value={form.role}
                         onChange={(event) => updateField("role", event.target.value as BackofficeRole)}
-                        disabled={Boolean(selectedUser?.protected)}
+                        disabled={!canManageStaff || Boolean(selectedUser?.protected)}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                       >
                         <option value={BackofficeRole.STAFF}>STAFF</option>
@@ -765,7 +800,7 @@ export default function StaffAccountsPage({
                         type="password"
                         value={form.password}
                         onChange={(event) => updateField("password", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder={isNewStaff ? "Minimum 10 characters" : "Leave blank to keep current password"}
                       />
                     </label>
@@ -776,7 +811,7 @@ export default function StaffAccountsPage({
                         type="password"
                         value={form.confirmPassword}
                         onChange={(event) => updateField("confirmPassword", event.target.value)}
-                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-100"
                         placeholder="Repeat password"
                       />
                     </label>
@@ -814,7 +849,7 @@ export default function StaffAccountsPage({
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleBrand(brand.id)}
-                                className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-500"
+                                className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-500 disabled:cursor-not-allowed"
                               />
                               <span>
                                 <span className="block font-medium text-neutral-900">{brand.name}</span>
@@ -841,6 +876,7 @@ export default function StaffAccountsPage({
                       <div className="mt-2 text-sm text-neutral-800">{selectedUser ? fmtDate(selectedUser.lastLoginAt) : "—"}</div>
                     </div>
                   </div>
+                  </fieldset>
                 </div>
               )}
             </div>

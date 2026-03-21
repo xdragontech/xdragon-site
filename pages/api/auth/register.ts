@@ -23,7 +23,6 @@ import { findExternalUserByEmail } from "../../../lib/externalIdentity";
  *   - NEXTAUTH_SECRET
  *   - RESEND_API_KEY
  *   - RESEND_FROM (e.g. "X Dragon <hello@xdragon.tech>")
- *   - ADMIN_EMAILS (comma-separated) (optional, for admin notifications elsewhere)
  */
 
 type Data =

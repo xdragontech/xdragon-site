@@ -77,7 +77,6 @@ async function loadDatabaseStatus(): Promise<DatabaseStatus> {
 export const getServerSideProps: GetServerSideProps<ConfigsPageProps> = async (ctx) => {
   const auth = await requireBackofficePage(ctx, {
     callbackUrl: "/admin/settings/configs",
-    superadminOnly: true,
   });
   if (!auth.ok) return auth.response;
 
@@ -162,6 +161,10 @@ export default function ConfigsPage({
           <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
             This page is for operational runtime, auth, and service configuration. Brand identity and brand-host relationships
             have been moved out so they can become their own live source of truth.
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+            This view is read-only for all backoffice roles. Runtime and brand configuration changes remain superadmin-only.
           </div>
         </div>
 

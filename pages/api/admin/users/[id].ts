@@ -5,6 +5,7 @@ import {
   createManagedBackofficePasswordLink,
   deleteManagedBackofficeUser,
   getManagedBackofficeUser,
+  resetManagedBackofficeUserMfa,
   setManagedBackofficeUserStatus,
   updateManagedBackofficeUser,
 } from "../../../../lib/backofficeAdminUsers";
@@ -18,7 +19,6 @@ function json(res: NextApiResponse, status: number, payload: any) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
   if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
-  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
   const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
   if (!id) return json(res, 400, { ok: false, error: "Missing id" });
@@ -31,11 +31,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "DELETE") {
+      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
       await deleteManagedBackofficeUser(auth.principal.id, id);
       return json(res, 200, { ok: true });
     }
 
     if (req.method === "PATCH" || req.method === "POST") {
+      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
       const action = String(body.action || "").toLowerCase();
 
@@ -52,6 +54,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const origin = buildOrigin(getApiRequestProtocol(req), canonicalAdminHost(getApiRequestHost(req)));
         const invite = await createManagedBackofficePasswordLink(id, "reset", origin);
         return json(res, 200, { ok: true, invite });
+      }
+
+      if (action === "resetmfa") {
+        const user = await resetManagedBackofficeUserMfa(id);
+        return json(res, 200, { ok: true, user });
       }
 
       const user = await updateManagedBackofficeUser(auth.principal.id, id, body);
