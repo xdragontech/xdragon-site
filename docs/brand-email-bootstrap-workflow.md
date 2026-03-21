@@ -1,6 +1,10 @@
 **Purpose**
 Make `BrandEmailConfig` the live source of truth for public auth and notification email without relying on silent global sender/recipient fallbacks.
 
+**Operator Surface**
+- live editing belongs on `Settings / Brands`
+- the sync commands remain useful for first-time bootstrap and emergency recovery
+
 **What The Sync Does**
 - reads the current bootstrap email env values
 - targets the current `BRAND_KEY`
