@@ -100,6 +100,9 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
                 >
                   Configs
                 </Link>
+                <Link href="/admin/settings/security" className={subItemClass("/admin/settings/security")}>
+                  Security
+                </Link>
               </div>
             )}
           </div>
