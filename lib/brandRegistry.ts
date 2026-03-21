@@ -1,5 +1,7 @@
 import {
   BrandEnvironment,
+  BrandEmailConfigStatus,
+  BrandEmailProvider,
   BrandHostKind,
   BrandStatus,
   type Brand,
@@ -12,8 +14,19 @@ import { normalizeHost } from "./requestHost";
 type BrandWithHosts = Prisma.BrandGetPayload<{
   include: {
     hosts: true;
+    emailConfig: true;
   };
 }>;
+
+export type EditableBrandEmailConfig = {
+  status: BrandEmailConfigStatus;
+  provider: BrandEmailProvider;
+  providerSecretRef: string;
+  fromName: string;
+  fromEmail: string;
+  replyToEmail: string;
+  supportEmail: string;
+};
 
 export type EditableBrandRecord = {
   id: string;
@@ -25,6 +38,7 @@ export type EditableBrandRecord = {
   productionAdminHost: string;
   previewPublicHost: string;
   previewAdminHost: string;
+  emailConfig: EditableBrandEmailConfig;
   createdAt: string;
   updatedAt: string;
 };
@@ -46,6 +60,8 @@ export type RuntimeBrandResolution = {
 };
 
 const BRAND_KEY_PATTERN = /^[a-z0-9-]+$/;
+const ENV_KEY_PATTERN = /^[A-Z0-9_]+$/;
+const DEFAULT_EMAIL_PROVIDER_SECRET_REF = "RESEND_API_KEY";
 
 function normalizeBrandKey(value: unknown): string {
   return String(value || "")
@@ -71,6 +87,53 @@ function ensureRequired(value: string, label: string) {
   if (!value) throw new Error(`${label} is required`);
 }
 
+function normalizeOptionalString(value: unknown): string {
+  return String(value || "").trim();
+}
+
+function normalizeEmail(value: unknown): string {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeEmailList(value: unknown): string {
+  const emails = Array.from(
+    new Set(
+      String(value || "")
+        .split(/[;,]/g)
+        .map((entry) => normalizeEmail(entry))
+        .filter((entry) => entry && isValidEmail(entry))
+    )
+  );
+
+  return emails.join(", ");
+}
+
+function validateOptionalEmail(value: unknown, label: string): string {
+  const normalized = normalizeEmail(value);
+  if (!normalized) return "";
+  if (!isValidEmail(normalized)) {
+    throw new Error(`${label} must be a valid email address`);
+  }
+  return normalized;
+}
+
+function normalizeProviderSecretRef(value: unknown): string {
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (!normalized) return DEFAULT_EMAIL_PROVIDER_SECRET_REF;
+  if (!ENV_KEY_PATTERN.test(normalized)) {
+    throw new Error("Provider secret env key must use uppercase letters, numbers, and underscores only");
+  }
+
+  return normalized;
+}
+
 function findHost(brand: Pick<Brand, "id"> & { hosts: BrandHost[] }, environment: BrandEnvironment, kind: BrandHostKind) {
   return (
     brand.hosts.find((host) => host.environment === environment && host.kind === kind && host.isCanonical) ||
@@ -90,6 +153,15 @@ function mapBrandToEditorRecord(brand: BrandWithHosts): EditableBrandRecord {
     productionAdminHost: findHost(brand, BrandEnvironment.PRODUCTION, BrandHostKind.ADMIN)?.host || "",
     previewPublicHost: findHost(brand, BrandEnvironment.PREVIEW, BrandHostKind.PUBLIC)?.host || "",
     previewAdminHost: findHost(brand, BrandEnvironment.PREVIEW, BrandHostKind.ADMIN)?.host || "",
+    emailConfig: {
+      status: brand.emailConfig?.status || BrandEmailConfigStatus.INACTIVE,
+      provider: BrandEmailProvider.RESEND,
+      providerSecretRef: brand.emailConfig?.providerSecretRef || DEFAULT_EMAIL_PROVIDER_SECRET_REF,
+      fromName: brand.emailConfig?.fromName || "",
+      fromEmail: brand.emailConfig?.fromEmail || "",
+      replyToEmail: brand.emailConfig?.replyToEmail || "",
+      supportEmail: brand.emailConfig?.supportEmail || "",
+    },
     createdAt: brand.createdAt.toISOString(),
     updatedAt: brand.updatedAt.toISOString(),
   };
@@ -154,6 +226,39 @@ function buildHostRows(input: EditableBrandInput) {
   ];
 }
 
+function buildEmailConfigInput(raw: any): EditableBrandEmailConfig {
+  const status = String(raw?.emailConfig?.status || BrandEmailConfigStatus.INACTIVE)
+    .trim()
+    .toUpperCase() as BrandEmailConfigStatus;
+
+  if (!Object.values(BrandEmailConfigStatus).includes(status)) {
+    throw new Error("Invalid brand email status");
+  }
+
+  const provider = BrandEmailProvider.RESEND;
+  const providerSecretRef = normalizeProviderSecretRef(raw?.emailConfig?.providerSecretRef);
+  const fromName = normalizeOptionalString(raw?.emailConfig?.fromName);
+  const fromEmail = validateOptionalEmail(raw?.emailConfig?.fromEmail, "Sender email");
+  const replyToEmail = validateOptionalEmail(raw?.emailConfig?.replyToEmail, "Reply-to email");
+  const supportEmail = normalizeEmailList(raw?.emailConfig?.supportEmail);
+
+  if (status === BrandEmailConfigStatus.ACTIVE) {
+    ensureRequired(fromEmail, "Sender email");
+    ensureRequired(supportEmail, "Support email");
+    ensureRequired(providerSecretRef, "Provider secret env key");
+  }
+
+  return {
+    status,
+    provider,
+    providerSecretRef,
+    fromName,
+    fromEmail,
+    replyToEmail,
+    supportEmail,
+  };
+}
+
 function validateBrandInput(raw: any): EditableBrandInput {
   const brandKey = normalizeBrandKey(raw?.brandKey);
   const name = String(raw?.name || "").trim();
@@ -178,6 +283,7 @@ function validateBrandInput(raw: any): EditableBrandInput {
     productionAdminHost: normalizeEditableHost(raw?.productionAdminHost),
     previewPublicHost: normalizeEditableHost(raw?.previewPublicHost),
     previewAdminHost: normalizeEditableHost(raw?.previewAdminHost),
+    emailConfig: buildEmailConfigInput(raw),
   };
 }
 
@@ -212,7 +318,7 @@ async function ensureHostAvailability(
 
 export async function listEditableBrands(search = ""): Promise<EditableBrandRecord[]> {
   const brands = await prisma.brand.findMany({
-    include: { hosts: true },
+    include: { hosts: true, emailConfig: true },
     orderBy: [{ createdAt: "asc" }],
   });
 
@@ -232,6 +338,12 @@ export async function listEditableBrands(search = ""): Promise<EditableBrandReco
       brand.productionAdminHost,
       brand.previewPublicHost,
       brand.previewAdminHost,
+      brand.emailConfig.status,
+      brand.emailConfig.providerSecretRef,
+      brand.emailConfig.fromName,
+      brand.emailConfig.fromEmail,
+      brand.emailConfig.replyToEmail,
+      brand.emailConfig.supportEmail,
     ]
       .join(" ")
       .toLowerCase()
@@ -252,8 +364,19 @@ export async function createEditableBrand(raw: any): Promise<EditableBrandRecord
       hosts: {
         create: hosts,
       },
+      emailConfig: {
+        create: {
+          status: input.emailConfig.status,
+          provider: input.emailConfig.provider,
+          providerSecretRef: input.emailConfig.providerSecretRef,
+          fromName: input.emailConfig.fromName || null,
+          fromEmail: input.emailConfig.fromEmail || null,
+          replyToEmail: input.emailConfig.replyToEmail || null,
+          supportEmail: input.emailConfig.supportEmail || null,
+        },
+      },
     },
-    include: { hosts: true },
+    include: { hosts: true, emailConfig: true },
   });
 
   return mapBrandToEditorRecord(brand);
@@ -276,8 +399,30 @@ export async function updateEditableBrand(id: string, raw: any): Promise<Editabl
         hosts: {
           create: hosts,
         },
+        emailConfig: {
+          upsert: {
+            create: {
+              status: input.emailConfig.status,
+              provider: input.emailConfig.provider,
+              providerSecretRef: input.emailConfig.providerSecretRef,
+              fromName: input.emailConfig.fromName || null,
+              fromEmail: input.emailConfig.fromEmail || null,
+              replyToEmail: input.emailConfig.replyToEmail || null,
+              supportEmail: input.emailConfig.supportEmail || null,
+            },
+            update: {
+              status: input.emailConfig.status,
+              provider: input.emailConfig.provider,
+              providerSecretRef: input.emailConfig.providerSecretRef,
+              fromName: input.emailConfig.fromName || null,
+              fromEmail: input.emailConfig.fromEmail || null,
+              replyToEmail: input.emailConfig.replyToEmail || null,
+              supportEmail: input.emailConfig.supportEmail || null,
+            },
+          },
+        },
       },
-      include: { hosts: true },
+      include: { hosts: true, emailConfig: true },
     });
   });
 
