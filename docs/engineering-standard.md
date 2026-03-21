@@ -12,12 +12,16 @@ This is the working standard for every X Dragon change until the public site and
 
 ## Boundary rules
 ### Public website
-- owns marketing layout, brand copy, assets, chat, contact, and public conversion flows
+- owns marketing layout, brand copy, assets, chat, contact, public conversion flows, and authenticated brand-user resource flows
+- owns `/auth`, `/tools`, `/prompts`, and `/guides`
+- owns the BFF/proxy integration layer to the reusable backoffice service
 - can depend on brand config
 - must not own reusable admin logic
 
 ### Back office
-- owns admin shell, content operations, lead management, analytics, and role-based access
+- owns admin shell, content operations, lead management, analytics, and staff role-based access
+- owns `/admin/*` and `/api/admin/*`
+- owns the reusable service/API layer that public websites integrate with
 - must not render public-site widgets or depend on public marketing components
 - must become brand-aware, not brand-hardcoded
 
@@ -44,6 +48,8 @@ This is the working standard for every X Dragon change until the public site and
 7. Public brand context must resolve from host server-side; client-sent brand identifiers are cross-checks only.
 8. Brand-specific email flows must fail safely and must not fall back across brands.
 9. Protected bootstrap superadmin provisioning must be explicit, env-driven, and idempotent; deploy startup must not silently rotate protected-account credentials.
+10. Public websites must integrate with the reusable backoffice through a BFF/proxy layer; direct browser-to-backoffice trust is not the default model.
+11. Integration credentials and forwarded user sessions are separate trust layers and must remain separate in code and docs.
 
 ## Deployment rules
 1. `feature/*` -> PR -> `staging` -> QA -> PR -> `main`
@@ -75,6 +81,7 @@ Stop and clarify before merging if a change:
 
 ## Reference docs
 - [`docs/refactor-roadmap.md`](./refactor-roadmap.md)
+- [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)

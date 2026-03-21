@@ -7,19 +7,20 @@ This is the strict ordered list of the major work still required to satisfy the 
 - live brand-scoped email config
 - protected bootstrap superadmin provisioning and recovery tooling
 
-## 1. Split the current app into a real public app and backoffice app
+## 1. Split the current platform into separate public-site and backoffice repos
 Why first:
-- The original spec requires two separate components, and the internal seams are now strong enough to start the actual split.
-- The remaining reusable-product work should not be built on one shared Pages Router deployment forever.
+- The clarified requirement is two fundamentally separate projects, not one repo with two apps.
+- The remaining reusable-product work should not be built on one shared Pages Router deployment or shared runtime forever.
 
 Exit criteria:
-- public website and backoffice deploy independently
-- shared logic moves into packages/modules with clear ownership
-- host routing no longer depends on one Pages Router app serving both surfaces
+- `xdragon-site` and `command` exist as separate repos
+- `command` admin UI and service/API are clearly separated modules/apps
+- public websites integrate through documented APIs and a BFF/proxy layer instead of shared runtime code
+- OpenAPI is the source of truth for the integration contract
 
 ## 2. Extract X Dragon-specific assumptions out of the reusable backoffice
 Why second:
-- A separated backoffice is not yet redistributable if it still assumes X Dragon naming, bootstrap behavior, or content conventions.
+- A separated `command` repo is not yet redistributable if it still assumes X Dragon naming, bootstrap behavior, or content conventions.
 
 Exit criteria:
 - reusable backoffice modules no longer depend on X Dragon domains, branding, or copy
