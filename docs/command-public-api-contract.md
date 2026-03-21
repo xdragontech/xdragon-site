@@ -9,6 +9,9 @@ OpenAPI source of truth:
 Operational BFF/session companion:
 - [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
 
+Implementation/extraction companion:
+- [`docs/command-repo-skeleton-and-bff-extraction-plan.md`](./command-repo-skeleton-and-bff-extraction-plan.md)
+
 **Scope Of This First Contract**
 - external auth
 - external account read/update

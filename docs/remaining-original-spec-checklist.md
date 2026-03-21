@@ -18,6 +18,12 @@ Exit criteria:
 - public websites integrate through documented APIs and a BFF/proxy layer instead of shared runtime code
 - OpenAPI is the source of truth for the integration contract
 
+Current implementation docs:
+- [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
+- [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+- [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
+- [`docs/command-repo-skeleton-and-bff-extraction-plan.md`](./command-repo-skeleton-and-bff-extraction-plan.md)
+
 ## 2. Extract X Dragon-specific assumptions out of the reusable backoffice
 Why second:
 - A separated `command` repo is not yet redistributable if it still assumes X Dragon naming, bootstrap behavior, or content conventions.

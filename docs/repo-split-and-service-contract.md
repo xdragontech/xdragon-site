@@ -56,6 +56,7 @@ These are separate trust layers and must stay separate in the contract.
   - [`openapi/command-public-api.v1.yaml`](../openapi/command-public-api.v1.yaml)
   - [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
   - [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
+  - [`docs/command-repo-skeleton-and-bff-extraction-plan.md`](./command-repo-skeleton-and-bff-extraction-plan.md)
 
 **Repo Responsibilities**
 **`xdragon-site`**
