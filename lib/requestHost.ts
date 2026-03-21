@@ -1,5 +1,5 @@
-import type { NextApiRequest } from "next";
 import type { NextRequest } from "next/server";
+import type { IncomingHttpHeaders } from "http";
 
 function firstValue(value: string | string[] | null | undefined): string {
   if (Array.isArray(value)) return value[0] || "";
@@ -13,7 +13,11 @@ export function normalizeHost(value: string | null | undefined): string {
     .toLowerCase();
 }
 
-export function getApiRequestHost(req: NextApiRequest): string {
+type HeadersCarrier = {
+  headers: IncomingHttpHeaders | Record<string, string | string[] | undefined>;
+};
+
+export function getApiRequestHost(req: HeadersCarrier): string {
   return normalizeHost(firstValue(req.headers["x-forwarded-host"]) || firstValue(req.headers.host));
 }
 
@@ -21,7 +25,7 @@ export function getMiddlewareRequestHost(req: NextRequest): string {
   return normalizeHost(req.headers.get("x-forwarded-host") || req.headers.get("host"));
 }
 
-export function getApiRequestProtocol(req: NextApiRequest): string {
+export function getApiRequestProtocol(req: HeadersCarrier): string {
   const proto = firstValue(req.headers["x-forwarded-proto"]).trim().toLowerCase();
   if (proto === "http" || proto === "https") return proto;
   return "https";

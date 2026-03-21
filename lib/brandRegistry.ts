@@ -8,7 +8,6 @@ import {
 } from "@prisma/client";
 import { prisma } from "./prisma";
 import { normalizeHost } from "./requestHost";
-import { getAllowedHosts as getFallbackAllowedHosts, getBrandSiteConfig } from "./siteConfig";
 
 type BrandWithHosts = Prisma.BrandGetPayload<{
   include: {
@@ -33,7 +32,7 @@ export type EditableBrandRecord = {
 export type EditableBrandInput = Omit<EditableBrandRecord, "id" | "createdAt" | "updatedAt">;
 
 export type RuntimeBrandResolution = {
-  source: "database" | "env";
+  source: "database";
   brandId?: string;
   brandKey: string;
   brandName: string;
@@ -182,18 +181,33 @@ function validateBrandInput(raw: any): EditableBrandInput {
   };
 }
 
-function fallbackBrandInput(): EditableBrandInput {
-  const cfg = getBrandSiteConfig();
-  return {
-    brandKey: normalizeBrandKey(cfg.brandKey) || "xdragon",
-    name: String(cfg.brandName || "X Dragon").trim() || "X Dragon",
-    status: BrandStatus.ACTIVE,
-    apexHost: normalizeEditableHost(cfg.apexHost),
-    productionPublicHost: normalizeEditableHost(cfg.production.publicHost),
-    productionAdminHost: normalizeEditableHost(cfg.production.adminHost),
-    previewPublicHost: normalizeEditableHost(cfg.preview.publicHost),
-    previewAdminHost: normalizeEditableHost(cfg.preview.adminHost),
-  };
+async function ensureHostAvailability(
+  client: Pick<typeof prisma, "brandHost">,
+  hosts: ReturnType<typeof buildHostRows>,
+  exceptBrandId?: string
+) {
+  const conflicts = await client.brandHost.findMany({
+    where: {
+      host: { in: hosts.map((host) => host.host) },
+      ...(exceptBrandId ? { NOT: { brandId: exceptBrandId } } : {}),
+    },
+    include: {
+      brand: {
+        select: {
+          brandKey: true,
+        },
+      },
+    },
+  });
+
+  if (!conflicts.length) return;
+
+  const details = conflicts
+    .map((conflict) => `${conflict.host} (${conflict.brand.brandKey})`)
+    .sort((left, right) => left.localeCompare(right))
+    .join(", ");
+
+  throw new Error(`Host values must be unique across brands. Conflicts: ${details}`);
 }
 
 export async function listEditableBrands(search = ""): Promise<EditableBrandRecord[]> {
@@ -228,6 +242,7 @@ export async function listEditableBrands(search = ""): Promise<EditableBrandReco
 export async function createEditableBrand(raw: any): Promise<EditableBrandRecord> {
   const input = validateBrandInput(raw);
   const hosts = buildHostRows(input);
+  await ensureHostAvailability(prisma, hosts);
 
   const brand = await prisma.brand.create({
     data: {
@@ -247,6 +262,7 @@ export async function createEditableBrand(raw: any): Promise<EditableBrandRecord
 export async function updateEditableBrand(id: string, raw: any): Promise<EditableBrandRecord> {
   const input = validateBrandInput(raw);
   const hosts = buildHostRows(input);
+  await ensureHostAvailability(prisma, hosts, id);
 
   const brand = await prisma.$transaction(async (tx) => {
     await tx.brand.findUniqueOrThrow({ where: { id } });
@@ -271,7 +287,7 @@ export async function updateEditableBrand(id: string, raw: any): Promise<Editabl
 export async function deleteEditableBrand(id: string): Promise<void> {
   const count = await prisma.brand.count();
   if (count <= 1) {
-    throw new Error("Cannot delete the only brand while runtime fallback still exists");
+    throw new Error("Cannot delete the only configured brand. Runtime host resolution requires at least one brand.");
   }
   await prisma.brand.delete({ where: { id } });
 }
@@ -329,90 +345,6 @@ export async function resolveWriteBrandId(
   return brands[0].id;
 }
 
-function resolveFallbackBrandForHost(host: string): RuntimeBrandResolution | null {
-  const normalizedHost = normalizeHost(host);
-  const cfg = fallbackBrandInput();
-
-  if (!normalizedHost) return null;
-
-  if (normalizedHost === cfg.productionPublicHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.productionPublicHost,
-      canonicalAdminHost: cfg.productionAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: false,
-    };
-  }
-
-  if (normalizedHost === cfg.productionAdminHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.productionPublicHost,
-      canonicalAdminHost: cfg.productionAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: true,
-    };
-  }
-
-  if (normalizedHost === cfg.previewPublicHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "preview",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.previewPublicHost,
-      canonicalAdminHost: cfg.previewAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: false,
-    };
-  }
-
-  if (normalizedHost === cfg.previewAdminHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "preview",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.previewPublicHost,
-      canonicalAdminHost: cfg.previewAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: true,
-    };
-  }
-
-  if (normalizedHost === cfg.apexHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.productionPublicHost,
-      canonicalAdminHost: cfg.productionAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: false,
-    };
-  }
-
-  return null;
-}
-
 export async function resolveRuntimeBrandForHost(host: string): Promise<RuntimeBrandResolution | null> {
   const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return null;
@@ -428,10 +360,7 @@ export async function resolveRuntimeBrandForHost(host: string): Promise<RuntimeB
     },
   });
 
-  if (!hostRecord) {
-    const hasBrands = (await prisma.brand.count()) > 0;
-    return hasBrands ? null : resolveFallbackBrandForHost(normalizedHost);
-  }
+  if (!hostRecord) return null;
 
   const brand = hostRecord.brand;
   const environment = hostRecord.environment === BrandEnvironment.PREVIEW ? "preview" : "production";
@@ -462,16 +391,9 @@ export async function getRuntimeAllowedHosts(extraHosts: string[] = []): Promise
     select: { host: true },
   });
 
-  if (dbHosts.length > 0) {
-    for (const host of dbHosts) {
-      const normalized = normalizeHost(host.host);
-      if (normalized) hosts.add(normalized);
-    }
-    return hosts;
-  }
-
-  for (const host of Array.from(getFallbackAllowedHosts())) {
-    hosts.add(normalizeHost(host));
+  for (const host of dbHosts) {
+    const normalized = normalizeHost(host.host);
+    if (normalized) hosts.add(normalized);
   }
 
   return hosts;

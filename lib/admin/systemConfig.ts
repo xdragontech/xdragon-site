@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { getBackofficeMfaIssuer, isBackofficeMfaEncryptionReady } from "../backofficeMfa";
-import { authCookieDomain, canonicalAdminHost, canonicalPublicHost, getAllowedHosts, getBrandSiteConfig } from "../siteConfig";
+import { authCookieDomain } from "../siteConfig";
+import { getRuntimeHostConfig } from "../runtimeHostConfig";
 
 type EnvValueKind = "plain" | "secret" | "databaseUrl";
 
@@ -66,8 +67,8 @@ const ENV_GROUPS: Array<{
   },
   {
     key: "brand",
-    title: "Brand & Host Config",
-    description: "Brand and host variables expected to define routing and canonical URLs.",
+    title: "Brand Bootstrap Inputs",
+    description: "Legacy seed inputs used by brand bootstrap/sync tooling. Live host routing now resolves from Brand and BrandHost rows in the database.",
     items: [
       { key: "BRAND_KEY", label: "Brand Key", description: "External-safe brand identifier.", kind: "plain" },
       { key: "NEXT_PUBLIC_BRAND_NAME", label: "Brand Name", description: "Public brand label.", kind: "plain" },
@@ -357,8 +358,10 @@ export function collectSystemEnvGroups(): SystemEnvGroup[] {
   }));
 }
 
-export function collectRuntimeStatus(requestHost?: string | null): RuntimeStatusItem[] {
-  const host = requestHost || "unknown";
+export async function collectRuntimeStatus(requestHost?: string | null): Promise<RuntimeStatusItem[]> {
+  const runtimeHost = await getRuntimeHostConfig(requestHost);
+  const host = runtimeHost.requestHost || "unknown";
+
   return [
     {
       label: "Request Host",
@@ -371,40 +374,30 @@ export function collectRuntimeStatus(requestHost?: string | null): RuntimeStatus
       note: "Generated on the server during this request.",
     },
     {
+      label: "Brand Registry Resolution",
+      value: runtimeHost.brandKey ? `Matched ${runtimeHost.brandKey}` : "No matching BrandHost",
+      note: runtimeHost.brandKey
+        ? "The current request host resolved through the database brand registry."
+        : "The current request host is not mapped in BrandHost. Runtime host routing will not normalize it.",
+    },
+    {
       label: "Canonical Admin Host",
-      value: canonicalAdminHost(requestHost || undefined),
-      note: "Derived from current host plus runtime host config.",
+      value: runtimeHost.canonicalAdminHost || "Unresolved",
+      note: runtimeHost.brandKey
+        ? "Resolved from BrandHost rows for the current environment."
+        : "Unresolved because there is no matching BrandHost row for this request host.",
     },
     {
       label: "Canonical Public Host",
-      value: canonicalPublicHost(requestHost || undefined),
-      note: "Derived from current host plus runtime host config.",
-    },
-  ];
-}
-
-export function collectDerivedRuntimeConfig(): RuntimeStatusItem[] {
-  const cfg = getBrandSiteConfig();
-  return [
-    {
-      label: "Resolved Brand Key",
-      value: cfg.brandKey,
-      note: "This is the runtime-resolved value the app will use, including code defaults.",
-    },
-    {
-      label: "Resolved Brand Name",
-      value: cfg.brandName,
-      note: "This is the runtime-resolved value the app will use, including code defaults.",
-    },
-    {
-      label: "Resolved Apex Host",
-      value: cfg.apexHost,
-      note: "This is the runtime-resolved value the app will use, including code defaults.",
+      value: runtimeHost.canonicalPublicHost || "Unresolved",
+      note: runtimeHost.brandKey
+        ? "Resolved from BrandHost rows for the current environment."
+        : "Unresolved because there is no matching BrandHost row for this request host.",
     },
     {
       label: "Allowed Hosts",
-      value: Array.from(getAllowedHosts()).join(", "),
-      note: "Requests outside this set are not expected to resolve cleanly.",
+      value: runtimeHost.allowedHosts.length ? runtimeHost.allowedHosts.join(", ") : "None configured",
+      note: "Loaded from BrandHost rows. The current request host is included so this diagnostics page can still reason about unmapped hosts.",
     },
     {
       label: "Auth Cookie Domain",
