@@ -5,7 +5,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getMiddlewareRequestHost } from "./lib/requestHost";
-import { adminHostFor, getAllowedHosts, isAdminHost, publicHostFor } from "./lib/siteConfig";
 
 type MiddlewareRuntime = {
   canonicalPublicHost: string;
@@ -91,43 +90,6 @@ export default async function middleware(req: NextRequest) {
     }
 
     return NextResponse.next();
-  }
-
-  // Unknown hosts should not be force-routed into the X Dragon pair.
-  if (!getAllowedHosts().has(host)) {
-    return NextResponse.next();
-  }
-
-  const isAdminPath = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
-  const isRootPath = url.pathname === "/" || url.pathname === "";
-  const onAdminHost = isAdminHost(host);
-
-  // Admin host root should always land on the admin sign-in route on the SAME host.
-  if (onAdminHost && isRootPath) {
-    url.pathname = "/admin/signin";
-    url.protocol = "https:";
-    return NextResponse.redirect(url, 308);
-  }
-
-  // Admin routes must stay on the matching admin host for the current environment.
-  if (isAdminPath && !onAdminHost) {
-    url.hostname = adminHostFor(host);
-    url.protocol = "https:";
-    return NextResponse.redirect(url, 308);
-  }
-
-  // Non-admin routes should never stay on an admin host.
-  if (!isAdminPath && onAdminHost) {
-    url.hostname = publicHostFor(host);
-    url.protocol = "https:";
-    return NextResponse.redirect(url, 308);
-  }
-
-  // Normalize any public alias host to the canonical public host for the fallback env config.
-  if (!onAdminHost && host !== publicHostFor(host)) {
-    url.hostname = publicHostFor(host);
-    url.protocol = "https:";
-    return NextResponse.redirect(url, 308);
   }
 
   return NextResponse.next();

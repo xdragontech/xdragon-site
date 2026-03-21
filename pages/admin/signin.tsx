@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth/next";
 import { getSession, signIn } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { canonicalAdminHost, getAllowedHosts } from "../../lib/siteConfig";
 import { authOptions } from "../api/auth/[...nextauth]";
 import {
   BACKOFFICE_CREDENTIALS_PROVIDER_ID,
@@ -15,12 +14,15 @@ import {
   hasVerifiedBackofficeMfaForRequest,
   resolveBackofficePostAuthDestination,
 } from "../../lib/backofficeAuth";
+import { getRuntimeHostConfig } from "../../lib/runtimeHostConfig";
+import { getApiRequestHost } from "../../lib/requestHost";
 
-function allowedHosts(): Set<string> {
-  return getAllowedHosts();
-}
+type AdminSignInProps = {
+  allowedHosts: string[];
+  recommendedAdminHost: string | null;
+};
 
-function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
+function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string, allowedHosts: string[]): string {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const fallback = "/admin/library";
   if (!v) return fallback;
@@ -29,7 +31,7 @@ function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin:
     if (v.startsWith("/")) return v;
     const u = new URL(v);
     const host = u.hostname.toLowerCase();
-    if (allowedHosts().has(host)) {
+    if (allowedHosts.includes(host)) {
       return `${currentOrigin}${u.pathname}${u.search}${u.hash}`;
     }
   } catch {}
@@ -47,17 +49,13 @@ function prettyAuthError(err?: string | null): string | null {
   return map[err] || err;
 }
 
-export default function AdminCommandSignIn() {
+export default function AdminCommandSignIn({ allowedHosts, recommendedAdminHost }: AdminSignInProps) {
   const router = useRouter();
-  const recommendedAdminHost = useMemo(() => {
-    if (typeof window === "undefined") return canonicalAdminHost();
-    return canonicalAdminHost(window.location.hostname);
-  }, []);
 
   const callbackUrl = useMemo(() => {
     if (typeof window === "undefined") return "/admin/dashboard";
-    return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin);
-  }, [router.query.callbackUrl]);
+    return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin, allowedHosts);
+  }, [allowedHosts, router.query.callbackUrl]);
 
   const initialErr = useMemo(() => {
     const q = router.query.error;
@@ -104,7 +102,7 @@ export default function AdminCommandSignIn() {
         if (!isBackofficeSession(session)) {
           setError(
             "Signed in, but your admin session was not established. This is usually a cookie or canonical-domain mismatch. " +
-              `Use https://${recommendedAdminHost} and verify NEXTAUTH_URL plus host config in Vercel.`
+              `Use https://${recommendedAdminHost || "your-admin-host"} and verify NEXTAUTH_URL plus host config in Vercel.`
           );
           return;
         }
@@ -182,7 +180,7 @@ export default function AdminCommandSignIn() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@xdragon.tech or xdadmin"
+                  placeholder="you@xdragon.tech or grant"
                 />
               </div>
 
@@ -209,7 +207,7 @@ export default function AdminCommandSignIn() {
 
             <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
               Tip: if you get signed-in but bounced back here, double-check that you always use the same canonical domain
-              (recommended: <span className="font-medium">{"https://" + recommendedAdminHost}</span>) and that
+              (recommended: <span className="font-medium">{"https://" + (recommendedAdminHost || "your-admin-host")}</span>) and that
               <span className="font-medium"> NEXTAUTH_URL</span> matches it in Vercel.
             </div>
           </div>
@@ -219,8 +217,9 @@ export default function AdminCommandSignIn() {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
+export const getServerSideProps: GetServerSideProps<AdminSignInProps> = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
+  const runtimeHost = await getRuntimeHostConfig(getApiRequestHost(ctx.req));
   if (isBackofficeSession(session)) {
     const destination = resolveBackofficePostAuthDestination(session);
     if (requiresBackofficeMfaChallenge(session) && !hasVerifiedBackofficeMfaForRequest(ctx.req, session)) {
@@ -239,5 +238,10 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       },
     };
   }
-  return { props: {} };
+  return {
+    props: {
+      allowedHosts: runtimeHost.allowedHosts,
+      recommendedAdminHost: runtimeHost.canonicalAdminHost,
+    },
+  };
 };

@@ -3,24 +3,23 @@ import Head from "next/head";
 import { getServerSession } from "next-auth/next";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { canonicalAdminHost, getAllowedHosts } from "../../lib/siteConfig";
 import { authOptions } from "../api/auth/[...nextauth]";
 import { isBackofficeSession, requiresBackofficeMfaChallenge } from "../../lib/authScopes";
 import {
   hasVerifiedBackofficeMfaForRequest,
   resolveBackofficePostAuthDestination,
 } from "../../lib/backofficeAuth";
+import { getRuntimeHostConfig } from "../../lib/runtimeHostConfig";
+import { getApiRequestHost } from "../../lib/requestHost";
 
 type BackofficeMfaPageProps = {
   callbackUrl: string;
   username: string;
+  allowedHosts: string[];
+  recommendedAdminHost: string | null;
 };
 
-function allowedHosts(): Set<string> {
-  return getAllowedHosts();
-}
-
-function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string): string {
+function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin: string, allowedHosts: string[]): string {
   const value = Array.isArray(raw) ? raw[0] : raw;
   const fallback = "/admin/library";
   if (!value) return fallback;
@@ -29,7 +28,7 @@ function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin:
     if (value.startsWith("/")) return value;
     const url = new URL(value);
     const host = url.hostname.toLowerCase();
-    if (allowedHosts().has(host)) {
+    if (allowedHosts.includes(host)) {
       return `${currentOrigin}${url.pathname}${url.search}${url.hash}`;
     }
   } catch {}
@@ -39,6 +38,7 @@ function normalizeCallbackUrl(raw: string | string[] | undefined, currentOrigin:
 
 export const getServerSideProps: GetServerSideProps<BackofficeMfaPageProps> = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
+  const runtimeHost = await getRuntimeHostConfig(getApiRequestHost(ctx.req));
   const callbackUrl = typeof ctx.query.callbackUrl === "string" ? ctx.query.callbackUrl : null;
   if (!isBackofficeSession(session)) {
     return {
@@ -73,6 +73,8 @@ export const getServerSideProps: GetServerSideProps<BackofficeMfaPageProps> = as
       callbackUrl: destination,
       username:
         String((session as any)?.user?.email || (session as any)?.user?.username || (session as any)?.user?.name || "staff"),
+      allowedHosts: runtimeHost.allowedHosts,
+      recommendedAdminHost: runtimeHost.canonicalAdminHost,
     },
   };
 };
@@ -80,16 +82,14 @@ export const getServerSideProps: GetServerSideProps<BackofficeMfaPageProps> = as
 export default function AdminMfaChallengePage({
   callbackUrl: initialCallbackUrl,
   username,
+  allowedHosts,
+  recommendedAdminHost,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
-  const recommendedAdminHost = useMemo(() => {
-    if (typeof window === "undefined") return canonicalAdminHost();
-    return canonicalAdminHost(window.location.hostname);
-  }, []);
   const callbackUrl = useMemo(() => {
     if (typeof window === "undefined") return initialCallbackUrl;
-    return normalizeCallbackUrl((router.query.callbackUrl as any) || initialCallbackUrl, window.location.origin);
-  }, [initialCallbackUrl, router.query.callbackUrl]);
+    return normalizeCallbackUrl((router.query.callbackUrl as any) || initialCallbackUrl, window.location.origin, allowedHosts);
+  }, [allowedHosts, initialCallbackUrl, router.query.callbackUrl]);
 
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -206,7 +206,7 @@ export default function AdminMfaChallengePage({
 
             <div className="mt-6 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
               Use the same admin host throughout sign-in and verification.
-              Recommended: <span className="font-medium">{" https://" + recommendedAdminHost}</span>
+              Recommended: <span className="font-medium">{" https://" + (recommendedAdminHost || "your-admin-host")}</span>
             </div>
           </div>
         </div>

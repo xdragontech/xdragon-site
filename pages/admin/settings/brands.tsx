@@ -308,7 +308,8 @@ export default function BrandsPage({
           />
 
           <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
-            Brand routing is now driven from the database. The current env values are only a fallback when no Brand records exist yet.
+            Brand routing is now driven only from the database. Public and admin hosts must be configured here before the
+            runtime will recognize them.
           </div>
 
           {!canManageBrands ? (
@@ -333,9 +334,8 @@ export default function BrandsPage({
 
         {brands.length === 0 && !loading ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            No brands are stored in the database yet. Public runtime can still fall back to env host config, but
-            brand-scoped writes should use the explicit brand sync flow before this becomes the long-term source of
-            truth.
+            No brands are stored in the database yet. Runtime host resolution is inactive until at least one brand and host set
+            is configured here or synced explicitly.
           </div>
         ) : null}
 
