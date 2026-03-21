@@ -13,6 +13,7 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 - [`docs/engineering-standard.md`](./engineering-standard.md)
 - [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
 - [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+- [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)

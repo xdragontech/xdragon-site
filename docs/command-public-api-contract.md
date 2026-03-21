@@ -6,6 +6,9 @@ Explain the initial public-site integration surface for `command` in human terms
 OpenAPI source of truth:
 - [`openapi/command-public-api.v1.yaml`](../openapi/command-public-api.v1.yaml)
 
+Operational BFF/session companion:
+- [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
+
 **Scope Of This First Contract**
 - external auth
 - external account read/update
@@ -21,7 +24,7 @@ This pass is intentionally narrow. It does not try to freeze every future servic
 
 The BFF is responsible for:
 - rendering the public UI
-- storing the opaque `command` session token in a site-controlled HTTP-only cookie or equivalent server-side session store
+- storing the opaque `command` session token in a server-side session store or equivalent BFF-controlled session layer
 - forwarding that token to `command`
 - shielding the browser from integration credentials and raw `command` session details
 

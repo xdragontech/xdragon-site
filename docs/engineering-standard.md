@@ -51,6 +51,7 @@ This is the working standard for every X Dragon change until the public site and
 10. Public websites must integrate with the reusable backoffice through a BFF/proxy layer; direct browser-to-backoffice trust is not the default model.
 11. Integration credentials and forwarded user sessions are separate trust layers and must remain separate in code and docs.
 12. Public integration changes must update the OpenAPI contract first or in the same ticket; route behavior is not the source of truth by itself.
+13. Raw reusable-backoffice session tokens should not be exposed to the browser when a BFF/session-forwarding model is in use.
 
 ## Deployment rules
 1. `feature/*` -> PR -> `staging` -> QA -> PR -> `main`
@@ -84,6 +85,7 @@ Stop and clarify before merging if a change:
 - [`docs/refactor-roadmap.md`](./refactor-roadmap.md)
 - [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
 - [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+- [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)

@@ -55,6 +55,7 @@ These are separate trust layers and must stay separate in the contract.
 - initial public-site contract docs live in:
   - [`openapi/command-public-api.v1.yaml`](../openapi/command-public-api.v1.yaml)
   - [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+  - [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
 
 **Repo Responsibilities**
 **`xdragon-site`**
