@@ -14,6 +14,7 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
+- [`docs/bootstrap-superadmin-workflow.md`](./bootstrap-superadmin-workflow.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
 - [`docs/remaining-original-spec-checklist.md`](./remaining-original-spec-checklist.md)
 
@@ -113,6 +114,7 @@ Tasks:
 - define brand bootstrap checklist
 - define required env contract per app
 - define extension points for content types, lead flows, and admin modules
+- define a first-run setup page for new installs to collect initial users and base system information
 
 ## Immediate recommendations
 1. Make the database brand registry authoritative before any further packaging work. Runtime host fallback is incompatible with a reusable multi-brand backoffice.
