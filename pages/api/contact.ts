@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { Resend } from "resend";
 import { ensurePublicBrandRequest } from "../../lib/brandContext";
+import { resolveBrandEmailConfig, sendBrandEmail, type BrandEmailRuntimeConfig } from "../../lib/brandEmail";
 
 type PrismaMod = { prisma?: any; default?: any };
 
@@ -171,51 +171,6 @@ type Data =
   | { ok: true; id?: string; notification?: "sent" | "deferred" }
   | { ok: false; error: string; details?: unknown };
 
-function getEnv() {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-
-  // Prefer explicit names, but support legacy ones you already use in Vercel.
-  const FROM =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.RESEND_FROM ||
-    process.env.CONTACT_FROM_EMAIL ||
-    "";
-
-  const TO =
-    process.env.RESEND_TO_EMAIL ||
-    process.env.CONTACT_TO_EMAIL ||
-    process.env.CONTACT_TO ||
-    "";
-
-  return { RESEND_API_KEY, FROM, TO };
-}
-
-function getNotificationConfig() {
-  const { RESEND_API_KEY, FROM, TO } = getEnv();
-
-  if (!RESEND_API_KEY) {
-    return { error: "Missing RESEND_API_KEY", RESEND_API_KEY, FROM, TO };
-  }
-  if (!FROM) {
-    return {
-      error: "Missing sender env var (set RESEND_FROM or RESEND_FROM_EMAIL)",
-      RESEND_API_KEY,
-      FROM,
-      TO,
-    };
-  }
-  if (!TO) {
-    return {
-      error: "Missing recipient env var (set RESEND_TO_EMAIL)",
-      RESEND_API_KEY,
-      FROM,
-      TO,
-    };
-  }
-
-  return { error: null, RESEND_API_KEY, FROM, TO };
-}
-
 function isEmail(s: unknown): s is string {
   return typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
@@ -223,6 +178,41 @@ function isEmail(s: unknown): s is string {
 function cleanStr(v: unknown, max = 2000) {
   if (typeof v !== "string") return "";
   return v.trim().slice(0, max);
+}
+
+async function sendContactNotification(params: {
+  config: BrandEmailRuntimeConfig;
+  brandName: string;
+  brandKey: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  sourceIp: string;
+}) {
+  const subject = `${params.brandName}: New contact request — ${params.name}`;
+  const text = [
+    `Brand: ${params.brandName} (${params.brandKey})`,
+    "",
+    "New website contact request:",
+    "",
+    `Name: ${params.name}`,
+    `Email: ${params.email}`,
+    params.phone ? `Phone: ${params.phone}` : "Phone: (not provided)",
+    "",
+    "Message:",
+    params.message,
+    "",
+    `Sent from: ${params.sourceIp}`,
+  ].join("\n");
+
+  return sendBrandEmail({
+    config: params.config,
+    to: params.config.supportEmails,
+    subject,
+    text,
+    replyTo: params.email,
+  });
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
@@ -253,6 +243,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   if (!name) return res.status(400).json({ ok: false, error: "Name is required" });
   if (!isEmail(email)) return res.status(400).json({ ok: false, error: "Valid email is required" });
   if (!message) return res.status(400).json({ ok: false, error: "Message is required" });
+
+  const notificationConfig = await resolveBrandEmailConfig(brand, "notification");
+  if (!notificationConfig.ok) {
+    return res.status(notificationConfig.status).json({ ok: false, error: notificationConfig.error });
+  }
 
   try {
     const ip = getClientIp(req);
@@ -365,41 +360,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       ts: new Date().toISOString(),
     }).catch(() => {});
 
-    const { error: notificationError, RESEND_API_KEY, FROM, TO } = getNotificationConfig();
-    if (notificationError) {
-      console.error("Contact notification config missing", notificationError);
-
-      if (capturedLeadId) {
-        return res.status(202).json({ ok: true, id: capturedLeadId, notification: "deferred" });
-      }
-
-      return res.status(500).json({ ok: false, error: notificationError });
-    }
-
-    const resend = new Resend(RESEND_API_KEY);
-
-    const subject = `${brand.brandName}: New contact request — ${name}`;
-    const text = [
-      `Brand: ${brand.brandName} (${brand.brandKey})`,
-      "",
-      "New website contact request:",
-      "",
-      `Name: ${name}`,
-      `Email: ${email}`,
-      phone ? `Phone: ${phone}` : "Phone: (not provided)",
-      "",
-      "Message:",
+    const result = await sendContactNotification({
+      config: notificationConfig.config,
+      brandName: brand.brandName,
+      brandKey: brand.brandKey,
+      name,
+      email,
+      phone,
       message,
-      "",
-      `Sent from: ${req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown IP"}`,
-    ].join("\n");
-
-    const result = await resend.emails.send({
-      from: FROM, // must be verified in Resend
-      to: [TO],
-      replyTo: email,
-      subject,
-      text,
+      sourceIp: String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown IP"),
     });
 
     const id =

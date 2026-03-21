@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
 import { ensurePublicBrandRequest } from "../../lib/brandContext";
+import { resolveBrandEmailConfig, sendBrandEmail } from "../../lib/brandEmail";
 
 /**
  * Basic Upstash Redis rate limiting (fixed-window).
@@ -328,6 +329,7 @@ function formatPhoneDisplay(e164: string | null): string | null {
  * If lead.email exists, it will be used as replyTo; otherwise replyTo is omitted.
  */
 async function maybeEmailLeadSummary(args: {
+  brandId?: string;
   brandName: string;
   brandKey: string;
   lead: Lead;
@@ -336,25 +338,17 @@ async function maybeEmailLeadSummary(args: {
   reply: string;
   returnId?: string;
 }): Promise<boolean> {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const RESEND_TO_EMAIL =
-    process.env.RESEND_TO_EMAIL ||
-    process.env.CONTACT_TO_EMAIL ||
-    process.env.CONTACT_TO ||
-    "hello@xdragon.tech";
-  const RESEND_FROM =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.RESEND_FROM ||
-    process.env.CONTACT_FROM_EMAIL ||
-    ""; // must be a verified sender, e.g. "X Dragon <noreply@xdragon.tech>"
-
-  if (!RESEND_API_KEY || !RESEND_FROM) return false;
+  const emailConfig = await resolveBrandEmailConfig(
+    {
+      brandId: args.brandId,
+      brandKey: args.brandKey,
+      brandName: args.brandName,
+    },
+    "notification"
+  );
+  if (!emailConfig.ok) return false;
 
   // We can still notify our inbox even if contact info is incomplete/invalid.
-
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { Resend } = require("resend") as typeof import("resend");
-  const resend = new Resend(RESEND_API_KEY);
 
   const who = args.lead.name || "New lead";
   const emailOk = isValidEmail(args.lead.email);
@@ -389,14 +383,19 @@ async function maybeEmailLeadSummary(args: {
   ];
 
   const payload: any = {
-    from: RESEND_FROM,
-    to: RESEND_TO_EMAIL,
+    to: emailConfig.config.supportEmails,
     subject,
     text: lines.join("\n"),
   };
   if (args.lead.email) if (emailOk) payload.replyTo = args.lead.email;
 
-  await resend.emails.send(payload);
+  await sendBrandEmail({
+    config: emailConfig.config,
+    to: payload.to,
+    subject: payload.subject,
+    text: payload.text,
+    replyTo: payload.replyTo,
+  });
 
   return true;
 }
@@ -636,6 +635,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (hasInvalidEmailAttempt && mergedLead.preferred_contact === "email" && !mergedLead.phone) {
         try {
           await maybeEmailLeadSummary({
+            brandId: brand.brandId,
             brandName: brand.brandName,
             brandKey: brand.brandKey,
             lead: { ...mergedLead, email: invalidEmailAttempt },
@@ -653,6 +653,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (validReady) {
         try {
           emailed = await maybeEmailLeadSummary({
+            brandId: brand.brandId,
             brandName: brand.brandName,
             brandKey: brand.brandKey,
             lead: mergedLead,

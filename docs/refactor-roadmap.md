@@ -12,6 +12,7 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 ## Companion docs
 - [`docs/engineering-standard.md`](./engineering-standard.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
 - [`docs/remaining-original-spec-checklist.md`](./remaining-original-spec-checklist.md)
 

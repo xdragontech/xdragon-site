@@ -4,20 +4,26 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
+    setError(null);
     setLoading(true);
     try {
-      await fetch("/api/auth/request-password-reset", {
+      const resp = await fetch("/api/auth/request-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || !body?.ok) {
+        throw new Error(body?.error || "Could not start password reset.");
+      }
       setSent(true);
-    } catch {
-      setSent(true);
+    } catch (nextError: any) {
+      setError(nextError?.message || "Could not start password reset.");
     } finally {
       setLoading(false);
     }
@@ -43,10 +49,14 @@ export default function ForgotPasswordPage() {
               </a>
             </div>
           ) : (
-            <form className="mt-6 space-y-4" onSubmit={submit}>
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <input
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            {error ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+            ) : null}
+
+            <div>
+              <label className="text-sm font-medium">Email</label>
+              <input
                   type="email"
                   required
                   value={email}
