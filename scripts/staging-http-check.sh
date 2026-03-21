@@ -104,8 +104,8 @@ expect_json_ok() {
 }
 
 load_optional_admin_creds() {
-  [[ -n "$ADMIN_EMAIL" ]] || ADMIN_EMAIL="$(load_env_value XDADMIN_EMAIL || load_env_value XDADMIN_USERNAME || true)"
-  [[ -n "$ADMIN_PASSWORD" ]] || ADMIN_PASSWORD="$(load_env_value XDADMIN_PASSWORD || true)"
+  [[ -n "$ADMIN_EMAIL" ]] || ADMIN_EMAIL="$(load_env_value ADMIN_EMAIL || true)"
+  [[ -n "$ADMIN_PASSWORD" ]] || ADMIN_PASSWORD="$(load_env_value ADMIN_PASSWORD || true)"
 }
 
 run_basic_checks() {

@@ -14,19 +14,90 @@ type Err = { ok: false; error: string };
 
 type Resp = Ok | Err;
 
+function countDistinctLeadContacts(
+  rows: Array<{
+    id: string;
+    source: "CHAT" | "CONTACT";
+    leadId: string | null;
+    conversationId: string | null;
+    raw: any;
+  }>
+) {
+  const seenChat = new Set<string>();
+  const seenContact = new Set<string>();
+
+  for (const row of rows) {
+    if (row.source === "CHAT") {
+      seenChat.add(row.conversationId || row.leadId || row.id);
+      continue;
+    }
+
+    const email =
+      row.raw?.lead?.email ||
+      row.raw?.email ||
+      row.id;
+    seenContact.add(row.leadId || email || row.id);
+  }
+
+  return {
+    chat: seenChat.size,
+    contact: seenContact.size,
+  };
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse<Resp>) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const auth = await requireBackofficeApi(req, res, { superadminOnly: true });
+  const auth = await requireBackofficeApi(req, res);
   if (!auth.ok) return res.status(401).json({ ok: false, error: "Unauthorized" });
 
   const since = new Date();
   since.setDate(since.getDate() - 7);
 
   try {
+    if (auth.principal.role !== "SUPERADMIN") {
+      const [allRows, last7Rows] = await Promise.all([
+        prisma.leadEvent.findMany({
+          where: {
+            brandId: { in: auth.principal.allowedBrandIds },
+          },
+          select: {
+            id: true,
+            source: true,
+            leadId: true,
+            conversationId: true,
+            raw: true,
+          },
+        }),
+        prisma.leadEvent.findMany({
+          where: {
+            brandId: { in: auth.principal.allowedBrandIds },
+            createdAt: { gte: since },
+          },
+          select: {
+            id: true,
+            source: true,
+            leadId: true,
+            conversationId: true,
+            raw: true,
+          },
+        }),
+      ]);
+
+      const totals = countDistinctLeadContacts(allRows as any);
+      const last7d = countDistinctLeadContacts(last7Rows as any);
+
+      return res.status(200).json({
+        ok: true,
+        totals: { total: totals.chat + totals.contact, contact: totals.contact, chat: totals.chat },
+        last7d: { contact: last7d.contact, chat: last7d.chat },
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
     // UNIQUE contacts:
     // - CHAT: distinct conversationId (fallback to leadId when conversationId is null)
     // - CONTACT: distinct leadId (fallback to email when leadId is null)

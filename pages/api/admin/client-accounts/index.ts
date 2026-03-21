@@ -12,15 +12,19 @@ function json(res: NextApiResponse, status: number, payload: any) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = await requireAdminApi(req, res);
   if (!auth.ok) return json(res, 401, { ok: false, error: "Unauthorized" });
-  if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
 
   try {
     if (req.method === "GET") {
       const users = await listManagedExternalUsers();
-      return json(res, 200, { ok: true, users });
+      const visibleUsers =
+        auth.principal.role === "SUPERADMIN"
+          ? users
+          : users.filter((user) => auth.principal.allowedBrandIds.includes(user.brandId));
+      return json(res, 200, { ok: true, users: visibleUsers });
     }
 
     if (req.method === "POST") {
+      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
       const user = await createManagedExternalUser(req.body || {});
       return json(res, 200, { ok: true, user });
     }

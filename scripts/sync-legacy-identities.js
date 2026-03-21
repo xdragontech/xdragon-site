@@ -32,23 +32,6 @@ function usernameSeedFromEmail(email) {
   return normalizeUsernameSeed(String(email || "").split("@")[0] || "");
 }
 
-function getEnvAdminEmails() {
-  return Array.from(
-    new Set(
-      (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL_LIST || process.env.ADMIN_USERS || "")
-        .split(/[,\s]+/)
-        .map((value) => normalizeEmail(value))
-        .filter(Boolean)
-    )
-  );
-}
-
-function isEnvAdminEmail(email) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return false;
-  return getEnvAdminEmails().includes(normalized);
-}
-
 function getBridgeBrandKey() {
   return normalizeEmail(process.env.BRAND_KEY || "xdragon");
 }
@@ -135,11 +118,7 @@ async function main() {
     loadLegacyUsers(),
   ]);
 
-  const adminEmails = getEnvAdminEmails();
-
-  const eligibleLegacyAdmins = legacyUsers.filter(
-    (user) => user.role === UserRole.ADMIN || adminEmails.includes(normalizeEmail(user.email))
-  );
+  const eligibleLegacyAdmins = legacyUsers.filter((user) => user.role === UserRole.ADMIN);
 
   const existingBackofficeEmails = new Set(
     (
@@ -204,7 +183,7 @@ async function main() {
         usernameSeedFromEmail(email) || normalizeUsernameSeed(legacy.name || "") || "staff"
       );
 
-      const role = isEnvAdminEmail(email) ? BackofficeRole.SUPERADMIN : BackofficeRole.STAFF;
+      const role = BackofficeRole.SUPERADMIN;
       const created = await tx.backofficeUser.create({
         data: {
           username,
