@@ -133,7 +133,7 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <LibraryCardHeader
             title="Security"
-            description="Set up your own authenticator-app MFA for backoffice access. Enforcement is not active yet, but this is the enrollment path we will use."
+            description="Set up your own authenticator-app MFA for backoffice access. Once enabled, new backoffice sign-ins must complete this second step."
             actionsTop={
               <button
                 type="button"
@@ -299,7 +299,7 @@ export default function SecurityPage({ loggedInAs }: InferGetServerSidePropsType
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                   <div className="text-sm font-semibold text-emerald-900">Authenticator MFA Enabled</div>
                   <p className="mt-2 text-sm text-emerald-800">
-                    Your backoffice account is enrolled with an authenticator app. Login enforcement is not active yet, but this account is ready.
+                    Your backoffice account is enrolled with an authenticator app. New backoffice sign-ins now require the authenticator or a recovery code.
                   </p>
                 </div>
               ) : null}

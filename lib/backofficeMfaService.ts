@@ -25,6 +25,18 @@ export type BackofficeMfaStatus = {
   recoveryCodes: string[] | null;
 };
 
+export type BackofficeMfaChallengeResult = {
+  usedRecoveryCode: boolean;
+  recoveryCodesRemaining: number;
+};
+
+function normalizeRecoveryCode(value: string): string {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 function mapMfaStatus(params: {
   user: {
     username: string;
@@ -170,4 +182,72 @@ export async function cancelBackofficeMfaEnrollment(userId: string): Promise<Bac
   const updated = await getBackofficeMfaUser(userId);
   if (!updated) throw new Error("Backoffice user not found");
   return mapMfaStatus({ user: updated, includePendingSecrets: false });
+}
+
+export async function verifyBackofficeMfaChallenge(userId: string, code: string): Promise<BackofficeMfaChallengeResult> {
+  const normalizedInput = String(code || "").trim();
+  if (!normalizedInput) {
+    throw new Error("Enter your authenticator or recovery code");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.backofficeUser.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        status: true,
+        mfaMethod: true,
+        mfaEnabledAt: true,
+        mfaSecretEncrypted: true,
+        mfaRecoveryCodesEncrypted: true,
+      },
+    });
+
+    if (!user) throw new Error("Backoffice user not found");
+    if (user.status === BackofficeUserStatus.BLOCKED) {
+      throw new Error("Blocked staff accounts cannot complete MFA");
+    }
+    if (
+      deriveBackofficeMfaState(user) !== "ENABLED" ||
+      user.mfaMethod !== BackofficeMfaMethod.AUTHENTICATOR_APP ||
+      !user.mfaSecretEncrypted
+    ) {
+      throw new Error("Authenticator MFA is not enabled on this account");
+    }
+
+    const secret = decryptBackofficeMfaValue(user.mfaSecretEncrypted);
+    if (verifyAuthenticatorCode({ secret, code: normalizedInput })) {
+      const remainingCodes = user.mfaRecoveryCodesEncrypted
+        ? JSON.parse(decryptBackofficeMfaValue(user.mfaRecoveryCodesEncrypted)).length
+        : 0;
+      return {
+        usedRecoveryCode: false,
+        recoveryCodesRemaining: remainingCodes,
+      };
+    }
+
+    if (!user.mfaRecoveryCodesEncrypted) {
+      throw new Error("Invalid authenticator or recovery code");
+    }
+
+    const recoveryCodes: string[] = JSON.parse(decryptBackofficeMfaValue(user.mfaRecoveryCodesEncrypted));
+    const target = normalizeRecoveryCode(normalizedInput);
+    const matchedIndex = recoveryCodes.findIndex((entry) => normalizeRecoveryCode(entry) === target);
+    if (matchedIndex < 0) {
+      throw new Error("Invalid authenticator or recovery code");
+    }
+
+    const nextRecoveryCodes = recoveryCodes.filter((_, index) => index !== matchedIndex);
+    await tx.backofficeUser.update({
+      where: { id: userId },
+      data: {
+        mfaRecoveryCodesEncrypted: encryptBackofficeMfaValue(JSON.stringify(nextRecoveryCodes)),
+      },
+    });
+
+    return {
+      usedRecoveryCode: true,
+      recoveryCodesRemaining: nextRecoveryCodes.length,
+    };
+  });
 }

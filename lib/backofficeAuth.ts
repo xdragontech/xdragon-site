@@ -6,12 +6,20 @@ import {
   getBackofficeIdentityFromSession,
   type BackofficeIdentityState,
 } from "./backofficeIdentity";
-import { getSessionEmail, getSessionUsername, isBackofficeSession } from "./authScopes";
+import {
+  getBackofficeRole,
+  getSessionEmail,
+  getSessionUsername,
+  isBackofficeSession,
+  requiresBackofficeMfaChallenge,
+} from "./authScopes";
+import { hasSatisfiedBackofficeMfaChallenge } from "./backofficeMfaChallenge";
 import { prisma } from "./prisma";
 
 type RequireBackofficeOptions = {
   callbackUrl?: string;
   superadminOnly?: boolean;
+  allowPendingMfa?: boolean;
 };
 
 type BrandSelectionInput =
@@ -44,6 +52,16 @@ function buildAdminRedirect(callbackUrl?: string) {
   } as const;
 }
 
+function buildAdminMfaRedirect(callbackUrl?: string) {
+  const target = callbackUrl || "/admin/library";
+  return {
+    redirect: {
+      destination: `/admin/mfa?callbackUrl=${encodeURIComponent(target)}`,
+      permanent: false,
+    },
+  } as const;
+}
+
 async function loadResolvedPrincipal(
   session: any,
   options?: RequireBackofficeOptions
@@ -57,6 +75,21 @@ async function loadResolvedPrincipal(
   return principal;
 }
 
+export function hasVerifiedBackofficeMfaForRequest(
+  req: Pick<NextApiRequest, "cookies" | "headers"> | Pick<GetServerSidePropsContext["req"], "cookies" | "headers">,
+  session: any
+) {
+  return hasSatisfiedBackofficeMfaChallenge(req as any, session);
+}
+
+export function requiresPendingBackofficeMfa(session: any, req: Pick<NextApiRequest, "cookies" | "headers"> | Pick<GetServerSidePropsContext["req"], "cookies" | "headers">) {
+  return requiresBackofficeMfaChallenge(session) && !hasVerifiedBackofficeMfaForRequest(req, session);
+}
+
+export function resolveBackofficePostAuthDestination(session: any): string {
+  return getBackofficeRole(session) === BackofficeRole.SUPERADMIN ? "/admin/dashboard" : "/admin/library";
+}
+
 export async function requireBackofficeApi(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -66,10 +99,14 @@ export async function requireBackofficeApi(
   const principal = await loadResolvedPrincipal(session, options);
 
   if (!principal) {
-    return { ok: false as const, session, principal: null };
+    return { ok: false as const, session, principal: null, reason: "UNAUTHORIZED" as const };
   }
 
-  return { ok: true as const, session, principal };
+  if (!options?.allowPendingMfa && requiresPendingBackofficeMfa(session, req)) {
+    return { ok: false as const, session, principal, reason: "MFA_REQUIRED" as const };
+  }
+
+  return { ok: true as const, session, principal, reason: null };
 }
 
 export async function requireBackofficePage(
@@ -84,17 +121,29 @@ export async function requireBackofficePage(
       ok: false as const,
       session,
       principal: null,
+      reason: "UNAUTHORIZED" as const,
       response: buildAdminRedirect(options?.callbackUrl || ctx.resolvedUrl || "/admin/library"),
+    };
+  }
+
+  if (!options?.allowPendingMfa && requiresPendingBackofficeMfa(session, ctx.req)) {
+    return {
+      ok: false as const,
+      session,
+      principal,
+      reason: "MFA_REQUIRED" as const,
+      response: buildAdminMfaRedirect(options?.callbackUrl || ctx.resolvedUrl || resolveBackofficePostAuthDestination(session)),
     };
   }
 
   return {
     ok: true as const,
-    session,
-    principal,
-    response: null,
-    loggedInAs: getSessionEmail(session) || getSessionUsername(session) || principal.displayName,
-  };
+      session,
+      principal,
+      reason: null,
+      response: null,
+      loggedInAs: getSessionEmail(session) || getSessionUsername(session) || principal.displayName,
+    };
 }
 
 async function resolveRequestedBrand(raw: BrandSelectionInput): Promise<Pick<Brand, "id" | "brandKey"> | null> {
