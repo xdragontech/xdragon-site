@@ -13,6 +13,7 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 - [`docs/engineering-standard.md`](./engineering-standard.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
+- [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
 - [`docs/remaining-original-spec-checklist.md`](./remaining-original-spec-checklist.md)
 
@@ -116,8 +117,8 @@ Tasks:
 ## Immediate recommendations
 1. Make the database brand registry authoritative before any further packaging work. Runtime host fallback is incompatible with a reusable multi-brand backoffice.
 2. Make brand-scoped email config live before calling the platform multi-brand complete. Global email config still leaks single-brand assumptions.
-3. Split the public and backoffice apps only after the remaining shared runtime truth is database-driven. That keeps the extraction mechanical instead of speculative.
-4. Treat the protected bootstrap superadmin/install flow as product architecture, not an operational afterthought.
+3. Formalize the protected bootstrap superadmin/install flow before packaging work. Reuse is not safe while bootstrap and recovery behavior are still implicit.
+4. Split the public and backoffice apps only after the remaining shared runtime truth is database-driven. That keeps the extraction mechanical instead of speculative.
 
 ## Definition of done for every refactor ticket
 - no layout/design drift
