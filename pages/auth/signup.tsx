@@ -24,11 +24,13 @@ export default function SignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: em, password, name: name.trim() || null }),
       });
-      // We intentionally don't rely on response body for user-existence privacy.
-      await resp.json().catch(() => ({}));
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || !body?.ok) {
+        throw new Error(body?.error || "Could not start signup. Please try again.");
+      }
       setSent(true);
-    } catch {
-      setError("Could not start signup. Please try again.");
+    } catch (error: any) {
+      setError(error?.message || "Could not start signup. Please try again.");
     } finally {
       setBusy(false);
     }

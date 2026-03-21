@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
 import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
+import { resolveBrandEmailConfig, sendBrandEmail, type BrandEmailRuntimeConfig } from "../../../lib/brandEmail";
 import { findExternalUserByEmail } from "../../../lib/externalIdentity";
 
 /**
@@ -16,13 +17,8 @@ import { findExternalUserByEmail } from "../../../lib/externalIdentity";
  * 5) Return { ok: true }
  *
  * Notes:
- * - This route is intentionally "best-effort" on email sending: we still create the user
- *   and return ok=true even if the notification email fails (we log it).
- * - Ensure you have these env vars set in Vercel + locally:
- *   - NEXTAUTH_URL (prod)
- *   - NEXTAUTH_SECRET
- *   - RESEND_API_KEY
- *   - RESEND_FROM (e.g. "X Dragon <hello@xdragon.tech>")
+ * - This route now requires an ACTIVE BrandEmailConfig for the resolved brand.
+ * - We block signup before user creation when the brand email setup is incomplete.
  */
 
 type Data =
@@ -38,19 +34,12 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-async function sendVerifyEmail(params: { to: string; url: string; brandName: string }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn("RESEND_API_KEY not set; skipping verification email");
-    return;
-  }
-
-  // Resend requires "Name <email@domain>" or "email@domain"
-  const from =
-    process.env.RESEND_FROM ||
-    process.env.EMAIL_FROM ||
-    "X Dragon <hello@xdragon.tech>";
-
+async function sendVerifyEmail(params: {
+  to: string;
+  url: string;
+  brandName: string;
+  emailConfig: BrandEmailRuntimeConfig;
+}) {
   const subject = `Verify your email to access ${params.brandName}`;
   const text = [
     `Thanks for signing up for ${params.brandName}.`,
@@ -60,22 +49,12 @@ async function sendVerifyEmail(params: { to: string; url: string; brandName: str
     "",
     "If you didn't request this, you can ignore this email.",
   ].join("\n");
-
-  const resp = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from,
-      to: params.to,
-      subject,
-      text,
-    }),
+  await sendBrandEmail({
+    config: params.emailConfig,
+    to: params.to,
+    subject,
+    text,
   });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    console.warn("Resend verify email failed:", resp.status, body);
-  }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
@@ -90,6 +69,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const { brand } = brandRequest;
 
   try {
+    const emailConfig = await resolveBrandEmailConfig(brand, "auth");
+    if (!emailConfig.ok) {
+      return res.status(emailConfig.status).json({ ok: false, error: emailConfig.error });
+    }
+
     const email = cleanEmail(req.body?.email);
     const password = String(req.body?.password || "");
     const name = String(req.body?.name || "").trim() || null;
@@ -142,7 +126,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const verifyUrl = `${getCanonicalPublicOrigin(req, brand)}/auth/verify?token=${encodeURIComponent(token)}`;
 
     // Best-effort email
-    await sendVerifyEmail({ to: email, url: verifyUrl, brandName: brand.brandName });
+    await sendVerifyEmail({
+      to: email,
+      url: verifyUrl,
+      brandName: brand.brandName,
+      emailConfig: emailConfig.config,
+    });
 
     return res.status(200).json({ ok: true });
   } catch (err: any) {
