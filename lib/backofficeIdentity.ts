@@ -1,10 +1,12 @@
 import bcrypt from "bcryptjs";
 import {
+  BackofficeMfaMethod,
   BackofficeRole,
   BackofficeUserStatus,
   BrandStatus,
   type Prisma,
 } from "@prisma/client";
+import { deriveBackofficeMfaState, type BackofficeMfaState } from "./backofficeMfa";
 import { prisma } from "./prisma";
 import { BACKOFFICE_AUTH_SCOPE, getAuthScope } from "./authScopes";
 
@@ -38,6 +40,9 @@ export type BackofficeIdentityState = {
   username: string;
   role: BackofficeRole;
   status: BackofficeUserStatus;
+  mfaMethod: BackofficeMfaMethod | null;
+  mfaState: BackofficeMfaState;
+  mfaEnabledAt: string | null;
   allowedBrandIds: string[];
   allowedBrandKeys: string[];
   lastSelectedBrandKey: string | null;
@@ -54,6 +59,9 @@ export type BackofficeAuthUser = {
   backofficeRole: BackofficeRole;
   status: BackofficeUserStatus;
   authScope: typeof BACKOFFICE_AUTH_SCOPE;
+  mfaMethod: BackofficeMfaMethod | null;
+  mfaState: BackofficeMfaState;
+  mfaEnabledAt: string | null;
   allowedBrandIds: string[];
   allowedBrandKeys: string[];
   lastSelectedBrandKey: string | null;
@@ -92,6 +100,14 @@ function toBackofficeIdentityState(user: BackofficeUserWithAccess): BackofficeId
     username: user.username,
     role: user.role,
     status: user.status,
+    mfaMethod: user.mfaMethod || null,
+    mfaState: deriveBackofficeMfaState({
+      mfaMethod: user.mfaMethod,
+      mfaEnabledAt: user.mfaEnabledAt,
+      mfaSecretEncrypted: user.mfaSecretEncrypted,
+      mfaRecoveryCodesEncrypted: user.mfaRecoveryCodesEncrypted,
+    }),
+    mfaEnabledAt: user.mfaEnabledAt ? user.mfaEnabledAt.toISOString() : null,
     allowedBrandIds,
     allowedBrandKeys,
     lastSelectedBrandKey:
@@ -113,6 +129,9 @@ function toBackofficeAuthUser(state: BackofficeIdentityState): BackofficeAuthUse
     backofficeRole: state.role,
     status: state.status,
     authScope: BACKOFFICE_AUTH_SCOPE,
+    mfaMethod: state.mfaMethod,
+    mfaState: state.mfaState,
+    mfaEnabledAt: state.mfaEnabledAt,
     allowedBrandIds: state.allowedBrandIds,
     allowedBrandKeys: state.allowedBrandKeys,
     lastSelectedBrandKey: state.lastSelectedBrandKey,
@@ -221,6 +240,9 @@ export async function authorizeBackofficeCredentials(
       username: xd.username,
       role: BackofficeRole.SUPERADMIN,
       status: BackofficeUserStatus.ACTIVE,
+      mfaMethod: null,
+      mfaState: "DISABLED",
+      mfaEnabledAt: null,
       allowedBrandIds: brands.map((brand) => brand.id),
       allowedBrandKeys: brands.map((brand) => brand.brandKey),
       lastSelectedBrandKey: brands[0]?.brandKey || null,
@@ -260,6 +282,9 @@ export async function refreshBackofficeIdentity(sessionLike: { sub?: string | nu
       username: xd.username,
       role: BackofficeRole.SUPERADMIN,
       status: BackofficeUserStatus.ACTIVE,
+      mfaMethod: null,
+      mfaState: "DISABLED",
+      mfaEnabledAt: null,
       allowedBrandIds: brands.map((brand) => brand.id),
       allowedBrandKeys: brands.map((brand) => brand.brandKey),
       lastSelectedBrandKey: brands[0]?.brandKey || null,
@@ -297,6 +322,9 @@ export async function getBackofficeIdentityFromSession(session: any): Promise<Ba
     username: hydrated.username,
     role: hydrated.backofficeRole,
     status: hydrated.status,
+    mfaMethod: hydrated.mfaMethod,
+    mfaState: hydrated.mfaState,
+    mfaEnabledAt: hydrated.mfaEnabledAt,
     allowedBrandIds: hydrated.allowedBrandIds,
     allowedBrandKeys: hydrated.allowedBrandKeys,
     lastSelectedBrandKey: hydrated.lastSelectedBrandKey,
