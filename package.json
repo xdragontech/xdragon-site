@@ -29,6 +29,12 @@
     "identity:audit:production": "./scripts/with-db-target.sh production node ./scripts/sync-legacy-identities.js",
     "identity:sync:preview": "./scripts/with-db-target.sh preview node ./scripts/sync-legacy-identities.js --apply",
     "identity:sync:production": "./scripts/with-db-target.sh production node ./scripts/sync-legacy-identities.js --apply",
+    "bootstrap-superadmin:status:preview": "./scripts/with-db-target.sh preview node ./scripts/bootstrap-superadmin.js",
+    "bootstrap-superadmin:status:production": "./scripts/with-db-target.sh production node ./scripts/bootstrap-superadmin.js",
+    "bootstrap-superadmin:ensure:preview": "./scripts/with-db-target.sh preview node ./scripts/bootstrap-superadmin.js --apply",
+    "bootstrap-superadmin:ensure:production": "./scripts/with-db-target.sh production node ./scripts/bootstrap-superadmin.js --apply",
+    "bootstrap-superadmin:recover:preview": "./scripts/with-db-target.sh preview node ./scripts/bootstrap-superadmin.js --apply --recover --clear-mfa",
+    "bootstrap-superadmin:recover:production": "./scripts/with-db-target.sh production node ./scripts/bootstrap-superadmin.js --apply --recover --clear-mfa",
     "vercel-build": "prisma generate && next build"
   },
   "dependencies": {

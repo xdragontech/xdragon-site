@@ -7,7 +7,7 @@ Define the protected bootstrap superadmin contract for the current X Dragon inst
 - the protected backoffice identity already exists in runtime code as `grant@xdragon.tech`
 - that identity is forced to `SUPERADMIN`
 - that identity cannot be deleted, blocked, demoted, or have its email changed
-- provisioning and password lifecycle are not yet formalized
+- provisioning and recovery are now handled through explicit operator tooling
 
 **Current Installation Contract**
 - `grant@xdragon.tech` is the protected bootstrap backoffice identity for this installation
@@ -24,7 +24,7 @@ Define the protected bootstrap superadmin contract for the current X Dragon inst
 - bootstrap recovery actions must be deliberate operator actions, not passive side effects of viewing a page
 
 **Password Source Policy**
-- the bootstrap password comes from a dedicated env value during provisioning or explicit recovery
+- the bootstrap password comes from `BACKOFFICE_BOOTSTRAP_PASSWORD` during provisioning or explicit recovery
 - the bootstrap password is consumed by a controlled bootstrap command, not by ordinary request-time runtime code
 - ordinary deploys may enforce protected-account invariants, but must not reset password hashes
 - password rotation for the bootstrap account must be an explicit operator workflow
@@ -49,6 +49,11 @@ Define the protected bootstrap superadmin contract for the current X Dragon inst
   - preserve the protected identity invariants
 - recovery must not depend on the normal staff-management UI alone
 
+**Current Tooling**
+- explicit ensure and recovery commands now exist for Preview and Production targets
+- `Settings / Configs` exposes bootstrap env presence and live protected-account status without exposing secrets
+- detailed operator commands live in [`docs/bootstrap-superadmin-workflow.md`](./bootstrap-superadmin-workflow.md)
+
 **Operational Expectations**
 - the protected bootstrap account is for initial setup, emergency recovery, and maintenance
 - ordinary daily staff administration should use normal `BackofficeUser` management flows
@@ -59,14 +64,8 @@ Define the protected bootstrap superadmin contract for the current X Dragon inst
 - the future reusable backoffice product must not permanently hardcode an X Dragon-specific bootstrap email
 - when packaging work begins, the bootstrap identity must become installation-configurable without weakening the protected-account model
 
-**Non-Goals In This Pass**
-- no implementation of the bootstrap command yet
+**Still Deferred**
 - no password rotation UI yet
-- no change to current staff-management screens beyond the already-present protected-account handling
-- no change to MFA policy beyond requiring recovery support in the future implementation
-
-**Implementation Scope For Pass 2**
-- add an explicit bootstrap-superadmin ensure command
-- add an explicit bootstrap-superadmin recovery/reset command
-- document required env inputs for bootstrap provisioning
-- expose enough status/diagnostics to verify the protected bootstrap account without exposing secrets
+- no first-run setup page yet
+- no change to current MFA policy beyond supporting protected-account recovery
+- the future setup page should orchestrate the same bootstrap/install contract instead of replacing the operator tooling
