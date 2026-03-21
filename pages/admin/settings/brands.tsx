@@ -7,6 +7,18 @@ import LibraryCardHeader from "../../../components/admin/LibraryCardHeader";
 import { useToast } from "../../../components/ui/toast";
 
 type BrandStatus = "SETUP_PENDING" | "ACTIVE" | "DISABLED";
+type BrandEmailStatus = "ACTIVE" | "INACTIVE";
+type BrandEmailProvider = "RESEND";
+
+type BrandEmailConfig = {
+  status: BrandEmailStatus;
+  provider: BrandEmailProvider;
+  providerSecretRef: string;
+  fromName: string;
+  fromEmail: string;
+  replyToEmail: string;
+  supportEmail: string;
+};
 
 type BrandRecord = {
   id: string;
@@ -18,6 +30,7 @@ type BrandRecord = {
   productionAdminHost: string;
   previewPublicHost: string;
   previewAdminHost: string;
+  emailConfig: BrandEmailConfig;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,6 +44,7 @@ type BrandForm = {
   productionAdminHost: string;
   previewPublicHost: string;
   previewAdminHost: string;
+  emailConfig: BrandEmailConfig;
 };
 
 type BrandsPageProps = {
@@ -50,6 +64,15 @@ function blankBrand(): BrandForm {
     productionAdminHost: "",
     previewPublicHost: "",
     previewAdminHost: "",
+    emailConfig: {
+      status: "INACTIVE",
+      provider: "RESEND",
+      providerSecretRef: "RESEND_API_KEY",
+      fromName: "",
+      fromEmail: "",
+      replyToEmail: "",
+      supportEmail: "",
+    },
   };
 }
 
@@ -63,6 +86,15 @@ function cloneBrand(brand: BrandRecord): BrandForm {
     productionAdminHost: brand.productionAdminHost,
     previewPublicHost: brand.previewPublicHost,
     previewAdminHost: brand.previewAdminHost,
+    emailConfig: {
+      status: brand.emailConfig.status,
+      provider: brand.emailConfig.provider,
+      providerSecretRef: brand.emailConfig.providerSecretRef,
+      fromName: brand.emailConfig.fromName,
+      fromEmail: brand.emailConfig.fromEmail,
+      replyToEmail: brand.emailConfig.replyToEmail,
+      supportEmail: brand.emailConfig.supportEmail,
+    },
   };
 }
 
@@ -76,7 +108,35 @@ function normalizeBrandForm(form: BrandForm) {
     productionAdminHost: form.productionAdminHost.trim().toLowerCase(),
     previewPublicHost: form.previewPublicHost.trim().toLowerCase(),
     previewAdminHost: form.previewAdminHost.trim().toLowerCase(),
+    emailConfig: {
+      status: form.emailConfig.status,
+      provider: form.emailConfig.provider,
+      providerSecretRef: form.emailConfig.providerSecretRef.trim().toUpperCase(),
+      fromName: form.emailConfig.fromName.trim(),
+      fromEmail: form.emailConfig.fromEmail.trim().toLowerCase(),
+      replyToEmail: form.emailConfig.replyToEmail.trim().toLowerCase(),
+      supportEmail: form.emailConfig.supportEmail
+        .split(/[;,]/g)
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean)
+        .join(", "),
+    },
   });
+}
+
+function updateEmailField<K extends keyof BrandEmailConfig>(
+  current: BrandForm | null,
+  key: K,
+  value: BrandEmailConfig[K]
+): BrandForm | null {
+  if (!current) return current;
+  return {
+    ...current,
+    emailConfig: {
+      ...current.emailConfig,
+      [key]: value,
+    },
+  };
 }
 
 export const getServerSideProps: GetServerSideProps<BrandsPageProps> = async (ctx) => {
@@ -198,6 +258,10 @@ export default function BrandsPage({
     setForm((current) => (current ? { ...current, [key]: value } : current));
   }
 
+  function updateBrandEmailField<K extends keyof BrandEmailConfig>(key: K, value: BrandEmailConfig[K]) {
+    setForm((current) => updateEmailField(current, key, value));
+  }
+
   async function saveBrand() {
     if (!form) return;
 
@@ -303,17 +367,18 @@ export default function BrandsPage({
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <LibraryCardHeader
             title="Brands"
-            description="Live brand identity and host-routing configuration. Changes here become the runtime source of truth once saved."
+            description="Live brand identity, host routing, and brand email configuration. Changes here become runtime source of truth once saved."
             actionsTop={topActions}
           />
 
           <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
-            Brand routing is now driven from the database. The current env values are only a fallback when no Brand records exist yet.
+            Brand routing is now driven only from the database. Public and admin hosts must be configured here before the
+            runtime will recognize them.
           </div>
 
           {!canManageBrands ? (
             <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
-              You can view live brand routing here, but only superadmins can create, edit, or delete brands.
+              You can view live brand and email configuration here, but only superadmins can create, edit, or delete brands.
             </div>
           ) : null}
 
@@ -333,9 +398,8 @@ export default function BrandsPage({
 
         {brands.length === 0 && !loading ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            No brands are stored in the database yet. Public runtime can still fall back to env host config, but
-            brand-scoped writes should use the explicit brand sync flow before this becomes the long-term source of
-            truth.
+            No brands are stored in the database yet. Runtime host resolution is inactive until at least one brand and host set
+            is configured here or synced explicitly.
           </div>
         ) : null}
 
@@ -369,6 +433,9 @@ export default function BrandsPage({
                   <div className={`mt-3 text-xs ${selectedId === brand.id ? "text-neutral-300" : "text-neutral-600"}`}>
                     {brand.productionPublicHost}
                   </div>
+                  <div className={`mt-2 text-[11px] ${selectedId === brand.id ? "text-neutral-300" : "text-neutral-500"}`}>
+                    Email: {brand.emailConfig.status === "ACTIVE" ? "ACTIVE" : "INACTIVE"}
+                  </div>
                 </button>
               ))}
 
@@ -385,7 +452,7 @@ export default function BrandsPage({
               <div>
                 <h2 className="text-lg font-semibold text-neutral-900">{isNewBrand ? "New Brand" : form?.name || "Brand Details"}</h2>
                 <p className="mt-1 text-sm text-neutral-600">
-                  Edit the live brand identity and host pairings used by runtime routing.
+                  Edit the live brand identity, host pairings, and email configuration used by runtime flows.
                 </p>
               </div>
               {form ? <StatusPill status={form.status} /> : null}
@@ -495,6 +562,92 @@ export default function BrandsPage({
                   <div className="mt-2">Apex Host routes into the production public experience for this brand.</div>
                   <div className="mt-1">Each environment must provide one public host and one admin host.</div>
                   <div className="mt-1">These values are now used by live request host resolution once the brand is saved.</div>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                  <div className="text-sm font-semibold text-neutral-900">Brand Email Config</div>
+                  <div className="mt-2 text-sm text-neutral-700">
+                    Email-dependent public flows read this brand config live. Provider is fixed to Resend for now.
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700">Email Status</label>
+                      <select
+                        value={form.emailConfig.status}
+                        onChange={(event) => updateBrandEmailField("status", event.target.value as BrandEmailStatus)}
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      >
+                        <option value="INACTIVE">INACTIVE</option>
+                        <option value="ACTIVE">ACTIVE</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700">Provider</label>
+                      <input
+                        value={form.emailConfig.provider}
+                        readOnly
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-neutral-100 px-3 py-2 text-sm text-neutral-700 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700">Provider Secret Env Key</label>
+                      <input
+                        value={form.emailConfig.providerSecretRef}
+                        onChange={(event) => updateBrandEmailField("providerSecretRef", event.target.value)}
+                        placeholder="RESEND_API_KEY"
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      />
+                      <div className="mt-2 text-xs text-neutral-500">
+                        This is the env var name, not the secret value.
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700">From Name</label>
+                      <input
+                        value={form.emailConfig.fromName}
+                        onChange={(event) => updateBrandEmailField("fromName", event.target.value)}
+                        placeholder="X Dragon"
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700">From Email</label>
+                      <input
+                        value={form.emailConfig.fromEmail}
+                        onChange={(event) => updateBrandEmailField("fromEmail", event.target.value)}
+                        placeholder="hello@xdragon.tech"
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700">Reply-To Email</label>
+                      <input
+                        value={form.emailConfig.replyToEmail}
+                        onChange={(event) => updateBrandEmailField("replyToEmail", event.target.value)}
+                        placeholder="hello@xdragon.tech"
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-neutral-700">Support / Notification Email(s)</label>
+                      <input
+                        value={form.emailConfig.supportEmail}
+                        onChange={(event) => updateBrandEmailField("supportEmail", event.target.value)}
+                        placeholder="hello@xdragon.tech, ops@xdragon.tech"
+                        className="mt-1 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      />
+                      <div className="mt-2 text-xs text-neutral-500">
+                        Separate multiple recipients with commas or semicolons.
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">

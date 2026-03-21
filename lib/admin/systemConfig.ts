@@ -1,6 +1,13 @@
 import { createHash } from "crypto";
+import { BackofficeRole, BackofficeUserStatus } from "@prisma/client";
 import { getBackofficeMfaIssuer, isBackofficeMfaEncryptionReady } from "../backofficeMfa";
-import { authCookieDomain, canonicalAdminHost, canonicalPublicHost, getAllowedHosts, getBrandSiteConfig } from "../siteConfig";
+import {
+  getBackofficeBootstrapPasswordEnvKey,
+  getProtectedBackofficeEmail,
+} from "../backofficeBootstrap";
+import { authCookieDomain } from "../siteConfig";
+import { getRuntimeHostConfig } from "../runtimeHostConfig";
+import { prisma } from "../prisma";
 
 type EnvValueKind = "plain" | "secret" | "databaseUrl";
 
@@ -35,6 +42,20 @@ export type RuntimeStatusItem = {
   note?: string;
 };
 
+type BootstrapDiagnostics = {
+  user: null | {
+    username: string;
+    role: BackofficeRole;
+    status: BackofficeUserStatus;
+    mfaMethod: string | null;
+    mfaEnabledAt: Date | null;
+    lastLoginAt: Date | null;
+    brandAccesses: Array<{ brandId: string }>;
+  };
+  configuredBrandCount: number;
+  error: string | null;
+};
+
 const ENV_GROUPS: Array<{
   key: string;
   title: string;
@@ -66,8 +87,8 @@ const ENV_GROUPS: Array<{
   },
   {
     key: "brand",
-    title: "Brand & Host Config",
-    description: "Brand and host variables expected to define routing and canonical URLs.",
+    title: "Brand Bootstrap Inputs",
+    description: "Legacy seed inputs used by brand bootstrap/sync tooling. Live host routing now resolves from Brand and BrandHost rows in the database.",
     items: [
       { key: "BRAND_KEY", label: "Brand Key", description: "External-safe brand identifier.", kind: "plain" },
       { key: "NEXT_PUBLIC_BRAND_NAME", label: "Brand Name", description: "Public brand label.", kind: "plain" },
@@ -133,6 +154,12 @@ const ENV_GROUPS: Array<{
         description: "Encryption key required before authenticator-app secrets and recovery codes can be stored safely.",
         kind: "secret",
       },
+      {
+        key: getBackofficeBootstrapPasswordEnvKey(),
+        label: "Bootstrap Superadmin Password",
+        description: "Password source used only by explicit bootstrap ensure/recovery tooling for the protected bootstrap account.",
+        kind: "secret",
+      },
     ],
   },
   {
@@ -161,49 +188,55 @@ const ENV_GROUPS: Array<{
       {
         key: "RESEND_API_KEY",
         label: "Resend API Key",
-        description: "Credential used for transactional email sends.",
+        description: "Default Resend credential env var. Brand email configs can reference this key through providerSecretRef.",
         kind: "secret",
+      },
+      {
+        key: "BRAND_EMAIL_PROVIDER_SECRET_REF",
+        label: "Brand Email Provider Secret Ref",
+        description: "Optional bootstrap override for the env key name used by the brand email sync workflow.",
+        kind: "plain",
       },
       {
         key: "RESEND_FROM",
         label: "Resend From",
-        description: "Preferred sender identity for Resend emails.",
+        description: "Bootstrap sender identity used by the brand email sync workflow.",
         kind: "plain",
       },
       {
         key: "RESEND_FROM_EMAIL",
         label: "Resend From Email",
-        description: "Sender email alias used by contact/chat flows.",
+        description: "Bootstrap sender email used by the brand email sync workflow.",
         kind: "plain",
       },
       {
         key: "CONTACT_FROM_EMAIL",
         label: "Contact From Email",
-        description: "Fallback sender email for contact/chat flows.",
+        description: "Legacy bootstrap sender email used by the brand email sync workflow.",
         kind: "plain",
       },
       {
         key: "EMAIL_FROM",
         label: "Email From",
-        description: "Legacy sender fallback used by auth/contact flows.",
+        description: "Legacy bootstrap sender fallback used by the brand email sync workflow.",
         kind: "plain",
       },
       {
         key: "RESEND_TO_EMAIL",
         label: "Resend To Email",
-        description: "Preferred recipient for internal notifications.",
+        description: "Bootstrap internal notification recipient used by the brand email sync workflow.",
         kind: "plain",
       },
       {
         key: "CONTACT_TO_EMAIL",
         label: "Contact To Email",
-        description: "Fallback notification recipient for contact/chat flows.",
+        description: "Legacy bootstrap notification recipient used by the brand email sync workflow.",
         kind: "plain",
       },
       {
         key: "CONTACT_TO",
         label: "Contact To",
-        description: "Legacy notification recipient fallback.",
+        description: "Legacy bootstrap notification recipient fallback used by the brand email sync workflow.",
         kind: "plain",
       },
       {
@@ -357,8 +390,90 @@ export function collectSystemEnvGroups(): SystemEnvGroup[] {
   }));
 }
 
-export function collectRuntimeStatus(requestHost?: string | null): RuntimeStatusItem[] {
-  const host = requestHost || "unknown";
+export async function collectRuntimeStatus(requestHost?: string | null): Promise<RuntimeStatusItem[]> {
+  const runtimeHost = await getRuntimeHostConfig(requestHost);
+  const host = runtimeHost.requestHost || "unknown";
+  const bootstrapPasswordKey = getBackofficeBootstrapPasswordEnvKey();
+  const bootstrapPasswordPresent = Boolean(getEnvValue(bootstrapPasswordKey));
+  const protectedBootstrapEmail = getProtectedBackofficeEmail();
+  let bootstrapDiagnostics: BootstrapDiagnostics = {
+    user: null,
+    configuredBrandCount: 0,
+    error: null,
+  };
+
+  try {
+    const [bootstrapUser, configuredBrandCount] = await Promise.all([
+      prisma.backofficeUser.findFirst({
+        where: { email: protectedBootstrapEmail },
+        select: {
+          username: true,
+          role: true,
+          status: true,
+          mfaMethod: true,
+          mfaEnabledAt: true,
+          lastLoginAt: true,
+          brandAccesses: {
+            select: {
+              brandId: true,
+            },
+          },
+        },
+      }),
+      prisma.brand.count(),
+    ]);
+
+    bootstrapDiagnostics = {
+      user: bootstrapUser,
+      configuredBrandCount,
+      error: null,
+    };
+  } catch (error) {
+    bootstrapDiagnostics = {
+      user: null,
+      configuredBrandCount: 0,
+      error: error instanceof Error ? error.message : "Unknown database error",
+    };
+  }
+
+  const bootstrapStatusValue = (() => {
+    if (bootstrapDiagnostics.error) return "Unavailable";
+    if (!bootstrapDiagnostics.user) return "Missing";
+    if (bootstrapDiagnostics.user.role !== BackofficeRole.SUPERADMIN) return "Misconfigured role";
+    if (bootstrapDiagnostics.user.status !== BackofficeUserStatus.ACTIVE) return "Inactive";
+    return "Present";
+  })();
+
+  const bootstrapStatusNote = (() => {
+    if (bootstrapDiagnostics.error) {
+      return `Bootstrap account lookup failed: ${bootstrapDiagnostics.error}`;
+    }
+
+    if (!bootstrapDiagnostics.user) {
+      return "Run the explicit bootstrap superadmin ensure command if this account is missing.";
+    }
+
+    const details = [
+      `Username ${bootstrapDiagnostics.user.username}`,
+      `Role ${bootstrapDiagnostics.user.role}`,
+      `Status ${bootstrapDiagnostics.user.status}`,
+      `MFA ${
+        bootstrapDiagnostics.user.mfaEnabledAt
+          ? "enabled"
+          : bootstrapDiagnostics.user.mfaMethod
+            ? "pending"
+            : "not enabled"
+      }`,
+      `Explicit brand access ${bootstrapDiagnostics.user.brandAccesses.length}/${bootstrapDiagnostics.configuredBrandCount}`,
+    ];
+
+    if (bootstrapDiagnostics.user.lastLoginAt) {
+      details.push(`Last login ${bootstrapDiagnostics.user.lastLoginAt.toISOString()}`);
+    }
+
+    return details.join(". ");
+  })();
+
   return [
     {
       label: "Request Host",
@@ -371,40 +486,30 @@ export function collectRuntimeStatus(requestHost?: string | null): RuntimeStatus
       note: "Generated on the server during this request.",
     },
     {
+      label: "Brand Registry Resolution",
+      value: runtimeHost.brandKey ? `Matched ${runtimeHost.brandKey}` : "No matching BrandHost",
+      note: runtimeHost.brandKey
+        ? "The current request host resolved through the database brand registry."
+        : "The current request host is not mapped in BrandHost. Runtime host routing will not normalize it.",
+    },
+    {
       label: "Canonical Admin Host",
-      value: canonicalAdminHost(requestHost || undefined),
-      note: "Derived from current host plus runtime host config.",
+      value: runtimeHost.canonicalAdminHost || "Unresolved",
+      note: runtimeHost.brandKey
+        ? "Resolved from BrandHost rows for the current environment."
+        : "Unresolved because there is no matching BrandHost row for this request host.",
     },
     {
       label: "Canonical Public Host",
-      value: canonicalPublicHost(requestHost || undefined),
-      note: "Derived from current host plus runtime host config.",
-    },
-  ];
-}
-
-export function collectDerivedRuntimeConfig(): RuntimeStatusItem[] {
-  const cfg = getBrandSiteConfig();
-  return [
-    {
-      label: "Resolved Brand Key",
-      value: cfg.brandKey,
-      note: "This is the runtime-resolved value the app will use, including code defaults.",
-    },
-    {
-      label: "Resolved Brand Name",
-      value: cfg.brandName,
-      note: "This is the runtime-resolved value the app will use, including code defaults.",
-    },
-    {
-      label: "Resolved Apex Host",
-      value: cfg.apexHost,
-      note: "This is the runtime-resolved value the app will use, including code defaults.",
+      value: runtimeHost.canonicalPublicHost || "Unresolved",
+      note: runtimeHost.brandKey
+        ? "Resolved from BrandHost rows for the current environment."
+        : "Unresolved because there is no matching BrandHost row for this request host.",
     },
     {
       label: "Allowed Hosts",
-      value: Array.from(getAllowedHosts()).join(", "),
-      note: "Requests outside this set are not expected to resolve cleanly.",
+      value: runtimeHost.allowedHosts.length ? runtimeHost.allowedHosts.join(", ") : "None configured",
+      note: "Loaded from BrandHost rows. The current request host is included so this diagnostics page can still reason about unmapped hosts.",
     },
     {
       label: "Auth Cookie Domain",
@@ -420,6 +525,21 @@ export function collectDerivedRuntimeConfig(): RuntimeStatusItem[] {
       label: "Backoffice MFA Encryption",
       value: isBackofficeMfaEncryptionReady() ? "Ready" : "Missing key",
       note: "A dedicated encryption key is required before authenticator secrets and recovery codes can be activated.",
+    },
+    {
+      label: "Bootstrap Superadmin Identity",
+      value: protectedBootstrapEmail,
+      note: "Protected bootstrap backoffice identity for this installation.",
+    },
+    {
+      label: "Bootstrap Password Source",
+      value: bootstrapPasswordPresent ? `${bootstrapPasswordKey} present` : `${bootstrapPasswordKey} missing`,
+      note: "Used only by explicit bootstrap ensure/recovery tooling. Deploy startup does not consume it.",
+    },
+    {
+      label: "Bootstrap Superadmin Status",
+      value: bootstrapStatusValue,
+      note: bootstrapStatusNote,
     },
   ];
 }

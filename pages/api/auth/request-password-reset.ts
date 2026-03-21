@@ -2,48 +2,35 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import { prisma } from "../../../lib/prisma";
 import { ensurePublicBrandRequest, getCanonicalPublicOrigin } from "../../../lib/brandContext";
+import { resolveBrandEmailConfig, sendBrandEmail, type BrandEmailRuntimeConfig } from "../../../lib/brandEmail";
 import { findExternalUserByEmail } from "../../../lib/externalIdentity";
 
 /**
  * POST /api/auth/request-password-reset
  * Body: { email: string }
  *
- * - Always returns { ok: true } so we don't leak whether an email exists.
+ * - Returns a setup error when the brand email config is missing or inactive.
+ * - Otherwise returns { ok: true } so we don't leak whether an email exists.
  * - Stores a HASHED token (sha256) in DB; only raw token is emailed.
  */
 function sha256(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
 
-async function sendResendEmail(params: { to: string; subject: string; text: string; html?: string }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn("[password-reset] RESEND_API_KEY missing; cannot send reset email");
-    return;
-  }
-
-  const from =
-    process.env.RESEND_FROM ||
-    process.env.CONTACT_FROM_EMAIL ||
-    process.env.EMAIL_FROM ||
-    "hello@xdragon.tech";
-
-  const resp = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from,
-      to: [params.to],
-      subject: params.subject,
-      text: params.text,
-      html: params.html,
-    }),
+async function sendResetEmail(params: {
+  emailConfig: BrandEmailRuntimeConfig;
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}) {
+  await sendBrandEmail({
+    config: params.emailConfig,
+    to: params.to,
+    subject: params.subject,
+    text: params.text,
+    html: params.html,
   });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    console.error("[password-reset] Resend send failed", resp.status, body);
-  }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -56,6 +43,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const emailRaw = (req.body?.email || "").toString().trim();
   const email = emailRaw.toLowerCase();
+
+  const emailConfig = await resolveBrandEmailConfig(brand, "auth");
+  if (!emailConfig.ok) {
+    return res.status(emailConfig.status).json({ ok: false, error: emailConfig.error });
+  }
 
   // Always respond ok=true to avoid user enumeration
   if (!email || !email.includes("@")) return res.status(200).json({ ok: true });
@@ -112,7 +104,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       </div>
     `;
 
-    await sendResendEmail({ to: email, subject, text, html });
+    await sendResetEmail({
+      emailConfig: emailConfig.config,
+      to: email,
+      subject,
+      text,
+      html,
+    });
 
     return res.status(200).json({ ok: true });
   } catch (err) {

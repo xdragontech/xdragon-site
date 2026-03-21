@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { BackofficeMfaMethod } from "@prisma/client";
-import { getBrandSiteConfig } from "./siteConfig";
 
 export type BackofficeMfaState = "DISABLED" | "PENDING" | "ENABLED";
 
@@ -96,7 +95,8 @@ export function generateAuthenticatorSecret(bytes = 20): string {
 export function getBackofficeMfaIssuer(): string {
   const configured = String(process.env.BACKOFFICE_MFA_ISSUER || "").trim();
   if (configured) return configured;
-  return `${getBrandSiteConfig().brandName} Command`;
+  const brandName = String(process.env.NEXT_PUBLIC_BRAND_NAME || "").trim();
+  return brandName ? `${brandName} Command` : "Backoffice Command";
 }
 
 export function buildAuthenticatorOtpAuthUrl(params: { accountName: string; secret: string; issuer?: string }) {

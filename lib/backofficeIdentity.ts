@@ -7,12 +7,9 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { deriveBackofficeMfaState, type BackofficeMfaState } from "./backofficeMfa";
+import { getProtectedBackofficeEmail } from "./backofficeBootstrap";
 import { prisma } from "./prisma";
 import { BACKOFFICE_AUTH_SCOPE, getAuthScope } from "./authScopes";
-
-// Permanent protected bootstrap identity for backoffice recovery/initial setup.
-// Provisioning and password rotation policy will be formalized separately.
-const PROTECTED_BACKOFFICE_EMAIL = "grant@xdragon.tech";
 
 type BrandAccessRow = {
   id: string;
@@ -141,10 +138,6 @@ function toBackofficeAuthUser(state: BackofficeIdentityState): BackofficeAuthUse
     allowedBrandKeys: state.allowedBrandKeys,
     lastSelectedBrandKey: state.lastSelectedBrandKey,
   };
-}
-
-export function getProtectedBackofficeEmail() {
-  return PROTECTED_BACKOFFICE_EMAIL;
 }
 
 export function isProtectedBackofficeIdentity(email: string | null | undefined, _username: string | null | undefined): boolean {

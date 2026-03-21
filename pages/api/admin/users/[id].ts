@@ -10,7 +10,7 @@ import {
   updateManagedBackofficeUser,
 } from "../../../../lib/backofficeAdminUsers";
 import { buildOrigin, getApiRequestHost, getApiRequestProtocol } from "../../../../lib/requestHost";
-import { canonicalAdminHost } from "../../../../lib/siteConfig";
+import { getRuntimeHostConfig } from "../../../../lib/runtimeHostConfig";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
@@ -51,7 +51,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (action === "generateresetlink") {
-        const origin = buildOrigin(getApiRequestProtocol(req), canonicalAdminHost(getApiRequestHost(req)));
+        const runtimeHost = await getRuntimeHostConfig(getApiRequestHost(req));
+        const origin = buildOrigin(
+          getApiRequestProtocol(req),
+          runtimeHost.canonicalAdminHost || getApiRequestHost(req)
+        );
         const invite = await createManagedBackofficePasswordLink(id, "reset", origin);
         return json(res, 200, { ok: true, invite });
       }

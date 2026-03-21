@@ -12,16 +12,19 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 ## Companion docs
 - [`docs/engineering-standard.md`](./engineering-standard.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
+- [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
+- [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
+- [`docs/bootstrap-superadmin-workflow.md`](./bootstrap-superadmin-workflow.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)
-- [`docs/staging-qa-checklist.md`](./staging-qa-checklist.md)
+- [`docs/remaining-original-spec-checklist.md`](./remaining-original-spec-checklist.md)
 
 ## Current reality
 - The repo is one Pages Router app serving both marketing and admin/resource flows.
-- Public brand content, host rules, auth rules, and admin behavior are still coupled.
-- The current schema is single-tenant. There is no brand/site dimension yet.
-- The current identity model still mixes backoffice/admin concerns and public user concerns in one user system.
+- Brand, host, and identity foundations now exist in the database and runtime.
+- Public and backoffice auth are separated, but the repo is still one deployable application.
+- Brand-scoped runtime and service behavior are not fully complete until database host routing and brand email config are fully authoritative.
 - Recent stabilization work resolved the immediate chat/contact deployment failures.
-- The next structural blockers are brand context, identity separation, and brand-aware data modeling.
+- The next structural blockers are authoritative DB brand runtime, brand-scoped service config, and the real app split.
 
 ## Non-negotiable guardrails
 - No direct pushes to `main` or `staging`.
@@ -111,12 +114,13 @@ Tasks:
 - define brand bootstrap checklist
 - define required env contract per app
 - define extension points for content types, lead flows, and admin modules
+- define a first-run setup page for new installs to collect initial users and base system information
 
 ## Immediate recommendations
-1. Do not split repos yet. First remove coupling inside the current codebase so the split is mechanical, not speculative.
-2. Introduce brand/tenant scoping before claiming the back office is reusable. Without it, a second brand will contaminate content and lead data.
-3. Split backoffice and external identity domains before expanding multi-brand auth. One shared user model will hard-code the wrong assumptions.
-4. Restore SSR/SSG for the public site after hydration bugs are fixed at the component level. A JS-only marketing home page is not production-grade.
+1. Make the database brand registry authoritative before any further packaging work. Runtime host fallback is incompatible with a reusable multi-brand backoffice.
+2. Make brand-scoped email config live before calling the platform multi-brand complete. Global email config still leaks single-brand assumptions.
+3. Formalize the protected bootstrap superadmin/install flow before packaging work. Reuse is not safe while bootstrap and recovery behavior are still implicit.
+4. Split the public and backoffice apps only after the remaining shared runtime truth is database-driven. That keeps the extraction mechanical instead of speculative.
 
 ## Definition of done for every refactor ticket
 - no layout/design drift

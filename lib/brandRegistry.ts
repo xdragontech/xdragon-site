@@ -1,5 +1,7 @@
 import {
   BrandEnvironment,
+  BrandEmailConfigStatus,
+  BrandEmailProvider,
   BrandHostKind,
   BrandStatus,
   type Brand,
@@ -8,13 +10,23 @@ import {
 } from "@prisma/client";
 import { prisma } from "./prisma";
 import { normalizeHost } from "./requestHost";
-import { getAllowedHosts as getFallbackAllowedHosts, getBrandSiteConfig } from "./siteConfig";
 
 type BrandWithHosts = Prisma.BrandGetPayload<{
   include: {
     hosts: true;
+    emailConfig: true;
   };
 }>;
+
+export type EditableBrandEmailConfig = {
+  status: BrandEmailConfigStatus;
+  provider: BrandEmailProvider;
+  providerSecretRef: string;
+  fromName: string;
+  fromEmail: string;
+  replyToEmail: string;
+  supportEmail: string;
+};
 
 export type EditableBrandRecord = {
   id: string;
@@ -26,6 +38,7 @@ export type EditableBrandRecord = {
   productionAdminHost: string;
   previewPublicHost: string;
   previewAdminHost: string;
+  emailConfig: EditableBrandEmailConfig;
   createdAt: string;
   updatedAt: string;
 };
@@ -33,7 +46,7 @@ export type EditableBrandRecord = {
 export type EditableBrandInput = Omit<EditableBrandRecord, "id" | "createdAt" | "updatedAt">;
 
 export type RuntimeBrandResolution = {
-  source: "database" | "env";
+  source: "database";
   brandId?: string;
   brandKey: string;
   brandName: string;
@@ -47,6 +60,8 @@ export type RuntimeBrandResolution = {
 };
 
 const BRAND_KEY_PATTERN = /^[a-z0-9-]+$/;
+const ENV_KEY_PATTERN = /^[A-Z0-9_]+$/;
+const DEFAULT_EMAIL_PROVIDER_SECRET_REF = "RESEND_API_KEY";
 
 function normalizeBrandKey(value: unknown): string {
   return String(value || "")
@@ -72,6 +87,53 @@ function ensureRequired(value: string, label: string) {
   if (!value) throw new Error(`${label} is required`);
 }
 
+function normalizeOptionalString(value: unknown): string {
+  return String(value || "").trim();
+}
+
+function normalizeEmail(value: unknown): string {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeEmailList(value: unknown): string {
+  const emails = Array.from(
+    new Set(
+      String(value || "")
+        .split(/[;,]/g)
+        .map((entry) => normalizeEmail(entry))
+        .filter((entry) => entry && isValidEmail(entry))
+    )
+  );
+
+  return emails.join(", ");
+}
+
+function validateOptionalEmail(value: unknown, label: string): string {
+  const normalized = normalizeEmail(value);
+  if (!normalized) return "";
+  if (!isValidEmail(normalized)) {
+    throw new Error(`${label} must be a valid email address`);
+  }
+  return normalized;
+}
+
+function normalizeProviderSecretRef(value: unknown): string {
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (!normalized) return DEFAULT_EMAIL_PROVIDER_SECRET_REF;
+  if (!ENV_KEY_PATTERN.test(normalized)) {
+    throw new Error("Provider secret env key must use uppercase letters, numbers, and underscores only");
+  }
+
+  return normalized;
+}
+
 function findHost(brand: Pick<Brand, "id"> & { hosts: BrandHost[] }, environment: BrandEnvironment, kind: BrandHostKind) {
   return (
     brand.hosts.find((host) => host.environment === environment && host.kind === kind && host.isCanonical) ||
@@ -91,6 +153,15 @@ function mapBrandToEditorRecord(brand: BrandWithHosts): EditableBrandRecord {
     productionAdminHost: findHost(brand, BrandEnvironment.PRODUCTION, BrandHostKind.ADMIN)?.host || "",
     previewPublicHost: findHost(brand, BrandEnvironment.PREVIEW, BrandHostKind.PUBLIC)?.host || "",
     previewAdminHost: findHost(brand, BrandEnvironment.PREVIEW, BrandHostKind.ADMIN)?.host || "",
+    emailConfig: {
+      status: brand.emailConfig?.status || BrandEmailConfigStatus.INACTIVE,
+      provider: BrandEmailProvider.RESEND,
+      providerSecretRef: brand.emailConfig?.providerSecretRef || DEFAULT_EMAIL_PROVIDER_SECRET_REF,
+      fromName: brand.emailConfig?.fromName || "",
+      fromEmail: brand.emailConfig?.fromEmail || "",
+      replyToEmail: brand.emailConfig?.replyToEmail || "",
+      supportEmail: brand.emailConfig?.supportEmail || "",
+    },
     createdAt: brand.createdAt.toISOString(),
     updatedAt: brand.updatedAt.toISOString(),
   };
@@ -155,6 +226,39 @@ function buildHostRows(input: EditableBrandInput) {
   ];
 }
 
+function buildEmailConfigInput(raw: any): EditableBrandEmailConfig {
+  const status = String(raw?.emailConfig?.status || BrandEmailConfigStatus.INACTIVE)
+    .trim()
+    .toUpperCase() as BrandEmailConfigStatus;
+
+  if (!Object.values(BrandEmailConfigStatus).includes(status)) {
+    throw new Error("Invalid brand email status");
+  }
+
+  const provider = BrandEmailProvider.RESEND;
+  const providerSecretRef = normalizeProviderSecretRef(raw?.emailConfig?.providerSecretRef);
+  const fromName = normalizeOptionalString(raw?.emailConfig?.fromName);
+  const fromEmail = validateOptionalEmail(raw?.emailConfig?.fromEmail, "Sender email");
+  const replyToEmail = validateOptionalEmail(raw?.emailConfig?.replyToEmail, "Reply-to email");
+  const supportEmail = normalizeEmailList(raw?.emailConfig?.supportEmail);
+
+  if (status === BrandEmailConfigStatus.ACTIVE) {
+    ensureRequired(fromEmail, "Sender email");
+    ensureRequired(supportEmail, "Support email");
+    ensureRequired(providerSecretRef, "Provider secret env key");
+  }
+
+  return {
+    status,
+    provider,
+    providerSecretRef,
+    fromName,
+    fromEmail,
+    replyToEmail,
+    supportEmail,
+  };
+}
+
 function validateBrandInput(raw: any): EditableBrandInput {
   const brandKey = normalizeBrandKey(raw?.brandKey);
   const name = String(raw?.name || "").trim();
@@ -179,26 +283,42 @@ function validateBrandInput(raw: any): EditableBrandInput {
     productionAdminHost: normalizeEditableHost(raw?.productionAdminHost),
     previewPublicHost: normalizeEditableHost(raw?.previewPublicHost),
     previewAdminHost: normalizeEditableHost(raw?.previewAdminHost),
+    emailConfig: buildEmailConfigInput(raw),
   };
 }
 
-function fallbackBrandInput(): EditableBrandInput {
-  const cfg = getBrandSiteConfig();
-  return {
-    brandKey: normalizeBrandKey(cfg.brandKey) || "xdragon",
-    name: String(cfg.brandName || "X Dragon").trim() || "X Dragon",
-    status: BrandStatus.ACTIVE,
-    apexHost: normalizeEditableHost(cfg.apexHost),
-    productionPublicHost: normalizeEditableHost(cfg.production.publicHost),
-    productionAdminHost: normalizeEditableHost(cfg.production.adminHost),
-    previewPublicHost: normalizeEditableHost(cfg.preview.publicHost),
-    previewAdminHost: normalizeEditableHost(cfg.preview.adminHost),
-  };
+async function ensureHostAvailability(
+  client: Pick<typeof prisma, "brandHost">,
+  hosts: ReturnType<typeof buildHostRows>,
+  exceptBrandId?: string
+) {
+  const conflicts = await client.brandHost.findMany({
+    where: {
+      host: { in: hosts.map((host) => host.host) },
+      ...(exceptBrandId ? { NOT: { brandId: exceptBrandId } } : {}),
+    },
+    include: {
+      brand: {
+        select: {
+          brandKey: true,
+        },
+      },
+    },
+  });
+
+  if (!conflicts.length) return;
+
+  const details = conflicts
+    .map((conflict) => `${conflict.host} (${conflict.brand.brandKey})`)
+    .sort((left, right) => left.localeCompare(right))
+    .join(", ");
+
+  throw new Error(`Host values must be unique across brands. Conflicts: ${details}`);
 }
 
 export async function listEditableBrands(search = ""): Promise<EditableBrandRecord[]> {
   const brands = await prisma.brand.findMany({
-    include: { hosts: true },
+    include: { hosts: true, emailConfig: true },
     orderBy: [{ createdAt: "asc" }],
   });
 
@@ -218,6 +338,12 @@ export async function listEditableBrands(search = ""): Promise<EditableBrandReco
       brand.productionAdminHost,
       brand.previewPublicHost,
       brand.previewAdminHost,
+      brand.emailConfig.status,
+      brand.emailConfig.providerSecretRef,
+      brand.emailConfig.fromName,
+      brand.emailConfig.fromEmail,
+      brand.emailConfig.replyToEmail,
+      brand.emailConfig.supportEmail,
     ]
       .join(" ")
       .toLowerCase()
@@ -228,6 +354,7 @@ export async function listEditableBrands(search = ""): Promise<EditableBrandReco
 export async function createEditableBrand(raw: any): Promise<EditableBrandRecord> {
   const input = validateBrandInput(raw);
   const hosts = buildHostRows(input);
+  await ensureHostAvailability(prisma, hosts);
 
   const brand = await prisma.brand.create({
     data: {
@@ -237,8 +364,19 @@ export async function createEditableBrand(raw: any): Promise<EditableBrandRecord
       hosts: {
         create: hosts,
       },
+      emailConfig: {
+        create: {
+          status: input.emailConfig.status,
+          provider: input.emailConfig.provider,
+          providerSecretRef: input.emailConfig.providerSecretRef,
+          fromName: input.emailConfig.fromName || null,
+          fromEmail: input.emailConfig.fromEmail || null,
+          replyToEmail: input.emailConfig.replyToEmail || null,
+          supportEmail: input.emailConfig.supportEmail || null,
+        },
+      },
     },
-    include: { hosts: true },
+    include: { hosts: true, emailConfig: true },
   });
 
   return mapBrandToEditorRecord(brand);
@@ -247,6 +385,7 @@ export async function createEditableBrand(raw: any): Promise<EditableBrandRecord
 export async function updateEditableBrand(id: string, raw: any): Promise<EditableBrandRecord> {
   const input = validateBrandInput(raw);
   const hosts = buildHostRows(input);
+  await ensureHostAvailability(prisma, hosts, id);
 
   const brand = await prisma.$transaction(async (tx) => {
     await tx.brand.findUniqueOrThrow({ where: { id } });
@@ -260,8 +399,30 @@ export async function updateEditableBrand(id: string, raw: any): Promise<Editabl
         hosts: {
           create: hosts,
         },
+        emailConfig: {
+          upsert: {
+            create: {
+              status: input.emailConfig.status,
+              provider: input.emailConfig.provider,
+              providerSecretRef: input.emailConfig.providerSecretRef,
+              fromName: input.emailConfig.fromName || null,
+              fromEmail: input.emailConfig.fromEmail || null,
+              replyToEmail: input.emailConfig.replyToEmail || null,
+              supportEmail: input.emailConfig.supportEmail || null,
+            },
+            update: {
+              status: input.emailConfig.status,
+              provider: input.emailConfig.provider,
+              providerSecretRef: input.emailConfig.providerSecretRef,
+              fromName: input.emailConfig.fromName || null,
+              fromEmail: input.emailConfig.fromEmail || null,
+              replyToEmail: input.emailConfig.replyToEmail || null,
+              supportEmail: input.emailConfig.supportEmail || null,
+            },
+          },
+        },
       },
-      include: { hosts: true },
+      include: { hosts: true, emailConfig: true },
     });
   });
 
@@ -271,7 +432,7 @@ export async function updateEditableBrand(id: string, raw: any): Promise<Editabl
 export async function deleteEditableBrand(id: string): Promise<void> {
   const count = await prisma.brand.count();
   if (count <= 1) {
-    throw new Error("Cannot delete the only brand while runtime fallback still exists");
+    throw new Error("Cannot delete the only configured brand. Runtime host resolution requires at least one brand.");
   }
   await prisma.brand.delete({ where: { id } });
 }
@@ -329,90 +490,6 @@ export async function resolveWriteBrandId(
   return brands[0].id;
 }
 
-function resolveFallbackBrandForHost(host: string): RuntimeBrandResolution | null {
-  const normalizedHost = normalizeHost(host);
-  const cfg = fallbackBrandInput();
-
-  if (!normalizedHost) return null;
-
-  if (normalizedHost === cfg.productionPublicHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.productionPublicHost,
-      canonicalAdminHost: cfg.productionAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: false,
-    };
-  }
-
-  if (normalizedHost === cfg.productionAdminHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.productionPublicHost,
-      canonicalAdminHost: cfg.productionAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: true,
-    };
-  }
-
-  if (normalizedHost === cfg.previewPublicHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "preview",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.previewPublicHost,
-      canonicalAdminHost: cfg.previewAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: false,
-    };
-  }
-
-  if (normalizedHost === cfg.previewAdminHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "preview",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.previewPublicHost,
-      canonicalAdminHost: cfg.previewAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: true,
-    };
-  }
-
-  if (normalizedHost === cfg.apexHost) {
-    return {
-      source: "env",
-      brandKey: cfg.brandKey,
-      brandName: cfg.name,
-      status: BrandStatus.ACTIVE,
-      environment: "production",
-      matchedHost: normalizedHost,
-      canonicalPublicHost: cfg.productionPublicHost,
-      canonicalAdminHost: cfg.productionAdminHost,
-      apexHost: cfg.apexHost,
-      isAdminHost: false,
-    };
-  }
-
-  return null;
-}
-
 export async function resolveRuntimeBrandForHost(host: string): Promise<RuntimeBrandResolution | null> {
   const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return null;
@@ -428,10 +505,7 @@ export async function resolveRuntimeBrandForHost(host: string): Promise<RuntimeB
     },
   });
 
-  if (!hostRecord) {
-    const hasBrands = (await prisma.brand.count()) > 0;
-    return hasBrands ? null : resolveFallbackBrandForHost(normalizedHost);
-  }
+  if (!hostRecord) return null;
 
   const brand = hostRecord.brand;
   const environment = hostRecord.environment === BrandEnvironment.PREVIEW ? "preview" : "production";
@@ -462,16 +536,9 @@ export async function getRuntimeAllowedHosts(extraHosts: string[] = []): Promise
     select: { host: true },
   });
 
-  if (dbHosts.length > 0) {
-    for (const host of dbHosts) {
-      const normalized = normalizeHost(host.host);
-      if (normalized) hosts.add(normalized);
-    }
-    return hosts;
-  }
-
-  for (const host of Array.from(getFallbackAllowedHosts())) {
-    hosts.add(normalizeHost(host));
+  for (const host of dbHosts) {
+    const normalized = normalizeHost(host.host);
+    if (normalized) hosts.add(normalized);
   }
 
   return hosts;

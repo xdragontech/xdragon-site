@@ -1,7 +1,9 @@
+import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/router";
-import { canonicalPublicHost } from "../../lib/siteConfig";
+import { getRuntimeHostConfig } from "../../lib/runtimeHostConfig";
+import { getApiRequestHost } from "../../lib/requestHost";
 
 type ProviderKey = "credentials";
 
@@ -19,7 +21,20 @@ function prettyAuthError(code?: string | string[] | null) {
   return map[c] || `Sign-in failed (${c}).`;
 }
 
-export default function SignInPage() {
+type SignInPageProps = {
+  recommendedPublicHost: string | null;
+};
+
+export const getServerSideProps: GetServerSideProps<SignInPageProps> = async (ctx) => {
+  const runtimeHost = await getRuntimeHostConfig(getApiRequestHost(ctx.req));
+  return {
+    props: {
+      recommendedPublicHost: runtimeHost.canonicalPublicHost,
+    },
+  };
+};
+
+export default function SignInPage({ recommendedPublicHost }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
   const debug = router.query.debug === "1";
 
@@ -84,7 +99,7 @@ export default function SignInPage() {
       // or NEXTAUTH_URL is not set correctly.
       const sess = await getSession();
       if (!sess?.user?.email) {
-        const recommendedHost = canonicalPublicHost(window.location.hostname);
+        const recommendedHost = recommendedPublicHost || window.location.hostname.toLowerCase();
         setError(
           "Signed in, but your session was not established. This is usually a domain/cookie mismatch. " +
             `Make sure you always use ONE domain (recommend: https://${recommendedHost}) and set NEXTAUTH_URL to it in Vercel.`

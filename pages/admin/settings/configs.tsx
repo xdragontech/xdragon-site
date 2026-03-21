@@ -95,7 +95,7 @@ export const getServerSideProps: GetServerSideProps<ConfigsPageProps> = async (c
     props: {
       loggedInAs: auth.loggedInAs,
       envGroups: collectSystemEnvGroups().filter((group) => group.key !== "brand"),
-      runtimeStatus: collectRuntimeStatus(requestHost),
+      runtimeStatus: await collectRuntimeStatus(requestHost),
       databaseStatus: await loadDatabaseStatus(),
     },
   };
