@@ -9,6 +9,8 @@ import {
 import { clearCommandBffSessionCookie, getCommandBffSessionToken } from "../../../../lib/commandBffSession";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
