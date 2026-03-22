@@ -7,15 +7,23 @@ type ResourcesLayoutProps = {
   title: string;
   sectionLabel: string;
   loggedInAs: string | null;
+  sessionMode?: "legacy" | "command";
   active?: "resources" | "prompts" | "guides";
   children: ReactNode;
 };
 
-export default function ResourcesLayout({ title, sectionLabel, loggedInAs, active, children }: ResourcesLayoutProps) {
+export default function ResourcesLayout({
+  title,
+  sectionLabel,
+  loggedInAs,
+  sessionMode = "legacy",
+  active,
+  children,
+}: ResourcesLayoutProps) {
   return (
     <WorkspaceLayout
       title={title}
-      header={<ResourcesHeader sectionLabel={sectionLabel} loggedInAs={loggedInAs} />}
+      header={<ResourcesHeader sectionLabel={sectionLabel} loggedInAs={loggedInAs} sessionMode={sessionMode} />}
       sidebar={<ResourcesSidebar active={active} />}
     >
       {children}

@@ -1,13 +1,41 @@
 import Head from "next/head";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { useState } from "react";
 
 type ResourcesHeaderProps = {
   sectionLabel: string;
   loggedInAs?: string | null;
+  sessionMode?: "legacy" | "command";
 };
 
-export default function ResourcesHeader({ sectionLabel, loggedInAs }: ResourcesHeaderProps) {
+export default function ResourcesHeader({
+  sectionLabel,
+  loggedInAs,
+  sessionMode = "legacy",
+}: ResourcesHeaderProps) {
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+
+    try {
+      if (sessionMode === "command") {
+        await fetch("/api/bff/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        window.location.assign("/auth/signin");
+        return;
+      }
+
+      await signOut({ callbackUrl: "/auth/signin" });
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
     <>
       <Head>
@@ -43,10 +71,12 @@ export default function ResourcesHeader({ sectionLabel, loggedInAs }: ResourcesH
                 </Link>
 
                 <button
-                  onClick={() => void signOut({ callbackUrl: "/auth/signin" })}
+                  type="button"
+                  onClick={() => void handleSignOut()}
                   className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800"
+                  disabled={signingOut}
                 >
-                  Sign out
+                  {signingOut ? "Signing out…" : "Sign out"}
                 </button>
               </div>
 

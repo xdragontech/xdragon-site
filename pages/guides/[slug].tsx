@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { requireUser } from "../../lib/requireUser";
+import { commandPublicGetGuideBySlug } from "../../lib/commandPublicApi";
 
 // Prisma singleton (prevents hot-reload connection storms in dev)
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
@@ -25,17 +26,48 @@ type GuideItem = {
 type Props = {
   email: string;
   guide: GuideItem;
+  sessionMode: "legacy" | "command";
 };
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const slug = String(ctx.params?.slug ?? "");
-  const { session, user, redirectTo } = await requireUser(ctx);
+  const { session, user, redirectTo, mode, sessionToken } = await requireUser(ctx);
 
   if (redirectTo || !session?.user || !user || user.status === "BLOCKED") {
     const callbackUrl = encodeURIComponent(`/guides/${slug}`);
     return {
-      redirect: { destination: `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
+      redirect: { destination: redirectTo || `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
     };
+  }
+
+  if (mode === "command" && sessionToken) {
+    try {
+      const response = await commandPublicGetGuideBySlug(sessionToken, slug);
+      return {
+        props: {
+          email: session.user.email ?? "",
+          sessionMode: mode,
+          guide: {
+            id: response.item.id,
+            title: response.item.title,
+            slug: response.item.slug,
+            summary: response.item.summary ?? "",
+            content: response.item.body ?? "",
+            updatedAt: response.item.updatedAt || null,
+            category: response.item.category
+              ? {
+                  id: response.item.category.id,
+                  name: response.item.category.name,
+                  slug: response.item.category.slug,
+                }
+              : null,
+            tags: response.item.tags ?? null,
+          },
+        },
+      };
+    } catch {
+      return { notFound: true };
+    }
   }
 
   try {
@@ -62,17 +94,23 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
       tags: row.tags ?? null,
     };
 
-    return { props: { email: session.user.email ?? "", guide } };
+    return { props: { email: session.user.email ?? "", guide, sessionMode: mode } };
   } catch {
     return { notFound: true };
   }
 };
 
 export default function GuidePage(props: InferGetServerSidePropsType<typeof getServerSideProps>) {
-  const { guide, email } = props as any as Props;
+  const { guide, email, sessionMode } = props as any as Props;
 
   return (
-    <ResourcesLayout title={`${guide.title} — X Dragon`} sectionLabel="Tools & guides" loggedInAs={email} active="guides">
+    <ResourcesLayout
+      title={`${guide.title} — X Dragon`}
+      sectionLabel="Tools & guides"
+      loggedInAs={email}
+      sessionMode={sessionMode}
+      active="guides"
+    >
       <main className="mx-auto max-w-3xl px-4 py-6">
         <div className="mb-4">
           <Link href="/guides" className="text-sm font-semibold text-neutral-700 hover:text-neutral-900">
