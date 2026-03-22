@@ -47,6 +47,43 @@ export type CommandPublicGuideDetail = CommandPublicGuideListItem & {
   body: string;
 };
 
+export type CommandPublicContactResult =
+  | { ok: true; id?: string; notification?: "sent" | "deferred" }
+  | { ok: false; error: string; details?: unknown };
+
+export type CommandPublicChatRole = "user" | "assistant";
+
+export type CommandPublicChatMessage = {
+  role: CommandPublicChatRole;
+  content: string;
+};
+
+export type CommandPublicChatLead = {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  website?: string | null;
+  preferred_contact?: "email" | "phone" | "text" | null;
+};
+
+export type CommandPublicChatResult =
+  | {
+      ok: true;
+      reply: string;
+      lead: {
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+        company: string | null;
+        website: string | null;
+        preferred_contact: "email" | "phone" | "text" | null;
+      };
+      returnId?: string;
+      emailed: boolean;
+    }
+  | { ok: false; error: string };
+
 export class CommandPublicApiError extends Error {
   readonly status: number;
   readonly context?: {
@@ -314,6 +351,40 @@ export async function commandPublicListGuides(sessionToken: string, params?: { q
       q: params?.q,
       category: params?.category,
       limit: params?.limit,
+    },
+  });
+}
+
+export async function commandPublicContact(params: {
+  name: string;
+  email: string;
+  phone?: string | null;
+  message: string;
+}) {
+  return requestCommandPublicApi<CommandPublicContactResult>("/api/v1/contact", {
+    method: "POST",
+    body: {
+      name: params.name,
+      email: params.email,
+      phone: params.phone,
+      message: params.message,
+    },
+  });
+}
+
+export async function commandPublicChat(params: {
+  conversationId?: string;
+  messages: CommandPublicChatMessage[];
+  lead?: CommandPublicChatLead | null;
+  emailed?: boolean;
+}) {
+  return requestCommandPublicApi<CommandPublicChatResult>("/api/v1/chat", {
+    method: "POST",
+    body: {
+      conversationId: params.conversationId,
+      messages: params.messages,
+      lead: params.lead || {},
+      emailed: params.emailed,
     },
   });
 }
