@@ -53,6 +53,8 @@ function buildSignInRedirect(ctx: GetServerSidePropsContext, errorCode?: string)
 }
 
 export async function requireUser(ctx: GetServerSidePropsContext): Promise<RequireUserResult> {
+  ctx.res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+
   if (isCommandPublicApiEnabled()) {
     const sessionToken = getCommandBffSessionToken(ctx.req);
     if (!sessionToken) {
