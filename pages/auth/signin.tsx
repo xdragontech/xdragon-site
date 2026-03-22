@@ -30,6 +30,7 @@ type SignInPageProps = {
 };
 
 export const getServerSideProps: GetServerSideProps<SignInPageProps> = async (ctx) => {
+  ctx.res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
   const runtimeHost = await getRuntimeHostConfig(getApiRequestHost(ctx.req));
   return {
     props: {
