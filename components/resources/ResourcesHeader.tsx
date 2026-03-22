@@ -1,18 +1,17 @@
 import Head from "next/head";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
 import { useState } from "react";
 
 type ResourcesHeaderProps = {
   sectionLabel: string;
   loggedInAs?: string | null;
-  sessionMode?: "legacy" | "command";
+  sessionMode?: "command";
 };
 
 export default function ResourcesHeader({
   sectionLabel,
   loggedInAs,
-  sessionMode = "legacy",
+  sessionMode = "command",
 }: ResourcesHeaderProps) {
   const [signingOut, setSigningOut] = useState(false);
 
@@ -21,16 +20,11 @@ export default function ResourcesHeader({
     setSigningOut(true);
 
     try {
-      if (sessionMode === "command") {
-        await fetch("/api/bff/auth/logout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        window.location.assign("/auth/signin");
-        return;
-      }
-
-      await signOut({ callbackUrl: "/auth/signin" });
+      await fetch("/api/bff/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      window.location.assign("/auth/signin");
     } finally {
       setSigningOut(false);
     }
