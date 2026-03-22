@@ -110,21 +110,9 @@ export default function SignInPage({
           return;
         }
 
-        const sessionResponse = await fetch("/api/bff/auth/session", {
-          method: "GET",
-          cache: "no-store",
-        });
-        const sessionBody = await sessionResponse.json().catch(() => ({}));
-
-        if (!sessionResponse.ok || !sessionBody?.account?.email) {
-          const recommendedHost = recommendedPublicHost || window.location.hostname.toLowerCase();
-          setError(
-            "Signed in, but your site session was not established. This is usually a cookie or host mismatch. " +
-              `Make sure you always use one public host (recommend: https://${recommendedHost}).`
-          );
-          return;
-        }
-
+        // After a successful login response, the authoritative next check is the protected SSR page.
+        // Avoid a same-tick follow-up session fetch here because some browsers can be late to surface
+        // the freshly-set cookie to the very next request.
         window.location.assign(callbackUrl);
         return;
       }
