@@ -1,6 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { ensurePublicBrandRequest } from "../../lib/brandContext";
 import { resolveBrandEmailConfig, sendBrandEmail, type BrandEmailRuntimeConfig } from "../../lib/brandEmail";
+import {
+  commandPublicContact,
+  isCommandPublicApiEnabled,
+  CommandPublicApiError,
+} from "../../lib/commandPublicApi";
 
 type PrismaMod = { prisma?: any; default?: any };
 
@@ -219,6 +224,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
+  if (isCommandPublicApiEnabled()) {
+    try {
+      const result = await commandPublicContact({
+        name: cleanStr(req.body?.name, 200),
+        email: cleanStr(req.body?.email, 320),
+        phone: cleanStr(req.body?.phone, 80) || null,
+        message: cleanStr(req.body?.message, 4000),
+      });
+
+      const status = result.ok && result.notification === "deferred" ? 202 : 200;
+      return res.status(status).json(result);
+    } catch (error) {
+      if (error instanceof CommandPublicApiError) {
+        return res.status(error.status).json({ ok: false, error: error.message });
+      }
+      return res.status(500).json({ ok: false, error: "Server error" });
+    }
   }
 
   const brandRequest = await ensurePublicBrandRequest(req, res);
