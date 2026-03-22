@@ -1,16 +1,9 @@
 // pages/guides/[slug].tsx
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import Link from "next/link";
-import { PrismaClient } from "@prisma/client";
-
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { requireUser } from "../../lib/requireUser";
 import { commandPublicGetGuideBySlug } from "../../lib/commandPublicApi";
-
-// Prisma singleton (prevents hot-reload connection storms in dev)
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 type GuideItem = {
   id: string;
@@ -26,75 +19,44 @@ type GuideItem = {
 type Props = {
   email: string;
   guide: GuideItem;
-  sessionMode: "legacy" | "command";
+  sessionMode: "command";
 };
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const slug = String(ctx.params?.slug ?? "");
-  const { session, user, redirectTo, mode, sessionToken } = await requireUser(ctx);
+  const { session, user, redirectTo, sessionToken } = await requireUser(ctx);
 
-  if (redirectTo || !session?.user || !user || user.status === "BLOCKED") {
+  if (redirectTo || !session?.user || !user || !sessionToken || user.status === "BLOCKED") {
     const callbackUrl = encodeURIComponent(`/guides/${slug}`);
     return {
       redirect: { destination: redirectTo || `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
     };
   }
 
-  if (mode === "command" && sessionToken) {
-    try {
-      const response = await commandPublicGetGuideBySlug(sessionToken, slug);
-      return {
-        props: {
-          email: session.user.email ?? "",
-          sessionMode: mode,
-          guide: {
-            id: response.item.id,
-            title: response.item.title,
-            slug: response.item.slug,
-            summary: response.item.summary ?? "",
-            content: response.item.body ?? "",
-            updatedAt: response.item.updatedAt || null,
-            category: response.item.category
-              ? {
-                  id: response.item.category.id,
-                  name: response.item.category.name,
-                  slug: response.item.category.slug,
-                }
-              : null,
-            tags: response.item.tags ?? null,
-          },
-        },
-      };
-    } catch {
-      return { notFound: true };
-    }
-  }
-
   try {
-    const model: any = (prisma as any).article ?? (prisma as any).guide;
-    if (!model?.findUnique) return { notFound: true };
-
-    let row: any = null;
-    try {
-      row = await model.findUnique({ where: { slug }, include: { category: true } });
-    } catch {
-      row = await model.findUnique({ where: { slug } });
-    }
-
-    if (!row || row.status !== "PUBLISHED") return { notFound: true };
-
-    const guide: GuideItem = {
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      summary: row.summary ?? "",
-      content: row.content ?? "",
-      updatedAt: row.updatedAt ? String(row.updatedAt) : null,
-      category: row.category ? { id: row.category.id, name: row.category.name, slug: row.category.slug } : null,
-      tags: row.tags ?? null,
+    const response = await commandPublicGetGuideBySlug(sessionToken, slug);
+    return {
+      props: {
+        email: session.user.email ?? "",
+        sessionMode: "command",
+        guide: {
+          id: response.item.id,
+          title: response.item.title,
+          slug: response.item.slug,
+          summary: response.item.summary ?? "",
+          content: response.item.body ?? "",
+          updatedAt: response.item.updatedAt || null,
+          category: response.item.category
+            ? {
+                id: response.item.category.id,
+                name: response.item.category.name,
+                slug: response.item.category.slug,
+              }
+            : null,
+          tags: response.item.tags ?? null,
+        },
+      },
     };
-
-    return { props: { email: session.user.email ?? "", guide, sessionMode: mode } };
   } catch {
     return { notFound: true };
   }

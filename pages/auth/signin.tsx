@@ -1,32 +1,23 @@
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useMemo, useState } from "react";
-import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { getRuntimeHostConfig } from "../../lib/runtimeHostConfig";
 import { getApiRequestHost } from "../../lib/requestHost";
-import { isCommandPublicApiEnabled } from "../../lib/commandPublicApi";
-
-type ProviderKey = "credentials";
 
 function prettyAuthError(code?: string | string[] | null) {
   const c = Array.isArray(code) ? code[0] : code;
   if (!c) return null;
   const map: Record<string, string> = {
-    CredentialsSignin: "Incorrect email or password.",
-    AccessDenied: "Access denied. Your account may be blocked or not verified yet.",
-    Configuration: "Auth is misconfigured. Please contact support.",
     Verification: "Your verification link is invalid or expired.",
-    OAuthSignin: "OAuth sign-in failed. Please try again.",
-    OAuthCallback: "OAuth callback failed. Please try again.",
     CommandSession: "Your account signed in, but the site could not verify the Command session. Please try again. If this repeats, support needs the public-site server log for the failed session check.",
     CommandSessionExpired: "Your session expired or could not be verified. Please sign in again.",
+    CommandConfiguration: "The public account service is not configured correctly. Please contact support.",
   };
   return map[c] || `Sign-in failed (${c}).`;
 }
 
 type SignInPageProps = {
   recommendedPublicHost: string | null;
-  useCommandBff: boolean;
 };
 
 export const getServerSideProps: GetServerSideProps<SignInPageProps> = async (ctx) => {
@@ -36,14 +27,12 @@ export const getServerSideProps: GetServerSideProps<SignInPageProps> = async (ct
   return {
     props: {
       recommendedPublicHost: runtimeHost.canonicalPublicHost,
-      useCommandBff: isCommandPublicApiEnabled(),
     },
   };
 };
 
 export default function SignInPage({
   recommendedPublicHost,
-  useCommandBff,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
   const debug = router.query.debug === "1";
@@ -81,81 +70,42 @@ export default function SignInPage({
 
     setBusy(true);
     try {
-      if (useCommandBff) {
-        const response = await fetch("/api/bff/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: em,
-            password: pw,
-          }),
-        });
-
-        const body = await response.json().catch(() => ({}));
-
-        if (debug) {
-          setDebugInfo({
-            when: new Date().toISOString(),
-            mode: "command",
-            inputEmail: em,
-            callbackUrl,
-            result: body,
-            location: window.location.href,
-            cookiesHint: "You are on the public host.",
-          });
-        }
-
-        if (!response.ok || !body?.ok) {
-          setError(body?.error || "Sign-in failed. Please try again.");
-          return;
-        }
-
-        // After a successful login response, the authoritative next check is the protected SSR page.
-        // Avoid a same-tick follow-up session fetch here because some browsers can be late to surface
-        // the freshly-set cookie to the very next request.
-        window.location.assign(callbackUrl);
-        return;
-      }
-
-      const res = await signIn("credentials" as ProviderKey, {
-        redirect: false,
-        email: em,
-        password: pw,
-        callbackUrl,
+      const response = await fetch("/api/bff/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: em,
+          password: pw,
+        }),
       });
+
+      const body = await response.json().catch(() => ({}));
 
       if (debug) {
         setDebugInfo({
           when: new Date().toISOString(),
-          mode: "legacy",
+          mode: "command",
           inputEmail: em,
           callbackUrl,
-          result: res,
+          result: body,
           location: window.location.href,
-          cookiesHint: "You are on www.* domain.",
+          cookiesHint: "You are on the public host.",
         });
       }
 
-      if (!res?.ok) {
-        setError(prettyAuthError(res?.error) || "Sign-in failed. Please try again.");
+      if (!response.ok || !body?.ok) {
+        setError(body?.error || "Sign-in failed. Please try again.");
         return;
       }
 
-      // IMPORTANT: If signIn() says OK but your app immediately redirects back to /auth/signin,
-      // it usually means the session cookie did not persist (domain mismatch: xdragon.tech vs www.xdragon.tech)
-      // or NEXTAUTH_URL is not set correctly.
-      const sess = await getSession();
-      if (!sess?.user?.email) {
-        const recommendedHost = recommendedPublicHost || window.location.hostname.toLowerCase();
-        setError(
-          "Signed in, but your session was not established. This is usually a domain/cookie mismatch. " +
-            `Make sure you always use ONE domain (recommend: https://${recommendedHost}) and set NEXTAUTH_URL to it in Vercel.`
-        );
+      const target = callbackUrl || "/tools";
+      if (recommendedPublicHost && window.location.hostname !== recommendedPublicHost) {
+        const targetUrl = new URL(target, window.location.origin);
+        targetUrl.hostname = recommendedPublicHost;
+        window.location.assign(targetUrl.toString());
         return;
       }
 
-      // Force a full navigation (safer than router.push for cookie propagation in edge cases)
-      const target = res.url || callbackUrl;
       window.location.assign(target);
     } catch (err: any) {
       setError(err?.message || "Unexpected error. Please try again.");
@@ -243,9 +193,6 @@ export default function SignInPage({
           <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-4 text-xs overflow-auto">
             <div className="font-semibold mb-2">Debug</div>
             <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-            <div className="mt-3 text-neutral-600">
-              If this says ok=true but you still get bounced back to /auth/signin, fix canonical domain + NEXTAUTH_URL.
-            </div>
           </div>
         )}
       </div>
