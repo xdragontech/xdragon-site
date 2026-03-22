@@ -1,10 +1,10 @@
 // pages/prompts/index.tsx
 import type { GetServerSideProps } from "next";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PrismaClient } from "@prisma/client";
 import { requireUser } from "../../lib/requireUser";
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
+import { commandPublicListPrompts } from "../../lib/commandPublicApi";
 
 type PromptItem = {
   id: string;
@@ -17,6 +17,7 @@ type PromptItem = {
 type Props = {
   email: string;
   prompts: PromptItem[];
+  sessionMode: "legacy" | "command";
 };
 
 // Prisma singleton (prevents hot-reload connection storms in dev)
@@ -24,7 +25,7 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-export default function PromptsIndexPage({ email, prompts }: Props) {
+export default function PromptsIndexPage({ email, prompts, sessionMode }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("All");
   // Collapsed by default: IDs present in this set are expanded.
@@ -59,7 +60,13 @@ export default function PromptsIndexPage({ email, prompts }: Props) {
   }, [prompts, query, category]);
 
   return (
-    <ResourcesLayout title="Prompts — X Dragon" sectionLabel="Tools & guides" loggedInAs={email} active="prompts">
+    <ResourcesLayout
+      title="Prompts — X Dragon"
+      sectionLabel="Tools & guides"
+      loggedInAs={email}
+      sessionMode={sessionMode}
+      active="prompts"
+    >
       <main className="mx-auto max-w-6xl px-4 py-6">
 <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
           {/* Category buttons */}
@@ -158,12 +165,31 @@ export default function PromptsIndexPage({ email, prompts }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   // Keep login gating exactly as-is
-  const { session, user } = await requireUser(ctx);
+  const { session, user, mode, sessionToken } = await requireUser(ctx);
   if (!session?.user?.email || !user) {
     return { redirect: { destination: "/auth/signin", permanent: false } };
   }
   if (user.status === "BLOCKED") {
     return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };
+  }
+
+  if (mode === "command" && sessionToken) {
+    const response = await commandPublicListPrompts(sessionToken, { limit: 250 });
+    const prompts: PromptItem[] = response.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description ?? null,
+      category: item.category || "Uncategorized",
+      prompt: item.content,
+    }));
+
+    return {
+      props: {
+        email: session.user.email || "",
+        prompts,
+        sessionMode: mode,
+      },
+    };
   }
 
   // Source of truth: DB (published prompts only)
@@ -185,6 +211,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     props: {
       email: session.user.email,
       prompts,
+      sessionMode: mode,
     },
   };
 };

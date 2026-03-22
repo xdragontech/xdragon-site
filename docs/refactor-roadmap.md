@@ -12,6 +12,9 @@ This roadmap is intentionally incremental. We do not change layout/design unless
 ## Companion docs
 - [`docs/engineering-standard.md`](./engineering-standard.md)
 - [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
+- [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+- [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
+- [`docs/command-repo-skeleton-and-bff-extraction-plan.md`](./command-repo-skeleton-and-bff-extraction-plan.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/brand-email-bootstrap-workflow.md`](./brand-email-bootstrap-workflow.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
@@ -97,6 +100,7 @@ Exit criteria:
 
 Tasks:
 - define the initial service contract before moving repos
+- define the initial `command` repo skeleton and `xdragon-site` BFF extraction waves before moving runtime
 - extract `command` first because the admin/API ownership boundary is the cleanest reusable seam
 - keep `/auth`, `/tools`, `/prompts`, and `/guides` with the public website; they are brand-user surfaces, not reusable backoffice surfaces
 - preserve the current Git/Vercel workflow while the X Dragon install is being separated
@@ -118,6 +122,7 @@ Tasks:
 2. Freeze the initial `command` API surface before moving runtime into a new repo.
 3. Keep `/auth`, `/tools`, `/prompts`, and `/guides` with the public website. They are external-user surfaces, not reusable backoffice surfaces.
 4. Separate public and backoffice auth route/config ownership before repo extraction. Reusing the current combined auth route would preserve the wrong coupling.
+5. Keep the v1 public API narrow: auth, account, and resources first. Do not freeze admin or speculative service surfaces into the first contract.
 
 ## Definition of done for every refactor ticket
 - no layout/design drift

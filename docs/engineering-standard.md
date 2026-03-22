@@ -50,6 +50,10 @@ This is the working standard for every X Dragon change until the public site and
 9. Protected bootstrap superadmin provisioning must be explicit, env-driven, and idempotent; deploy startup must not silently rotate protected-account credentials.
 10. Public websites must integrate with the reusable backoffice through a BFF/proxy layer; direct browser-to-backoffice trust is not the default model.
 11. Integration credentials and forwarded user sessions are separate trust layers and must remain separate in code and docs.
+12. Public integration changes must update the OpenAPI contract first or in the same ticket; route behavior is not the source of truth by itself.
+13. Raw reusable-backoffice session tokens should not be exposed to the browser when a BFF/session-forwarding model is in use.
+14. Repo-split work must assign each moved surface an explicit destination app or package; “move it later” is not an acceptable boundary plan.
+15. The reusable public API should not be trapped inside the admin web app if later server separation is an expected path.
 
 ## Deployment rules
 1. `feature/*` -> PR -> `staging` -> QA -> PR -> `main`
@@ -82,6 +86,9 @@ Stop and clarify before merging if a change:
 ## Reference docs
 - [`docs/refactor-roadmap.md`](./refactor-roadmap.md)
 - [`docs/repo-split-and-service-contract.md`](./repo-split-and-service-contract.md)
+- [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+- [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
+- [`docs/command-repo-skeleton-and-bff-extraction-plan.md`](./command-repo-skeleton-and-bff-extraction-plan.md)
 - [`docs/brand-context-and-identity-contract.md`](./brand-context-and-identity-contract.md)
 - [`docs/bootstrap-superadmin-provisioning.md`](./bootstrap-superadmin-provisioning.md)
 - [`docs/schema-split-and-migration-plan.md`](./schema-split-and-migration-plan.md)

@@ -52,6 +52,11 @@ These are separate trust layers and must stay separate in the contract.
 - OpenAPI is the source of truth for the integration contract
 - human-readable documentation layers on top of OpenAPI
 - future public-site builders should be able to integrate against the contract without reading X Dragon app code
+- initial public-site contract docs live in:
+  - [`openapi/command-public-api.v1.yaml`](../openapi/command-public-api.v1.yaml)
+  - [`docs/command-public-api-contract.md`](./command-public-api-contract.md)
+  - [`docs/command-bff-session-forwarding-contract.md`](./command-bff-session-forwarding-contract.md)
+  - [`docs/command-repo-skeleton-and-bff-extraction-plan.md`](./command-repo-skeleton-and-bff-extraction-plan.md)
 
 **Repo Responsibilities**
 **`xdragon-site`**

@@ -4,6 +4,7 @@ import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { getRuntimeHostConfig } from "../../lib/runtimeHostConfig";
 import { getApiRequestHost } from "../../lib/requestHost";
+import { isCommandPublicApiEnabled } from "../../lib/commandPublicApi";
 
 type ProviderKey = "credentials";
 
@@ -23,6 +24,7 @@ function prettyAuthError(code?: string | string[] | null) {
 
 type SignInPageProps = {
   recommendedPublicHost: string | null;
+  useCommandBff: boolean;
 };
 
 export const getServerSideProps: GetServerSideProps<SignInPageProps> = async (ctx) => {
@@ -30,11 +32,15 @@ export const getServerSideProps: GetServerSideProps<SignInPageProps> = async (ct
   return {
     props: {
       recommendedPublicHost: runtimeHost.canonicalPublicHost,
+      useCommandBff: isCommandPublicApiEnabled(),
     },
   };
 };
 
-export default function SignInPage({ recommendedPublicHost }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function SignInPage({
+  recommendedPublicHost,
+  useCommandBff,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
   const debug = router.query.debug === "1";
 
@@ -71,6 +77,54 @@ export default function SignInPage({ recommendedPublicHost }: InferGetServerSide
 
     setBusy(true);
     try {
+      if (useCommandBff) {
+        const response = await fetch("/api/bff/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: em,
+            password: pw,
+          }),
+        });
+
+        const body = await response.json().catch(() => ({}));
+
+        if (debug) {
+          setDebugInfo({
+            when: new Date().toISOString(),
+            mode: "command",
+            inputEmail: em,
+            callbackUrl,
+            result: body,
+            location: window.location.href,
+            cookiesHint: "You are on the public host.",
+          });
+        }
+
+        if (!response.ok || !body?.ok) {
+          setError(body?.error || "Sign-in failed. Please try again.");
+          return;
+        }
+
+        const sessionResponse = await fetch("/api/bff/auth/session", {
+          method: "GET",
+          cache: "no-store",
+        });
+        const sessionBody = await sessionResponse.json().catch(() => ({}));
+
+        if (!sessionResponse.ok || !sessionBody?.account?.email) {
+          const recommendedHost = recommendedPublicHost || window.location.hostname.toLowerCase();
+          setError(
+            "Signed in, but your site session was not established. This is usually a cookie or host mismatch. " +
+              `Make sure you always use one public host (recommend: https://${recommendedHost}).`
+          );
+          return;
+        }
+
+        window.location.assign(callbackUrl);
+        return;
+      }
+
       const res = await signIn("credentials" as ProviderKey, {
         redirect: false,
         email: em,
@@ -81,6 +135,7 @@ export default function SignInPage({ recommendedPublicHost }: InferGetServerSide
       if (debug) {
         setDebugInfo({
           when: new Date().toISOString(),
+          mode: "legacy",
           inputEmail: em,
           callbackUrl,
           result: res,
