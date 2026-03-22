@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { PrismaClient } from "@prisma/client";
 import { requireUser } from "../../lib/requireUser";
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
+import { commandPublicListGuides } from "../../lib/commandPublicApi";
 
 type GuideItem = {
   id: string;
@@ -19,6 +20,7 @@ type GuideItem = {
 type Props = {
   email: string;
   guides: GuideItem[];
+  sessionMode: "legacy" | "command";
 };
 
 // Prisma singleton (prevents hot-reload connection storms in dev)
@@ -33,7 +35,7 @@ function fmtDate(iso?: string | null) {
   return d.toLocaleDateString();
 }
 
-export default function GuidesIndexPage({ email, guides }: Props) {
+export default function GuidesIndexPage({ email, guides, sessionMode }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("All");
 
@@ -62,7 +64,13 @@ export default function GuidesIndexPage({ email, guides }: Props) {
   }, [guides, query, category]);
 
   return (
-    <ResourcesLayout title="Guides — X Dragon" sectionLabel="Tools & guides" loggedInAs={email} active="guides">
+    <ResourcesLayout
+      title="Guides — X Dragon"
+      sectionLabel="Tools & guides"
+      loggedInAs={email}
+      sessionMode={sessionMode}
+      active="guides"
+    >
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap gap-2">
@@ -153,12 +161,39 @@ export default function GuidesIndexPage({ email, guides }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const { session, user } = await requireUser(ctx);
+  const { session, user, mode, sessionToken } = await requireUser(ctx);
   if (!session?.user?.email || !user) {
     return { redirect: { destination: "/auth/signin", permanent: false } };
   }
   if (user.status === "BLOCKED") {
     return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };
+  }
+
+  if (mode === "command" && sessionToken) {
+    const response = await commandPublicListGuides(sessionToken, { limit: 200 });
+    const guides: GuideItem[] = response.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      slug: item.slug,
+      summary: item.summary ?? "",
+      updatedAt: item.updatedAt || null,
+      category: item.category
+        ? {
+            id: item.category.id,
+            name: item.category.name,
+            slug: item.category.slug,
+          }
+        : null,
+      tags: item.tags ?? null,
+    }));
+
+    return {
+      props: {
+        email: session.user.email || "",
+        guides,
+        sessionMode: mode,
+      },
+    };
   }
 
   // IMPORTANT: Your Prisma schema currently uses Article/ArticleCategory as the backing models for Guides.
@@ -184,5 +219,5 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     tags: r.tags ?? null,
   }));
 
-  return { props: { email: session.user.email, guides } };
+  return { props: { email: session.user.email, guides, sessionMode: mode } };
 };

@@ -1,7 +1,21 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import type { GetServerSideProps } from "next";
+import { isCommandPublicApiEnabled } from "../../lib/commandPublicApi";
 
-export default function ResetPasswordPage() {
+type ResetPasswordPageProps = {
+  useCommandBff: boolean;
+};
+
+export const getServerSideProps: GetServerSideProps<ResetPasswordPageProps> = async () => {
+  return {
+    props: {
+      useCommandBff: isCommandPublicApiEnabled(),
+    },
+  };
+};
+
+export default function ResetPasswordPage({ useCommandBff }: ResetPasswordPageProps) {
   const router = useRouter();
   const email = useMemo(() => (router.query.email ? String(router.query.email) : ""), [router.query.email]);
   const token = useMemo(() => (router.query.token ? String(router.query.token) : ""), [router.query.token]);
@@ -11,7 +25,7 @@ export default function ResetPasswordPage() {
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [error, setError] = useState<string>("");
 
-  const canSubmit = email && token && password.length >= 8 && password === confirm && status !== "saving";
+  const canSubmit = token && password.length >= 8 && password === confirm && status !== "saving";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +77,7 @@ export default function ResetPasswordPage() {
             </div>
           ) : (
             <form className="mt-6 space-y-4" onSubmit={submit}>
-              {!email || !token ? (
+              {!token || (!email && !useCommandBff) ? (
                 <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
                   This reset link is missing required information. Please request a new reset email.
                   <div className="mt-2">
