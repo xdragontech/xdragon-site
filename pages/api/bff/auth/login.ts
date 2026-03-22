@@ -3,6 +3,7 @@ import {
   commandPublicLogin,
   isCommandPublicApiEnabled,
   CommandPublicApiError,
+  logCommandPublicApiError,
 } from "../../../../lib/commandPublicApi";
 import { setCommandBffSessionCookie } from "../../../../lib/commandBffSession";
 
@@ -17,8 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
     const result = await commandPublicLogin({
-      email: String(req.body?.email || ""),
+      email,
       password: String(req.body?.password || ""),
     });
 
@@ -30,9 +32,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error) {
     if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError("bff-auth-login", error, {
+        requestHost: req.headers.host || null,
+        emailDomain: String(req.body?.email || "").includes("@")
+          ? String(req.body?.email || "").trim().toLowerCase().split("@")[1] || null
+          : null,
+      });
       return res.status(error.status).json({ ok: false, error: error.message });
     }
 
+    console.error("[bff-auth-login] unexpected error", error);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 }

@@ -49,11 +49,29 @@ export type CommandPublicGuideDetail = CommandPublicGuideListItem & {
 
 export class CommandPublicApiError extends Error {
   readonly status: number;
+  readonly context?: {
+    method: string;
+    url: string;
+    contentType: string | null;
+    bodySnippet: string | null;
+    upstreamError: string | null;
+  };
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    context?: {
+      method: string;
+      url: string;
+      contentType: string | null;
+      bodySnippet: string | null;
+      upstreamError: string | null;
+    }
+  ) {
     super(message);
     this.name = "CommandPublicApiError";
     this.status = status;
+    this.context = context;
   }
 }
 
@@ -88,15 +106,50 @@ export function getCommandPublicOriginFromRequest(
   return buildOrigin(getApiRequestProtocol(req), getApiRequestHost(req));
 }
 
-async function parseJsonSafe(response: Response) {
+async function readResponseBodySafe(response: Response) {
   const text = await response.text();
-  if (!text) return null;
+  if (!text) {
+    return {
+      text: null,
+      payload: null,
+    };
+  }
 
   try {
-    return JSON.parse(text);
+    return {
+      text,
+      payload: JSON.parse(text),
+    };
   } catch {
-    return null;
+    return {
+      text,
+      payload: null,
+    };
   }
+}
+
+function buildBodySnippet(value: string | null) {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.slice(0, 240);
+}
+
+export function logCommandPublicApiError(
+  scope: string,
+  error: CommandPublicApiError,
+  extra?: Record<string, unknown>
+) {
+  console.error(
+    JSON.stringify({
+      scope,
+      type: error.name,
+      status: error.status,
+      message: error.message,
+      context: error.context || null,
+      extra: extra || null,
+    })
+  );
 }
 
 async function requestCommandPublicApi<T>(
@@ -131,24 +184,44 @@ async function requestCommandPublicApi<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(url.toString(), {
-    method: options?.method || "GET",
-    headers,
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-    cache: "no-store",
-  });
+  const method = options?.method || "GET";
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      body: options?.body ? JSON.stringify(options.body) : undefined,
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new CommandPublicApiError(502, "Command public API network request failed", {
+      method,
+      url: url.toString(),
+      contentType: null,
+      bodySnippet: null,
+      upstreamError: error instanceof Error ? error.message : null,
+    });
+  }
 
   if (response.status === 204) {
     return undefined as T;
   }
 
-  const payload = await parseJsonSafe(response);
+  const { payload, text } = await readResponseBodySafe(response);
   if (!response.ok) {
-    const message =
+    const upstreamError =
       payload && typeof payload === "object" && typeof (payload as any).error === "string"
         ? (payload as any).error
-        : `Command public API request failed (${response.status})`;
-    throw new CommandPublicApiError(response.status, message);
+        : null;
+    const message =
+      upstreamError || `Command public API request failed (${response.status})`;
+    throw new CommandPublicApiError(response.status, message, {
+      method,
+      url: url.toString(),
+      contentType: response.headers.get("content-type"),
+      bodySnippet: buildBodySnippet(text),
+      upstreamError,
+    });
   }
 
   return payload as T;

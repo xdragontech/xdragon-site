@@ -55,9 +55,9 @@ export default function ResourcesIndex({ email, sessionMode }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   // Keep login gating exactly as-is
-  const { session, user, mode } = await requireUser(ctx);
+  const { session, user, mode, redirectTo } = await requireUser(ctx);
   if (!session?.user?.email || !user) {
-    return { redirect: { destination: "/auth/signin", permanent: false } };
+    return { redirect: { destination: redirectTo || "/auth/signin", permanent: false } };
   }
   if (user.status === "BLOCKED") {
     return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };

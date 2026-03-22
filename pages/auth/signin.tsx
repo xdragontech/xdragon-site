@@ -18,6 +18,8 @@ function prettyAuthError(code?: string | string[] | null) {
     Verification: "Your verification link is invalid or expired.",
     OAuthSignin: "OAuth sign-in failed. Please try again.",
     OAuthCallback: "OAuth callback failed. Please try again.",
+    CommandSession: "Your account signed in, but the site could not verify the Command session. Please try again. If this repeats, support needs the public-site server log for the failed session check.",
+    CommandSessionExpired: "Your session expired or could not be verified. Please sign in again.",
   };
   return map[c] || `Sign-in failed (${c}).`;
 }

@@ -161,9 +161,9 @@ export default function GuidesIndexPage({ email, guides, sessionMode }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const { session, user, mode, sessionToken } = await requireUser(ctx);
+  const { session, user, mode, sessionToken, redirectTo } = await requireUser(ctx);
   if (!session?.user?.email || !user) {
-    return { redirect: { destination: "/auth/signin", permanent: false } };
+    return { redirect: { destination: redirectTo || "/auth/signin", permanent: false } };
   }
   if (user.status === "BLOCKED") {
     return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };

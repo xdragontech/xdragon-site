@@ -9,6 +9,8 @@ import {
   commandPublicGetSession,
   isCommandPublicApiEnabled,
   isUnauthorizedCommandError,
+  CommandPublicApiError,
+  logCommandPublicApiError,
   type CommandPublicAccount,
 } from "./commandPublicApi";
 import { clearCommandBffSessionCookie, getCommandBffSessionToken } from "./commandBffSession";
@@ -29,11 +31,38 @@ export type RequireUserResult = {
   redirectTo?: string;
 };
 
+function buildSignInRedirect(ctx: GetServerSidePropsContext, errorCode?: string) {
+  const params = new URLSearchParams();
+  const callbackUrl =
+    typeof ctx.resolvedUrl === "string" && ctx.resolvedUrl.startsWith("/")
+      ? ctx.resolvedUrl
+      : typeof ctx.req.url === "string" && ctx.req.url.startsWith("/")
+        ? ctx.req.url
+        : "";
+
+  if (callbackUrl && callbackUrl !== "/auth/signin") {
+    params.set("callbackUrl", callbackUrl);
+  }
+
+  if (errorCode) {
+    params.set("error", errorCode);
+  }
+
+  const query = params.toString();
+  return query ? `/auth/signin?${query}` : "/auth/signin";
+}
+
 export async function requireUser(ctx: GetServerSidePropsContext): Promise<RequireUserResult> {
   if (isCommandPublicApiEnabled()) {
     const sessionToken = getCommandBffSessionToken(ctx.req);
     if (!sessionToken) {
-      return { session: null, user: null, mode: "command", sessionToken: null, redirectTo: "/auth/signin" };
+      return {
+        session: null,
+        user: null,
+        mode: "command",
+        sessionToken: null,
+        redirectTo: buildSignInRedirect(ctx),
+      };
     }
 
     try {
@@ -54,6 +83,16 @@ export async function requireUser(ctx: GetServerSidePropsContext): Promise<Requi
         sessionToken,
       };
     } catch (error) {
+      if (error instanceof CommandPublicApiError) {
+        logCommandPublicApiError("require-user-command-session", error, {
+          requestHost: ctx.req.headers.host || null,
+          resolvedUrl: ctx.resolvedUrl || null,
+          hasSessionCookie: true,
+        });
+      } else {
+        console.error("[require-user-command-session] unexpected error", error);
+      }
+
       if (isUnauthorizedCommandError(error)) {
         clearCommandBffSessionCookie(ctx.res);
       }
@@ -63,7 +102,10 @@ export async function requireUser(ctx: GetServerSidePropsContext): Promise<Requi
         user: null,
         mode: "command",
         sessionToken: null,
-        redirectTo: "/auth/signin",
+        redirectTo: buildSignInRedirect(
+          ctx,
+          isUnauthorizedCommandError(error) ? "CommandSessionExpired" : "CommandSession"
+        ),
       };
     }
   }
@@ -72,18 +114,18 @@ export async function requireUser(ctx: GetServerSidePropsContext): Promise<Requi
   const email = session?.user?.email ? String(session.user.email).toLowerCase() : null;
 
   if (!email) {
-    return { session: null, user: null, mode: "legacy", redirectTo: "/auth/signin" };
+    return { session: null, user: null, mode: "legacy", redirectTo: buildSignInRedirect(ctx) };
   }
 
   if (!isExternalSession(session)) {
-    return { session: null, user: null, mode: "legacy", redirectTo: "/auth/signin" };
+    return { session: null, user: null, mode: "legacy", redirectTo: buildSignInRedirect(ctx) };
   }
 
   const user = await getExternalIdentityFromSession(session);
 
   // If user record missing or blocked, treat as not signed in
   if (!user || user.status === "BLOCKED") {
-    return { session: null, user: null, mode: "legacy", redirectTo: "/auth/signin" };
+    return { session: null, user: null, mode: "legacy", redirectTo: buildSignInRedirect(ctx) };
   }
 
   return { session, user, mode: "legacy" };

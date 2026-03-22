@@ -36,7 +36,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   if (redirectTo || !session?.user || !user || user.status === "BLOCKED") {
     const callbackUrl = encodeURIComponent(`/guides/${slug}`);
     return {
-      redirect: { destination: `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
+      redirect: { destination: redirectTo || `/auth/signin?callbackUrl=${callbackUrl}`, permanent: false },
     };
   }
 
