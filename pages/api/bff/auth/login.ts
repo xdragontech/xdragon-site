@@ -9,6 +9,7 @@ import { setCommandBffSessionCookie } from "../../../../lib/commandBffSession";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  res.setHeader("Vary", "Cookie");
 
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
