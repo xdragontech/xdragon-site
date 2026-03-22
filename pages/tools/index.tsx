@@ -1,18 +1,13 @@
 // pages/tools/index.tsx
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
-import { PrismaClient } from "@prisma/client";
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { requireUser } from "../../lib/requireUser";
 
 type Props = {
   email: string;
-  sessionMode: "legacy" | "command";
+  sessionMode: "command";
 };
-
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export default function ResourcesIndex({ email, sessionMode }: Props) {
   return (
@@ -55,7 +50,7 @@ export default function ResourcesIndex({ email, sessionMode }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   // Keep login gating exactly as-is
-  const { session, user, mode, redirectTo } = await requireUser(ctx);
+  const { session, user, redirectTo } = await requireUser(ctx);
   if (!session?.user?.email || !user) {
     return { redirect: { destination: redirectTo || "/auth/signin", permanent: false } };
   }
@@ -66,7 +61,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   return {
     props: {
       email: session.user.email,
-      sessionMode: mode,
+      sessionMode: "command",
     },
   };
 };

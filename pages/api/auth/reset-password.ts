@@ -1,93 +1,23 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import crypto from "crypto";
-import bcrypt from "bcryptjs";
-import { prisma } from "../../../lib/prisma";
-import { ensurePublicBrandRequest } from "../../../lib/brandContext";
-import { commandPublicResetPassword, isCommandPublicApiEnabled, CommandPublicApiError } from "../../../lib/commandPublicApi";
-
-/**
- * POST /api/auth/reset-password
- * Body: { email: string, token: string, password: string }
- */
-function sha256(input: string) {
-  return crypto.createHash("sha256").update(input).digest("hex");
-}
-
-function isStrongEnough(pw: string) {
-  return pw.length >= 8;
-}
+import { commandPublicResetPassword, CommandPublicApiError } from "../../../lib/commandPublicApi";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
-
-  if (isCommandPublicApiEnabled()) {
-    try {
-      const result = await commandPublicResetPassword({
-        token: String(req.body?.token || ""),
-        password: String(req.body?.password || ""),
-      });
-      return res.status(200).json(result);
-    } catch (error) {
-      if (error instanceof CommandPublicApiError) {
-        return res.status(error.status).json({ ok: false, error: error.message });
-      }
-      return res.status(500).json({ ok: false, error: "Server error" });
-    }
-  }
-
-  const brandRequest = await ensurePublicBrandRequest(req, res);
-  if (!brandRequest) return;
-  const { brand } = brandRequest;
-
-  const emailRaw = (req.body?.email || "").toString().trim();
-  const tokenRaw = (req.body?.token || "").toString().trim();
-  const password = (req.body?.password || "").toString();
-
-  const email = emailRaw.toLowerCase();
-
-  if (!email || !email.includes("@") || !tokenRaw) {
-    return res.status(400).json({ ok: false, error: "Missing email or token" });
-  }
-  if (!isStrongEnough(password)) {
-    return res.status(400).json({ ok: false, error: "Password must be at least 8 characters" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
   try {
-    const tokenHash = sha256(tokenRaw);
-
-    const brandId = brand.brandId;
-    if (!brandId) return res.status(500).json({ ok: false, error: "Brand is missing a persisted brand record" });
-
-    const rec = await prisma.externalPasswordResetToken.findFirst({
-      where: { brandId, identifier: email, token: tokenHash },
+    const result = await commandPublicResetPassword({
+      token: String(req.body?.token || ""),
+      password: String(req.body?.password || ""),
     });
 
-    if (!rec) return res.status(400).json({ ok: false, error: "Invalid or expired token" });
-    if (rec.expires.getTime() < Date.now()) {
-      await prisma.externalPasswordResetToken.deleteMany({ where: { brandId, identifier: email } });
-      return res.status(400).json({ ok: false, error: "Invalid or expired token" });
+    return res.status(200).json(result);
+  } catch (error) {
+    if (error instanceof CommandPublicApiError) {
+      return res.status(error.status).json({ ok: false, error: error.message });
     }
 
-    const user = await prisma.externalUser.findFirst({
-      where: {
-        brandId,
-        email,
-      },
-    });
-    if (!user) return res.status(400).json({ ok: false, error: "Invalid or expired token" });
-    if (user.status === "BLOCKED") return res.status(403).json({ ok: false, error: "Account blocked" });
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.externalUser.update({
-      where: { id: user.id },
-      data: { passwordHash },
-    });
-
-    await prisma.externalPasswordResetToken.deleteMany({ where: { brandId, identifier: email } });
-
-    return res.status(200).json({ ok: true });
-  } catch (err) {
-    console.error("[password-reset] reset handler error", err);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 }

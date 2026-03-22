@@ -7,7 +7,7 @@ type ResourcesLayoutProps = {
   title: string;
   sectionLabel: string;
   loggedInAs: string | null;
-  sessionMode?: "legacy" | "command";
+  sessionMode?: "command";
   active?: "resources" | "prompts" | "guides";
   children: ReactNode;
 };
@@ -16,7 +16,7 @@ export default function ResourcesLayout({
   title,
   sectionLabel,
   loggedInAs,
-  sessionMode = "legacy",
+  sessionMode = "command",
   active,
   children,
 }: ResourcesLayoutProps) {
