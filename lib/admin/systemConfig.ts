@@ -122,7 +122,7 @@ const ENV_GROUPS: Array<{
   {
     key: "auth",
     title: "Auth Runtime Config",
-    description: "Shared authentication settings used by backoffice and public auth flows.",
+    description: "Authentication settings still used by backoffice and residual auth surfaces in this repo.",
     items: [
       {
         key: "AUTH_COOKIE_DOMAIN",
@@ -163,9 +163,34 @@ const ENV_GROUPS: Array<{
     ],
   },
   {
+    key: "commandPublic",
+    title: "Public Site -> Command Integration",
+    description: "BFF configuration used by the public website to call command/public-api and hold the forwarded external-user session.",
+    items: [
+      {
+        key: "COMMAND_PUBLIC_API_BASE_URL",
+        label: "Command Public API Base URL",
+        description: "Absolute base URL for the deployed command/public-api instance used by the website BFF.",
+        kind: "plain",
+      },
+      {
+        key: "COMMAND_PUBLIC_INTEGRATION_KEY",
+        label: "Command Integration Key",
+        description: "Server-side integration credential proving this public website is allowed to call the attached command install.",
+        kind: "secret",
+      },
+      {
+        key: "COMMAND_BFF_SESSION_SECRET",
+        label: "Command BFF Session Secret",
+        description: "Dedicated secret for encrypting the website-side BFF session envelope. Preferred over falling back to NEXTAUTH_SECRET.",
+        kind: "secret",
+      },
+    ],
+  },
+  {
     key: "services",
-    title: "Data & Service Integrations",
-    description: "Database and external service credentials used by runtime flows.",
+    title: "Website Runtime Data",
+    description: "Database inputs still used directly by the website runtime. Public AI, email, and rate-limit provider keys now belong to command, not xdragon-site.",
     items: [
       {
         key: "XD_POSTGRES",
@@ -178,78 +203,6 @@ const ENV_GROUPS: Array<{
         label: "Database URL (Legacy / Integration)",
         description: "Observed for drift detection only. The app no longer treats this as the source of truth.",
         kind: "databaseUrl",
-      },
-      {
-        key: "OPENAI_API_KEY",
-        label: "OpenAI API Key",
-        description: "Credential used by the public chat endpoint.",
-        kind: "secret",
-      },
-      {
-        key: "RESEND_API_KEY",
-        label: "Resend API Key",
-        description: "Default Resend credential env var. Brand email configs can reference this key through providerSecretRef.",
-        kind: "secret",
-      },
-      {
-        key: "BRAND_EMAIL_PROVIDER_SECRET_REF",
-        label: "Brand Email Provider Secret Ref",
-        description: "Optional bootstrap override for the env key name used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "RESEND_FROM",
-        label: "Resend From",
-        description: "Bootstrap sender identity used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "RESEND_FROM_EMAIL",
-        label: "Resend From Email",
-        description: "Bootstrap sender email used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "CONTACT_FROM_EMAIL",
-        label: "Contact From Email",
-        description: "Legacy bootstrap sender email used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "EMAIL_FROM",
-        label: "Email From",
-        description: "Legacy bootstrap sender fallback used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "RESEND_TO_EMAIL",
-        label: "Resend To Email",
-        description: "Bootstrap internal notification recipient used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "CONTACT_TO_EMAIL",
-        label: "Contact To Email",
-        description: "Legacy bootstrap notification recipient used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "CONTACT_TO",
-        label: "Contact To",
-        description: "Legacy bootstrap notification recipient fallback used by the brand email sync workflow.",
-        kind: "plain",
-      },
-      {
-        key: "UPSTASH_REDIS_REST_URL",
-        label: "Upstash Redis REST URL",
-        description: "Optional Redis endpoint for rate limiting and event logging.",
-        kind: "plain",
-      },
-      {
-        key: "UPSTASH_REDIS_REST_TOKEN",
-        label: "Upstash Redis REST Token",
-        description: "Optional Redis token for rate limiting and event logging.",
-        kind: "secret",
       },
     ],
   },
