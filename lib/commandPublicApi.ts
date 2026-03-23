@@ -47,6 +47,64 @@ export type CommandPublicGuideDetail = CommandPublicGuideListItem & {
   body: string;
 };
 
+export type CommandPublicScheduleRange = {
+  from: string;
+  to: string;
+};
+
+export type CommandPublicScheduleParticipantType = "ENTERTAINMENT" | "FOOD_VENDOR" | "MARKET_VENDOR";
+
+export type CommandPublicScheduleResourceType = "STAGE" | "FOOD_SPOT" | "MARKET_SPOT" | "OTHER";
+
+export type CommandPublicScheduleItem = {
+  id: string;
+  kind: "TIMED_SLOT" | "FULL_DAY";
+  status: string;
+  allDay: boolean;
+  occursOn: string;
+  timezone: string;
+  start: string;
+  end: string;
+  startsAtMinutes: number;
+  endsAtMinutes: number;
+  timeLabel: string;
+  occurrenceWindowLabel: string;
+  sequence: number | null;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  locationLabel: string;
+  url: string | null;
+  eventSeries: {
+    id: string;
+    slug: string;
+    name: string;
+  };
+  occurrence: {
+    id: string;
+    name: string | null;
+    status: string;
+  };
+  resource: {
+    id: string;
+    slug: string;
+    name: string;
+    type: CommandPublicScheduleResourceType;
+  };
+  participant: {
+    id: string;
+    slug: string;
+    displayName: string;
+    type: CommandPublicScheduleParticipantType;
+  };
+};
+
+export type CommandPublicScheduleResponse = {
+  ok: true;
+  range: CommandPublicScheduleRange;
+  items: CommandPublicScheduleItem[];
+};
+
 export class CommandPublicApiError extends Error {
   readonly status: number;
   readonly context?: {
@@ -325,4 +383,56 @@ export async function commandPublicGetGuideBySlug(sessionToken: string, slug: st
       sessionToken,
     }
   );
+}
+
+type CommandPublicScheduleQuery = {
+  from?: string;
+  to?: string;
+  date?: string;
+  occurrenceDate?: string;
+  eventSeries?: string;
+  participantType?: CommandPublicScheduleParticipantType | string;
+  resource?: string;
+  location?: string;
+  resourceType?: CommandPublicScheduleResourceType | string;
+  q?: string;
+  sequence?: number | string;
+  limit?: number;
+};
+
+export async function commandPublicListScheduleCalendar(params?: CommandPublicScheduleQuery) {
+  return requestCommandPublicApi<CommandPublicScheduleResponse>("/api/v1/schedule/calendar", {
+    query: {
+      from: params?.from,
+      to: params?.to,
+      occurrenceDate: params?.occurrenceDate,
+      eventSeries: params?.eventSeries,
+      participantType: params?.participantType,
+      resource: params?.resource,
+      location: params?.location,
+      resourceType: params?.resourceType,
+      q: params?.q,
+      sequence: params?.sequence ?? undefined,
+      limit: params?.limit,
+    },
+  });
+}
+
+export async function commandPublicListScheduleList(params?: CommandPublicScheduleQuery) {
+  return requestCommandPublicApi<CommandPublicScheduleResponse>("/api/v1/schedule/list", {
+    query: {
+      date: params?.date,
+      from: params?.from,
+      to: params?.to,
+      occurrenceDate: params?.occurrenceDate,
+      eventSeries: params?.eventSeries,
+      participantType: params?.participantType,
+      resource: params?.resource,
+      location: params?.location,
+      resourceType: params?.resourceType,
+      q: params?.q,
+      sequence: params?.sequence ?? undefined,
+      limit: params?.limit,
+    },
+  });
 }

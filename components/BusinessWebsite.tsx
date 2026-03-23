@@ -24,6 +24,7 @@ export default function BusinessWebsite() {
 
   const navItems = [
     { label: "Home", href: "#home" },
+    { label: "Schedule", href: "/schedule" },
     { label: "Services", href: "#services" },
     { label: "How We Work", href: "#process" },
     { label: "Case Study", href: "#case-study" },
