@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import PublicSiteHeader from "./PublicSiteHeader";
 import { useToast } from "./ui/toast";
 
 /**
@@ -17,20 +18,9 @@ type Phase = {
 };
 
 export default function BusinessWebsite() {
-  const [open, setOpen] = useState(false);
   const [formStatus, setFormStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [formError, setFormError] = useState<string>("");
   const { toast: pushToast } = useToast();
-
-  const navItems = [
-    { label: "Home", href: "#home" },
-    { label: "Services", href: "#services" },
-    { label: "How We Work", href: "#process" },
-    { label: "Case Study", href: "#case-study" },
-    { label: "About", href: "#about" },
-    { label: "Testimonials", href: "#testimonials" },
-    { label: "Contact", href: "#contact" },
-  ];
 
   const services = useMemo(
     () => [
@@ -165,87 +155,7 @@ export default function BusinessWebsite() {
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
       `}</style>
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 border-b border-neutral-200">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <a href="#home" className="flex items-center gap-2 font-semibold text-lg">
-              <img src="/logo.png" alt="X Dragon Technologies logo" className="h-11 w-auto" />
-            </a>
-
-            <nav className="hidden md:flex items-center gap-8">
-              {navItems.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="text-sm font-medium text-neutral-700 hover:text-black transition-colors"
-                >
-                  {item.label}
-                </a>
-              ))}
-
-              <a
-                href="/tools"
-                className="rounded-2xl bg-red-600 text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
-              >
-                Resources
-              </a>
-
-              <a
-                href="#contact"
-                className="rounded-2xl bg-black text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
-              >
-                Get Started
-              </a>
-            </nav>
-
-            <button
-              onClick={() => setOpen(!open)}
-              className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-300 bg-white p-2 hover:bg-neutral-50"
-              aria-label="Toggle menu"
-            >
-              <span className="flex flex-col gap-1.5" aria-hidden="true">
-                <span className="block h-1.5 w-6 rounded bg-neutral-900" />
-                <span className="block h-1.5 w-6 rounded bg-neutral-900" />
-                <span className="block h-1.5 w-6 rounded bg-neutral-900" />
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {open && (
-          <div className="md:hidden border-t border-neutral-200">
-            <div className="px-4 py-3 flex flex-col gap-2">
-              {navItems.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-xl px-3 py-2 text-sm font-medium hover:bg-neutral-100"
-                >
-                  {item.label}
-                </a>
-              ))}
-
-              <a
-                href="/tools"
-                onClick={() => setOpen(false)}
-                className="block rounded-xl bg-red-600 text-white px-3 py-2 text-center text-sm font-semibold"
-              >
-                Resources
-              </a>
-
-              <a
-                href="#contact"
-                onClick={() => setOpen(false)}
-                className="block rounded-xl bg-black text-white px-3 py-2 text-center text-sm font-semibold"
-              >
-                Get Started
-              </a>
-            </div>
-          </div>
-        )}
-      </header>
+      <PublicSiteHeader isHome />
 
       {/* Hero */}
       <section id="home" className="relative isolate min-h-[calc(100svh-4rem)] flex items-center">
