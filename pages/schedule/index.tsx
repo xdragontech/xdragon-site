@@ -266,7 +266,7 @@ export default function PublicSchedulePage({
             {appliedFilterTrail.map((item, index) => (
               <div key={item} className="flex items-center gap-3">
                 {index > 0 ? <span className="text-neutral-300">/</span> : null}
-                <span>{item}</span>
+                <span className={index === 0 ? "font-semibold text-neutral-800" : undefined}>{item}</span>
               </div>
             ))}
           </div>
@@ -281,12 +281,7 @@ export default function PublicSchedulePage({
               </div>
 
               <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4 lg:justify-self-end lg:w-full lg:max-w-md">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Current Range</div>
-                <div className="mt-1 text-sm font-semibold text-neutral-900">
-                  {formatDateLabel(calendarFeed.range.from)} - {formatDateLabel(calendarFeed.range.to)}
-                </div>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <label className="grid gap-1">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">From</span>
                     <input
