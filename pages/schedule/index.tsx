@@ -1,8 +1,8 @@
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import BrandHead from "../../components/BrandHead";
+import PublicSiteHeader from "../../components/PublicSiteHeader";
 import {
   commandPublicListScheduleCalendar,
   commandPublicListScheduleList,
@@ -234,26 +234,7 @@ export default function PublicSchedulePage({
       />
 
       <div className="min-h-screen bg-neutral-50 text-neutral-900">
-        <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <Link href="/" className="flex items-center gap-3">
-              <img src="/logo.png" alt="X Dragon logo" className="h-11 w-auto" />
-              <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.18em] text-neutral-500">X Dragon</div>
-                <div className="text-lg font-semibold text-neutral-900">Events & Schedule</div>
-              </div>
-            </Link>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href="/" className="rounded-2xl border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50">
-                Home
-              </Link>
-              <a href="/#contact" className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
-                Contact
-              </a>
-            </div>
-          </div>
-        </header>
+        <PublicSiteHeader />
 
         <main className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:px-8">
           <section className="grid gap-4 rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
