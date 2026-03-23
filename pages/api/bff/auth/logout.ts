@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { commandPublicLogout, isCommandPublicApiEnabled } from "../../../../lib/commandPublicApi";
+import { commandPublicLogout } from "../../../../lib/commandPublicApi";
 import { clearCommandBffSessionCookie, getCommandBffSessionToken } from "../../../../lib/commandBffSession";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const sessionToken = getCommandBffSessionToken(req);
 
   try {
-    if (isCommandPublicApiEnabled() && sessionToken) {
+    if (sessionToken) {
       await commandPublicLogout(sessionToken);
     }
   } catch (error) {

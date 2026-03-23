@@ -2,7 +2,6 @@
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { PrismaClient } from "@prisma/client";
 import { requireUser } from "../../lib/requireUser";
 import ResourcesLayout from "../../components/resources/ResourcesLayout";
 import { commandPublicListGuides } from "../../lib/commandPublicApi";
@@ -20,13 +19,8 @@ type GuideItem = {
 type Props = {
   email: string;
   guides: GuideItem[];
-  sessionMode: "legacy" | "command";
+  sessionMode: "command";
 };
-
-// Prisma singleton (prevents hot-reload connection storms in dev)
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 function fmtDate(iso?: string | null) {
   if (!iso) return "—";
@@ -161,63 +155,36 @@ export default function GuidesIndexPage({ email, guides, sessionMode }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
-  const { session, user, mode, sessionToken, redirectTo } = await requireUser(ctx);
-  if (!session?.user?.email || !user) {
+  const { session, user, sessionToken, redirectTo } = await requireUser(ctx);
+  if (!session?.user?.email || !user || !sessionToken) {
     return { redirect: { destination: redirectTo || "/auth/signin", permanent: false } };
   }
   if (user.status === "BLOCKED") {
     return { redirect: { destination: "/auth/signin?blocked=1", permanent: false } };
   }
 
-  if (mode === "command" && sessionToken) {
-    const response = await commandPublicListGuides(sessionToken, { limit: 200 });
-    const guides: GuideItem[] = response.items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      slug: item.slug,
-      summary: item.summary ?? "",
-      updatedAt: item.updatedAt || null,
-      category: item.category
-        ? {
-            id: item.category.id,
-            name: item.category.name,
-            slug: item.category.slug,
-          }
-        : null,
-      tags: item.tags ?? null,
-    }));
-
-    return {
-      props: {
-        email: session.user.email || "",
-        guides,
-        sessionMode: mode,
-      },
-    };
-  }
-
-  // IMPORTANT: Your Prisma schema currently uses Article/ArticleCategory as the backing models for Guides.
-  // To avoid runtime failures during renames/migrations, prefer prisma.article and fall back to prisma.guide if it exists.
-  const model = (prisma as any).article ?? (prisma as any).guide;
-  if (!model?.findMany) {
-    throw new Error("Guides model not found on Prisma client (expected prisma.article or prisma.guide).");
-  }
-
-  const rows = await model.findMany({
-    where: { status: "PUBLISHED" },
-    orderBy: { updatedAt: "desc" },
-    include: { category: true },
-  });
-
-  const guides: GuideItem[] = rows.map((r: any) => ({
-    id: r.id,
-    title: r.title,
-    slug: r.slug,
-    summary: r.summary ?? "",
-    updatedAt: r.updatedAt ? String(r.updatedAt) : null,
-    category: r.category ? { id: r.category.id, name: r.category.name, slug: r.category.slug } : null,
-    tags: r.tags ?? null,
+  const response = await commandPublicListGuides(sessionToken, { limit: 200 });
+  const guides: GuideItem[] = response.items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    slug: item.slug,
+    summary: item.summary ?? "",
+    updatedAt: item.updatedAt || null,
+    category: item.category
+      ? {
+          id: item.category.id,
+          name: item.category.name,
+          slug: item.category.slug,
+        }
+      : null,
+    tags: item.tags ?? null,
   }));
 
-  return { props: { email: session.user.email, guides, sessionMode: mode } };
+  return {
+    props: {
+      email: session.user.email || "",
+      guides,
+      sessionMode: "command",
+    },
+  };
 };
