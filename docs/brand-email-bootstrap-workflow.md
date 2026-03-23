@@ -1,6 +1,11 @@
 **Purpose**
 Make `BrandEmailConfig` the live source of truth for public auth and notification email without relying on silent global sender/recipient fallbacks.
 
+**Important Scope Note**
+- `command` now owns the live public auth/contact/chat email behavior.
+- This document is only relevant for legacy local bootstrap tooling that still exists in `xdragon-site`.
+- These env values no longer belong on the live `xdragon-site` Vercel project just because they appear in this workflow.
+
 **Operator Surface**
 - live editing belongs on `Settings / Brands`
 - the sync commands remain useful for first-time bootstrap and emergency recovery
