@@ -154,17 +154,18 @@ export default function ConfigsPage({
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <LibraryCardHeader
             title="Configs"
-            description="Read-only system diagnostics for the backoffice. Brand identity and host routing now live under Settings / Brands."
+            description="Read-only system diagnostics for the website runtime, backoffice auth surfaces that still live in this repo, and the website-to-command integration boundary."
             actionsTop={topActions}
           />
 
           <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
-            This page is for operational runtime, auth, and service configuration. Brand identity and brand-host relationships
-            have been moved out so they can become their own live source of truth.
+            This page is for operational runtime, auth, database, and website-to-command integration diagnostics. Brand identity
+            and brand-host relationships have been moved out so they can become their own live source of truth.
           </div>
 
           <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
-            This view is read-only for all backoffice roles. Runtime and brand configuration changes remain superadmin-only.
+            Public AI, email, and rate-limit provider credentials now belong to Command. This view should show the website BFF
+            integration envs instead of the old public-service provider keys.
           </div>
         </div>
 
