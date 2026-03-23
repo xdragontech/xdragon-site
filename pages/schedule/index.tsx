@@ -262,77 +262,70 @@ export default function PublicSchedulePage({
         <PublicSiteHeader />
 
         <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-neutral-500">
-            {appliedFilterTrail.map((item, index) => (
-              <div key={item} className="flex items-center gap-3">
-                {index > 0 ? <span className="text-neutral-300">/</span> : null}
-                <span className={index === 0 ? "font-semibold text-neutral-800" : undefined}>{item}</span>
-              </div>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-base font-semibold uppercase tracking-[0.2em] text-red-600">Live Schedule</div>
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-medium text-neutral-500">
+              {appliedFilterTrail.map((item, index) => (
+                <div key={item} className="flex items-center gap-3">
+                  {index > 0 ? <span className="text-neutral-300">/</span> : null}
+                  <span className={index === 0 ? "font-semibold text-neutral-800" : undefined}>{item}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <section className="grid gap-4 rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
-            <div className="grid gap-4 lg:grid-cols-[1.35fr,0.65fr] lg:items-start">
-              <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.22em] text-red-600">Live Schedule</div>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">
-                  Browse upcoming events, lineups, and vendor placements
-                </h1>
-              </div>
+            <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
+              <div className="grid gap-3 lg:grid-cols-5">
+                <label className="grid gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">From</span>
+                  <input
+                    type="date"
+                    value={draftFilters.from}
+                    onChange={(event) => setDraftFilters((current) => ({ ...current, from: event.target.value }))}
+                    className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                  />
+                </label>
 
-              <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4 lg:justify-self-end lg:w-full lg:max-w-md">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="grid gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">From</span>
-                    <input
-                      type="date"
-                      value={draftFilters.from}
-                      onChange={(event) => setDraftFilters((current) => ({ ...current, from: event.target.value }))}
-                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
-                    />
-                  </label>
+                <label className="grid gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">To</span>
+                  <input
+                    type="date"
+                    value={draftFilters.to}
+                    onChange={(event) => setDraftFilters((current) => ({ ...current, to: event.target.value }))}
+                    className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                  />
+                </label>
 
-                  <label className="grid gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">To</span>
-                    <input
-                      type="date"
-                      value={draftFilters.to}
-                      onChange={(event) => setDraftFilters((current) => ({ ...current, to: event.target.value }))}
-                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
-                    />
-                  </label>
-                </div>
+                <label className="grid gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Event Series</span>
+                  <select
+                    value={draftFilters.eventSeries}
+                    onChange={(event) => setDraftFilters((current) => ({ ...current, eventSeries: event.target.value }))}
+                    className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                  >
+                    <option value="">All series</option>
+                    {eventSeriesOptions.map((item) => (
+                      <option key={item.slug} value={item.slug}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-                <div className="mt-2 grid gap-2">
-                  <label className="grid gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Event Series</span>
-                    <select
-                      value={draftFilters.eventSeries}
-                      onChange={(event) => setDraftFilters((current) => ({ ...current, eventSeries: event.target.value }))}
-                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
-                    >
-                      <option value="">All series</option>
-                      {eventSeriesOptions.map((item) => (
-                        <option key={item.slug} value={item.slug}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="grid gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Participant Type</span>
-                    <select
-                      value={draftFilters.participantType}
-                      onChange={(event) => setDraftFilters((current) => ({ ...current, participantType: event.target.value }))}
-                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
-                    >
-                      <option value="">All types</option>
-                      <option value="ENTERTAINMENT">Entertainment</option>
-                      <option value="FOOD_VENDOR">Food vendors</option>
-                      <option value="MARKET_VENDOR">Market vendors</option>
-                    </select>
-                  </label>
+                <label className="grid gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Participant Type</span>
+                  <select
+                    value={draftFilters.participantType}
+                    onChange={(event) => setDraftFilters((current) => ({ ...current, participantType: event.target.value }))}
+                    className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                  >
+                    <option value="">All types</option>
+                    <option value="ENTERTAINMENT">Entertainment</option>
+                    <option value="FOOD_VENDOR">Food vendors</option>
+                    <option value="MARKET_VENDOR">Market vendors</option>
+                  </select>
+                </label>
 
                   <label className="grid gap-1">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Resource Type</span>
@@ -347,13 +340,13 @@ export default function PublicSchedulePage({
                       <option value="MARKET_SPOT">Market spots</option>
                     </select>
                   </label>
-                </div>
+              </div>
 
-                <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => void loadSchedule()}
-                    className="flex-1 rounded-2xl bg-red-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-red-700"
+                    className="rounded-2xl bg-red-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-red-700"
                     disabled={loading}
                   >
                     {loading ? "Loading..." : "Apply"}
@@ -376,7 +369,6 @@ export default function PublicSchedulePage({
                     Reset
                   </button>
                 </div>
-              </div>
             </div>
           </section>
 
