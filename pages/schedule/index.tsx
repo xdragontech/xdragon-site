@@ -29,8 +29,20 @@ type PageProps = {
     eventSeries: string;
     participantType: string;
     resourceType: string;
-    sequence: string;
   };
+};
+
+const participantTypeLabels: Record<CommandPublicScheduleParticipantType, string> = {
+  ENTERTAINMENT: "Entertainment",
+  FOOD_VENDOR: "Food Vendors",
+  MARKET_VENDOR: "Market Vendors",
+};
+
+const resourceTypeLabels: Record<CommandPublicScheduleResourceType, string> = {
+  STAGE: "Stages",
+  FOOD_SPOT: "Food Spots",
+  MARKET_SPOT: "Market Spots",
+  OTHER: "Other Resources",
 };
 
 function toIsoDateOnly(value: Date) {
@@ -84,7 +96,6 @@ export default function PublicSchedulePage({
   const [apiFilters, setApiFilters] = useState(initialFilters);
   const [draftFilters, setDraftFilters] = useState(initialFilters);
   const [localQuery, setLocalQuery] = useState("");
-  const [localLocation, setLocalLocation] = useState("ALL");
   const [calendarFeed, setCalendarFeed] = useState(initialCalendar);
   const [listFeed, setListFeed] = useState(initialList);
   const [selectedId, setSelectedId] = useState<string | null>(initialList.items[0]?.id || initialCalendar.items[0]?.id || null);
@@ -105,17 +116,11 @@ export default function PublicSchedulePage({
     return Array.from(map.entries()).map(([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [allItems]);
 
-  const locationOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const item of allItems) set.add(item.locationLabel);
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [allItems]);
-
   const calendarEvents = useMemo(() => {
     return calendarFeed.items
       .filter((item) => {
         const needle = localQuery.trim().toLowerCase();
-        const matchesQuery =
+        return (
           !needle ||
           [
             item.title,
@@ -128,9 +133,8 @@ export default function PublicSchedulePage({
           ]
             .join(" ")
             .toLowerCase()
-            .includes(needle);
-        const matchesLocation = localLocation === "ALL" ? true : item.locationLabel === localLocation;
-        return matchesQuery && matchesLocation;
+            .includes(needle)
+        );
       })
       .map((item) => {
         const colors = eventColors(item);
@@ -145,12 +149,12 @@ export default function PublicSchedulePage({
           textColor: colors.textColor,
         };
       });
-  }, [calendarFeed.items, localLocation, localQuery]);
+  }, [calendarFeed.items, localQuery]);
 
   const filteredListItems = useMemo(() => {
     const needle = localQuery.trim().toLowerCase();
     return listFeed.items.filter((item) => {
-      const matchesQuery =
+      return (
         !needle ||
         [
           item.title,
@@ -163,11 +167,10 @@ export default function PublicSchedulePage({
         ]
           .join(" ")
           .toLowerCase()
-          .includes(needle);
-      const matchesLocation = localLocation === "ALL" ? true : item.locationLabel === localLocation;
-      return matchesQuery && matchesLocation;
+          .includes(needle)
+      );
     });
-  }, [listFeed.items, localLocation, localQuery]);
+  }, [listFeed.items, localQuery]);
 
   const groupedItems = useMemo(() => {
     const map = new Map<string, CommandPublicScheduleItem[]>();
@@ -182,6 +185,29 @@ export default function PublicSchedulePage({
   const selectedItem =
     allItems.find((item) => item.id === selectedId) || filteredListItems[0] || calendarFeed.items[0] || null;
 
+  const appliedFilterTrail = useMemo(() => {
+    const seriesName =
+      apiFilters.eventSeries
+        ? eventSeriesOptions.find((item) => item.slug === apiFilters.eventSeries)?.name || apiFilters.eventSeries
+        : "All Series";
+
+    const participantLabel = apiFilters.participantType
+      ? participantTypeLabels[apiFilters.participantType as CommandPublicScheduleParticipantType] || apiFilters.participantType
+      : "All Participants";
+
+    const resourceLabel = apiFilters.resourceType
+      ? resourceTypeLabels[apiFilters.resourceType as CommandPublicScheduleResourceType] || apiFilters.resourceType
+      : "All Resources";
+
+    return [
+      `${formatDateLabel(apiFilters.from)} - ${formatDateLabel(apiFilters.to)}`,
+      seriesName,
+      participantLabel,
+      resourceLabel,
+      localQuery.trim() ? `Search: ${localQuery.trim()}` : "Search: All",
+    ];
+  }, [apiFilters, eventSeriesOptions, localQuery]);
+
   async function loadSchedule(nextFilters = draftFilters) {
     setLoading(true);
     setError("");
@@ -193,7 +219,6 @@ export default function PublicSchedulePage({
       if (nextFilters.eventSeries) params.set("eventSeries", nextFilters.eventSeries);
       if (nextFilters.participantType) params.set("participantType", nextFilters.participantType);
       if (nextFilters.resourceType) params.set("resourceType", nextFilters.resourceType);
-      if (nextFilters.sequence) params.set("sequence", nextFilters.sequence);
 
       const [calendarRes, listRes] = await Promise.all([
         fetch(`/api/schedule/calendar?${params.toString()}`),
@@ -236,237 +261,214 @@ export default function PublicSchedulePage({
       <div className="min-h-screen bg-neutral-50 text-neutral-900">
         <PublicSiteHeader />
 
-        <main className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:px-8">
+        <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-neutral-500">
+            {appliedFilterTrail.map((item, index) => (
+              <div key={item} className="flex items-center gap-3">
+                {index > 0 ? <span className="text-neutral-300">/</span> : null}
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+
           <section className="grid gap-4 rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
-            <div className="grid gap-3 lg:grid-cols-[1.3fr,0.7fr] lg:items-end">
+            <div className="grid gap-4 lg:grid-cols-[1.35fr,0.65fr] lg:items-start">
               <div>
                 <div className="text-sm font-semibold uppercase tracking-[0.22em] text-red-600">Live Schedule</div>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">
                   Browse upcoming events, lineups, and vendor placements
                 </h1>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-600 sm:text-base">
-                  This page reads directly from the Command scheduling service. API-backed filters control what the server returns, and local refine filters let visitors narrow what is already on screen without another request.
-                </p>
               </div>
 
-              <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-5">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Current Range</div>
-                <div className="mt-2 text-lg font-semibold text-neutral-900">
+              <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4 lg:justify-self-end lg:w-full lg:max-w-md">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Current Range</div>
+                <div className="mt-1 text-sm font-semibold text-neutral-900">
                   {formatDateLabel(calendarFeed.range.from)} - {formatDateLabel(calendarFeed.range.to)}
                 </div>
-                <div className="mt-2 text-sm text-neutral-600">
-                  Showing {calendarFeed.items.length} calendar entries and {listFeed.items.length} list entries.
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">From</span>
+                    <input
+                      type="date"
+                      value={draftFilters.from}
+                      onChange={(event) => setDraftFilters((current) => ({ ...current, from: event.target.value }))}
+                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">To</span>
+                    <input
+                      type="date"
+                      value={draftFilters.to}
+                      onChange={(event) => setDraftFilters((current) => ({ ...current, to: event.target.value }))}
+                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-2 grid gap-2">
+                  <label className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Event Series</span>
+                    <select
+                      value={draftFilters.eventSeries}
+                      onChange={(event) => setDraftFilters((current) => ({ ...current, eventSeries: event.target.value }))}
+                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                    >
+                      <option value="">All series</option>
+                      {eventSeriesOptions.map((item) => (
+                        <option key={item.slug} value={item.slug}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Participant Type</span>
+                    <select
+                      value={draftFilters.participantType}
+                      onChange={(event) => setDraftFilters((current) => ({ ...current, participantType: event.target.value }))}
+                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                    >
+                      <option value="">All types</option>
+                      <option value="ENTERTAINMENT">Entertainment</option>
+                      <option value="FOOD_VENDOR">Food vendors</option>
+                      <option value="MARKET_VENDOR">Market vendors</option>
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Resource Type</span>
+                    <select
+                      value={draftFilters.resourceType}
+                      onChange={(event) => setDraftFilters((current) => ({ ...current, resourceType: event.target.value }))}
+                      className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[11px] outline-none focus:ring-2 focus:ring-red-200"
+                    >
+                      <option value="">All resources</option>
+                      <option value="STAGE">Stages</option>
+                      <option value="FOOD_SPOT">Food spots</option>
+                      <option value="MARKET_SPOT">Market spots</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void loadSchedule()}
+                    className="flex-1 rounded-2xl bg-red-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-red-700"
+                    disabled={loading}
+                  >
+                    {loading ? "Loading..." : "Apply"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const reset = {
+                        from: initialFilters.from,
+                        to: initialFilters.to,
+                        eventSeries: "",
+                        participantType: "",
+                        resourceType: "",
+                      };
+                      setDraftFilters(reset);
+                      void loadSchedule(reset);
+                    }}
+                    className="rounded-2xl border border-neutral-300 bg-white px-3 py-2 text-[11px] font-semibold text-neutral-800 hover:bg-neutral-50"
+                  >
+                    Reset
+                  </button>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="grid gap-4 rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div className="grid gap-3 lg:grid-cols-3">
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">From</span>
-                <input
-                  type="date"
-                  value={draftFilters.from}
-                  onChange={(event) => setDraftFilters((current) => ({ ...current, from: event.target.value }))}
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                />
-              </label>
+          {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">To</span>
-                <input
-                  type="date"
-                  value={draftFilters.to}
-                  onChange={(event) => setDraftFilters((current) => ({ ...current, to: event.target.value }))}
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                />
-              </label>
+          <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+            <PublicScheduleCalendar
+              events={calendarEvents}
+              loading={loading}
+              onRangeChange={(range) => {
+                if (range.from === apiFilters.from && range.to === apiFilters.to) return;
+                const nextFilters = { ...draftFilters, from: range.from, to: range.to };
+                setDraftFilters(nextFilters);
+                void loadSchedule(nextFilters);
+              }}
+              onEventOpen={(id) => setSelectedId(id)}
+            />
+          </section>
 
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Event Series</span>
-                <select
-                  value={draftFilters.eventSeries}
-                  onChange={(event) => setDraftFilters((current) => ({ ...current, eventSeries: event.target.value }))}
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                >
-                  <option value="">All series</option>
-                  {eventSeriesOptions.map((item) => (
-                    <option key={item.slug} value={item.slug}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-4">
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Participant Type</span>
-                <select
-                  value={draftFilters.participantType}
-                  onChange={(event) => setDraftFilters((current) => ({ ...current, participantType: event.target.value }))}
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                >
-                  <option value="">All types</option>
-                  <option value="ENTERTAINMENT">Entertainment</option>
-                  <option value="FOOD_VENDOR">Food vendors</option>
-                  <option value="MARKET_VENDOR">Market vendors</option>
-                </select>
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Resource Type</span>
-                <select
-                  value={draftFilters.resourceType}
-                  onChange={(event) => setDraftFilters((current) => ({ ...current, resourceType: event.target.value }))}
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                >
-                  <option value="">All resources</option>
-                  <option value="STAGE">Stages</option>
-                  <option value="FOOD_SPOT">Food spots</option>
-                  <option value="MARKET_SPOT">Market spots</option>
-                </select>
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Sequence</span>
-                <input
-                  value={draftFilters.sequence}
-                  onChange={(event) => setDraftFilters((current) => ({ ...current, sequence: event.target.value.replace(/[^\d]/g, "").slice(0, 3) }))}
-                  placeholder="Optional"
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                />
-              </label>
-
-              <div className="flex items-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => void loadSchedule()}
-                  className="w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-700"
-                  disabled={loading}
-                >
-                  {loading ? "Loading..." : "Apply Filters"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const reset = {
-                      from: initialFilters.from,
-                      to: initialFilters.to,
-                      eventSeries: "",
-                      participantType: "",
-                      resourceType: "",
-                      sequence: "",
-                    };
-                    setDraftFilters(reset);
-                    void loadSchedule(reset);
-                  }}
-                  className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-                >
-                  Reset
-                </button>
+          <section className="grid gap-6 xl:grid-cols-3">
+            <div className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Search Loaded Results</div>
+              <div className="mt-4 grid gap-3">
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-neutral-900">Search</span>
+                  <input
+                    value={localQuery}
+                    onChange={(event) => setLocalQuery(event.target.value)}
+                    placeholder="Filter by title, description, location, or participant"
+                    className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
+                  />
+                </label>
+                <div className="text-sm text-neutral-600">{filteredListItems.length} visible entries</div>
               </div>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Refine On Page</span>
-                <input
-                  value={localQuery}
-                  onChange={(event) => setLocalQuery(event.target.value)}
-                  placeholder="Filter loaded results by title, description, location, or participant..."
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                />
-              </label>
+            <div className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-xl font-semibold text-neutral-900">Schedule List</h2>
+                <div className="text-sm text-neutral-600">{filteredListItems.length} visible entries</div>
+              </div>
 
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Location Refine</span>
-                <select
-                  value={localLocation}
-                  onChange={(event) => setLocalLocation(event.target.value)}
-                  className="rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-200"
-                >
-                  <option value="ALL">All locations</option>
-                  {locationOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-          </section>
-
-          <section className="grid gap-8 xl:grid-cols-[1.35fr,0.65fr]">
-            <div className="grid gap-6">
-              <PublicScheduleCalendar
-                events={calendarEvents}
-                loading={loading}
-                onRangeChange={(range) => {
-                  if (range.from === apiFilters.from && range.to === apiFilters.to) return;
-                  const nextFilters = { ...draftFilters, from: range.from, to: range.to };
-                  setDraftFilters(nextFilters);
-                  void loadSchedule(nextFilters);
-                }}
-                onEventOpen={(id) => setSelectedId(id)}
-              />
-
-              <div className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-xl font-semibold text-neutral-900">Schedule List</h2>
-                  <div className="text-sm text-neutral-600">{filteredListItems.length} visible entries</div>
-                </div>
-
-                <div className="mt-6 grid gap-6">
-                  {groupedItems.length === 0 ? (
-                    <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-600">
-                      No schedule entries matched the current filters.
-                    </div>
-                  ) : (
-                    groupedItems.map(([occursOn, items]) => (
-                      <div key={occursOn} className="grid gap-3">
-                        <div className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500">{formatDateLabel(occursOn)}</div>
-                        <div className="grid gap-3">
-                          {items.map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => setSelectedId(item.id)}
-                              className={
-                                item.id === selectedItem?.id
-                                  ? "grid gap-2 rounded-3xl border border-red-300 bg-red-50 p-5 text-left shadow-sm"
-                                  : "grid gap-2 rounded-3xl border border-neutral-200 bg-white p-5 text-left shadow-sm hover:bg-neutral-50"
-                              }
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">{item.eventSeries.name}</div>
-                                  <div className="mt-1 text-lg font-semibold text-neutral-900">{item.title}</div>
-                                  {item.subtitle ? <div className="mt-1 text-sm text-neutral-600">{item.subtitle}</div> : null}
-                                </div>
-                                <div className="text-right text-sm text-neutral-600">
-                                  <div className="font-semibold text-neutral-900">{item.timeLabel}</div>
-                                  <div>{item.locationLabel}</div>
-                                </div>
+              <div className="mt-6 grid gap-6">
+                {groupedItems.length === 0 ? (
+                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-600">
+                    No schedule entries matched the current filters.
+                  </div>
+                ) : (
+                  groupedItems.map(([occursOn, items]) => (
+                    <div key={occursOn} className="grid gap-3">
+                      <div className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500">{formatDateLabel(occursOn)}</div>
+                      <div className="grid gap-3">
+                        {items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedId(item.id)}
+                            className={
+                              item.id === selectedItem?.id
+                                ? "grid gap-2 rounded-3xl border border-red-300 bg-red-50 p-5 text-left shadow-sm"
+                                : "grid gap-2 rounded-3xl border border-neutral-200 bg-white p-5 text-left shadow-sm hover:bg-neutral-50"
+                            }
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">{item.eventSeries.name}</div>
+                                <div className="mt-1 text-lg font-semibold text-neutral-900">{item.title}</div>
+                                {item.subtitle ? <div className="mt-1 text-sm text-neutral-600">{item.subtitle}</div> : null}
                               </div>
-
-                              <div className="flex flex-wrap gap-2 text-xs font-semibold text-neutral-600">
-                                <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">{item.participant.type.replace("_", " ")}</span>
-                                {item.sequence ? <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">Sequence {item.sequence}</span> : null}
-                                <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">{item.resource.name}</span>
+                              <div className="text-right text-sm text-neutral-600">
+                                <div className="font-semibold text-neutral-900">{item.timeLabel}</div>
+                                <div>{item.locationLabel}</div>
                               </div>
+                            </div>
 
-                              {item.description ? <div className="text-sm leading-6 text-neutral-700">{item.description}</div> : null}
-                            </button>
-                          ))}
-                        </div>
+                            <div className="flex flex-wrap gap-2 text-xs font-semibold text-neutral-600">
+                              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">{item.participant.type.replace("_", " ")}</span>
+                              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">{item.resource.name}</span>
+                            </div>
+
+                            {item.description ? <div className="text-sm leading-6 text-neutral-700">{item.description}</div> : null}
+                          </button>
+                        ))}
                       </div>
-                    ))
-                  )}
-                </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -514,21 +516,6 @@ export default function PublicSchedulePage({
                   </div>
                 )}
               </div>
-
-              <div className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">How This Page Works</div>
-                <div className="mt-4 grid gap-3 text-sm leading-6 text-neutral-700">
-                  <p>
-                    Primary filters change what the website requests from Command.
-                  </p>
-                  <p>
-                    Refine filters narrow the results already loaded into the browser.
-                  </p>
-                  <p>
-                    Entertainment entries use timed slots. Vendor entries represent full-day placement windows.
-                  </p>
-                </div>
-              </div>
             </aside>
           </section>
         </main>
@@ -547,7 +534,6 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
     eventSeries: typeof ctx.query.eventSeries === "string" ? ctx.query.eventSeries : "",
     participantType: typeof ctx.query.participantType === "string" ? ctx.query.participantType : "",
     resourceType: typeof ctx.query.resourceType === "string" ? ctx.query.resourceType : "",
-    sequence: typeof ctx.query.sequence === "string" ? ctx.query.sequence : "",
   };
 
   const [initialCalendar, initialList] = await Promise.all([
@@ -557,7 +543,6 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
       eventSeries: initialFilters.eventSeries,
       participantType: initialFilters.participantType as CommandPublicScheduleParticipantType | "",
       resourceType: initialFilters.resourceType as CommandPublicScheduleResourceType | "",
-      sequence: initialFilters.sequence || undefined,
       limit: 300,
     }),
     commandPublicListScheduleList({
@@ -566,7 +551,6 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
       eventSeries: initialFilters.eventSeries,
       participantType: initialFilters.participantType as CommandPublicScheduleParticipantType | "",
       resourceType: initialFilters.resourceType as CommandPublicScheduleResourceType | "",
-      sequence: initialFilters.sequence || undefined,
       limit: 150,
     }),
   ]);
