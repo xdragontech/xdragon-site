@@ -73,6 +73,8 @@ export default function AdminResetPasswordPage() {
     <>
       <Head>
         <title>X Dragon Command — Reset Password</title>
+        <link rel="icon" type="image/png" href="/favicon_symbol.png?v=2" />
+        <link rel="shortcut icon" href="/favicon_symbol.png?v=2" />
       </Head>
 
       <div className="min-h-screen bg-neutral-50 text-neutral-900">
