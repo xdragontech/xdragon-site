@@ -15,8 +15,14 @@ export default function AppShell({ pathname, children }: AppShellProps) {
 
   return (
     <ToastProvider>
-      <BrandHead />
-      {area === "backoffice" ? <BackofficeShell>{children}</BackofficeShell> : <PublicSiteShell>{children}</PublicSiteShell>}
+      {area === "backoffice" ? (
+        <BackofficeShell>{children}</BackofficeShell>
+      ) : (
+        <>
+          <BrandHead />
+          <PublicSiteShell>{children}</PublicSiteShell>
+        </>
+      )}
     </ToastProvider>
   );
 }

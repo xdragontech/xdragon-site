@@ -6,17 +6,18 @@ type BrandHeadProps = {
 };
 
 export default function BrandHead({ title, description }: BrandHeadProps) {
+  const includeSiteChrome = !title && !description;
+
   return (
     <Head>
       {title ? <title>{title}</title> : null}
       {description ? <meta name="description" content={description} /> : null}
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <link rel="icon" href="/favicon.ico" sizes="any" />
-      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-      <link rel="icon" type="image/png" href="/favicon_symbol.png" />
-      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-      <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#111111" />
-      <meta name="theme-color" content="#111111" />
+      {includeSiteChrome ? <meta name="viewport" content="width=device-width, initial-scale=1" /> : null}
+      {includeSiteChrome ? <link rel="icon" href="/favicon.ico?v=2" sizes="any" /> : null}
+      {includeSiteChrome ? <link rel="shortcut icon" href="/favicon.ico?v=2" /> : null}
+      {includeSiteChrome ? <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" /> : null}
+      {includeSiteChrome ? <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#111111" /> : null}
+      {includeSiteChrome ? <meta name="theme-color" content="#111111" /> : null}
     </Head>
   );
 }
