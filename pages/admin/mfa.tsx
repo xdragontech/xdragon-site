@@ -139,9 +139,8 @@ export default function AdminMfaChallengePage({
     <>
       <Head>
         <title>X Dragon Command — Verify Sign In</title>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" href="/favicon_symbol.png" />
+        <link rel="icon" type="image/png" href="/favicon_symbol.png?v=2" />
+        <link rel="shortcut icon" href="/favicon_symbol.png?v=2" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
