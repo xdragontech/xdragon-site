@@ -105,6 +105,48 @@ export type CommandPublicScheduleResponse = {
   range: CommandPublicScheduleRange;
   items: CommandPublicScheduleItem[];
 };
+
+export type CommandPublicAnalyticsConsentNotice = {
+  id: string;
+  version: number;
+  status: "PUBLISHED";
+  title: string;
+  message: string;
+  acceptLabel: string;
+  declineLabel: string;
+  publishedAt: string;
+  updatedAt: string;
+};
+
+export type CommandPublicAnalyticsEvent = {
+  eventId: string;
+  eventType: "SESSION_START" | "PAGE_VIEW" | "ENGAGEMENT_PING" | "SESSION_END" | "WEB_VITAL";
+  occurredAt: string;
+  path?: string | null;
+  url?: string | null;
+  referer?: string | null;
+  engagedSeconds?: number | null;
+  metricName?: string | null;
+  metricValue?: number | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmTerm?: string | null;
+  utmContent?: string | null;
+  gclid?: string | null;
+  fbclid?: string | null;
+  msclkid?: string | null;
+  ttclid?: string | null;
+  raw?: unknown;
+};
+
+export type CommandPublicAnalyticsCollectResult = {
+  ok: true;
+  sessionId: string;
+  acceptedEvents: number;
+  duplicateEvents: number;
+};
+
 export type CommandPublicContactResult =
   | { ok: true; id?: string; notification?: "sent" | "deferred" }
   | { ok: false; error: string; details?: unknown };
@@ -178,6 +220,7 @@ const FORWARDED_CLIENT_IP_HEADER = "X-Command-Client-IP";
 const FORWARDED_CLIENT_COUNTRY_HEADER = "X-Command-Client-Country-Iso2";
 const FORWARDED_CLIENT_USER_AGENT_HEADER = "X-Command-Client-User-Agent";
 const FORWARDED_CLIENT_REFERER_HEADER = "X-Command-Client-Referer";
+const WEBSITE_SESSION_HEADER = "X-Command-Website-Session";
 
 function normalizeBaseUrl(value: unknown) {
   const raw = String(value || "").trim();
@@ -289,6 +332,7 @@ async function requestCommandPublicApi<T>(
   options?: {
     method?: "GET" | "POST" | "PATCH";
     sessionToken?: string | null;
+    websiteSessionId?: string | null;
     body?: Record<string, unknown>;
     query?: Record<string, string | number | null | undefined>;
     request?: CommandPublicRequestSource;
@@ -312,6 +356,10 @@ async function requestCommandPublicApi<T>(
 
   if (options?.sessionToken) {
     headers["X-Command-Session"] = options.sessionToken;
+  }
+
+  if (options?.websiteSessionId) {
+    headers[WEBSITE_SESSION_HEADER] = options.websiteSessionId;
   }
 
   if (options?.body) {
@@ -369,9 +417,13 @@ export async function commandPublicRegister(params: {
   email: string;
   password: string;
   name?: string | null;
+  request?: CommandPublicRequestSource;
+  websiteSessionId?: string | null;
 }) {
   return requestCommandPublicApi<{ ok: true; verificationRequired: true }>("/api/v1/auth/register", {
     method: "POST",
+    request: params.request,
+    websiteSessionId: params.websiteSessionId,
     body: {
       email: params.email,
       password: params.password,
@@ -380,10 +432,16 @@ export async function commandPublicRegister(params: {
   });
 }
 
-export async function commandPublicVerifyEmail(token: string) {
+export async function commandPublicVerifyEmail(params: {
+  token: string;
+  request?: CommandPublicRequestSource;
+  websiteSessionId?: string | null;
+}) {
   return requestCommandPublicApi<{ ok: true; verified: true }>("/api/v1/auth/verify-email", {
     method: "POST",
-    body: { token },
+    request: params.request,
+    websiteSessionId: params.websiteSessionId,
+    body: { token: params.token },
   });
 }
 
@@ -408,12 +466,14 @@ export async function commandPublicLogin(params: {
   email: string;
   password: string;
   request?: CommandPublicRequestSource;
+  websiteSessionId?: string | null;
 }) {
   return requestCommandPublicApi<{ ok: true; session: CommandPublicSessionState["session"]; account: CommandPublicAccount }>(
     "/api/v1/auth/login",
     {
       method: "POST",
       request: params.request,
+      websiteSessionId: params.websiteSessionId,
       body: {
         email: params.email,
         password: params.password,
@@ -463,10 +523,12 @@ export async function commandPublicContact(params: {
   phone?: string | null;
   message: string;
   request?: CommandPublicRequestSource;
+  websiteSessionId?: string | null;
 }) {
   return requestCommandPublicApi<CommandPublicContactResult>("/api/v1/contact", {
     method: "POST",
     request: params.request,
+    websiteSessionId: params.websiteSessionId,
     body: {
       name: params.name,
       email: params.email,
@@ -482,10 +544,12 @@ export async function commandPublicChat(params: {
   lead?: CommandPublicChatLead | null;
   emailed?: boolean;
   request?: CommandPublicRequestSource;
+  websiteSessionId?: string | null;
 }) {
   return requestCommandPublicApi<CommandPublicChatResult>("/api/v1/chat", {
     method: "POST",
     request: params.request,
+    websiteSessionId: params.websiteSessionId,
     body: {
       conversationId: params.conversationId,
       messages: params.messages,
@@ -552,6 +616,32 @@ export async function commandPublicListScheduleList(params?: CommandPublicSchedu
       q: params?.q,
       sequence: params?.sequence ?? undefined,
       limit: params?.limit,
+    },
+  });
+}
+
+export async function commandPublicGetAnalyticsConsentNotice(params?: {
+  request?: CommandPublicRequestSource;
+}) {
+  return requestCommandPublicApi<{ ok: true; notice: CommandPublicAnalyticsConsentNotice }>(
+    "/api/v1/analytics/consent-notice",
+    {
+      request: params?.request,
+    }
+  );
+}
+
+export async function commandPublicCollectAnalytics(params: {
+  events: CommandPublicAnalyticsEvent[];
+  websiteSessionId: string;
+  request?: CommandPublicRequestSource;
+}) {
+  return requestCommandPublicApi<CommandPublicAnalyticsCollectResult>("/api/v1/analytics/collect", {
+    method: "POST",
+    request: params.request,
+    websiteSessionId: params.websiteSessionId,
+    body: {
+      events: params.events,
     },
   });
 }

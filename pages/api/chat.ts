@@ -3,6 +3,7 @@ import {
   commandPublicChat,
   CommandPublicApiError,
 } from "../../lib/commandPublicApi";
+import { getWebsiteAnalyticsSessionId } from "../../lib/websiteAnalytics";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -18,6 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       lead: req.body?.lead || {},
       emailed: Boolean(req.body?.emailed),
       request: req,
+      websiteSessionId: getWebsiteAnalyticsSessionId(req),
     });
 
     return res.status(result.ok ? 200 : 500).json(result);

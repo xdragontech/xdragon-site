@@ -3,6 +3,7 @@ import {
   commandPublicContact,
   CommandPublicApiError,
 } from "../../lib/commandPublicApi";
+import { getWebsiteAnalyticsSessionId } from "../../lib/websiteAnalytics";
 
 type Data =
   | { ok: true; id?: string; notification?: "sent" | "deferred" }
@@ -26,6 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       phone: cleanString(req.body?.phone, 80) || null,
       message: cleanString(req.body?.message, 4000),
       request: req,
+      websiteSessionId: getWebsiteAnalyticsSessionId(req),
     });
 
     const status = result.ok && result.notification === "deferred" ? 202 : 200;

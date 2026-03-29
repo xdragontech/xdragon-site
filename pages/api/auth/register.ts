@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { commandPublicRegister, CommandPublicApiError } from "../../../lib/commandPublicApi";
+import { getWebsiteAnalyticsSessionId } from "../../../lib/websiteAnalytics";
 
 type Data =
   | { ok: true; verificationRequired?: boolean }
@@ -20,6 +21,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       email: cleanEmail(req.body?.email),
       password: String(req.body?.password || ""),
       name: String(req.body?.name || "").trim() || null,
+      request: req,
+      websiteSessionId: getWebsiteAnalyticsSessionId(req),
     });
 
     return res.status(200).json(result);
