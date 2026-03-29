@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "http";
 import { buildOrigin, getApiRequestHost, getApiRequestProtocol } from "./requestHost";
+import { getCfCountryIso2, getClientIp, getHeader, getUserAgent } from "./requestIdentity";
 
 export type CommandPublicAccount = {
   id: string;
@@ -168,6 +169,16 @@ export class CommandPublicApiError extends Error {
   }
 }
 
+type CommandPublicRequestSource = Pick<IncomingMessage, "headers"> & {
+  socket?: IncomingMessage["socket"];
+  connection?: unknown;
+};
+
+const FORWARDED_CLIENT_IP_HEADER = "X-Command-Client-IP";
+const FORWARDED_CLIENT_COUNTRY_HEADER = "X-Command-Client-Country-Iso2";
+const FORWARDED_CLIENT_USER_AGENT_HEADER = "X-Command-Client-User-Agent";
+const FORWARDED_CLIENT_REFERER_HEADER = "X-Command-Client-Referer";
+
 function normalizeBaseUrl(value: unknown) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -197,6 +208,34 @@ export function getCommandPublicOriginFromRequest(
   req: Pick<IncomingMessage, "headers"> & { cookies?: Partial<Record<string, string>> }
 ) {
   return buildOrigin(getApiRequestProtocol(req), getApiRequestHost(req));
+}
+
+function buildForwardedClientHeaders(req?: CommandPublicRequestSource) {
+  if (!req) return {};
+
+  const headers: Record<string, string> = {};
+  const ip = getClientIp(req);
+  const countryIso2 = getCfCountryIso2(req);
+  const userAgent = getUserAgent(req);
+  const referer = getHeader(req, "referer")?.trim() || "";
+
+  if (ip && ip !== "unknown") {
+    headers[FORWARDED_CLIENT_IP_HEADER] = ip;
+  }
+
+  if (countryIso2) {
+    headers[FORWARDED_CLIENT_COUNTRY_HEADER] = countryIso2;
+  }
+
+  if (userAgent) {
+    headers[FORWARDED_CLIENT_USER_AGENT_HEADER] = userAgent;
+  }
+
+  if (referer) {
+    headers[FORWARDED_CLIENT_REFERER_HEADER] = referer;
+  }
+
+  return headers;
 }
 
 async function readResponseBodySafe(response: Response) {
@@ -252,6 +291,7 @@ async function requestCommandPublicApi<T>(
     sessionToken?: string | null;
     body?: Record<string, unknown>;
     query?: Record<string, string | number | null | undefined>;
+    request?: CommandPublicRequestSource;
   }
 ): Promise<T> {
   const config = getCommandPublicApiConfig();
@@ -267,6 +307,7 @@ async function requestCommandPublicApi<T>(
 
   const headers: Record<string, string> = {
     "X-Command-Integration-Key": config.integrationKey,
+    ...buildForwardedClientHeaders(options?.request),
   };
 
   if (options?.sessionToken) {
@@ -363,11 +404,16 @@ export async function commandPublicResetPassword(params: { token: string; passwo
   });
 }
 
-export async function commandPublicLogin(params: { email: string; password: string }) {
+export async function commandPublicLogin(params: {
+  email: string;
+  password: string;
+  request?: CommandPublicRequestSource;
+}) {
   return requestCommandPublicApi<{ ok: true; session: CommandPublicSessionState["session"]; account: CommandPublicAccount }>(
     "/api/v1/auth/login",
     {
       method: "POST",
+      request: params.request,
       body: {
         email: params.email,
         password: params.password,
@@ -416,9 +462,11 @@ export async function commandPublicContact(params: {
   email: string;
   phone?: string | null;
   message: string;
+  request?: CommandPublicRequestSource;
 }) {
   return requestCommandPublicApi<CommandPublicContactResult>("/api/v1/contact", {
     method: "POST",
+    request: params.request,
     body: {
       name: params.name,
       email: params.email,
@@ -433,9 +481,11 @@ export async function commandPublicChat(params: {
   messages: CommandPublicChatMessage[];
   lead?: CommandPublicChatLead | null;
   emailed?: boolean;
+  request?: CommandPublicRequestSource;
 }) {
   return requestCommandPublicApi<CommandPublicChatResult>("/api/v1/chat", {
     method: "POST",
+    request: params.request,
     body: {
       conversationId: params.conversationId,
       messages: params.messages,
