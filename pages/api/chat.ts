@@ -17,6 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       messages: Array.isArray(req.body?.messages) ? req.body.messages : [],
       lead: req.body?.lead || {},
       emailed: Boolean(req.body?.emailed),
+      request: req,
     });
 
     return res.status(result.ok ? 200 : 500).json(result);
