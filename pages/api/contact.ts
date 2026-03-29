@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       email: cleanString(req.body?.email, 320),
       phone: cleanString(req.body?.phone, 80) || null,
       message: cleanString(req.body?.message, 4000),
+      request: req,
     });
 
     const status = result.ok && result.notification === "deferred" ? 202 : 200;

@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const result = await commandPublicLogin({
       email,
       password: String(req.body?.password || ""),
+      request: req,
     });
 
     setCommandBffSessionCookie(res, result.session);
