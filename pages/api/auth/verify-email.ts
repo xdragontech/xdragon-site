@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { commandPublicVerifyEmail, CommandPublicApiError } from "../../../lib/commandPublicApi";
+import { getWebsiteAnalyticsSessionId } from "../../../lib/websiteAnalytics";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -8,9 +9,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const result = await commandPublicVerifyEmail(
-      typeof req.body?.token === "string" ? req.body.token : ""
-    );
+    const result = await commandPublicVerifyEmail({
+      token: typeof req.body?.token === "string" ? req.body.token : "",
+      request: req,
+      websiteSessionId: getWebsiteAnalyticsSessionId(req),
+    });
     return res.status(200).json(result);
   } catch (error) {
     if (error instanceof CommandPublicApiError) {
