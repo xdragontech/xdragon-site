@@ -91,9 +91,6 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
 
             {showSettingsTree && (
               <div className="space-y-2 pl-3">
-                <Link href="/admin/settings/brands" className={subItemClass("/admin/settings/brands")}>
-                  Brands
-                </Link>
                 <Link
                   href="/admin/settings/configs"
                   className={subItemClass("/admin/settings/configs", ["/admin/settings"])}

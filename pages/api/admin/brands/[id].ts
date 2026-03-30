@@ -1,9 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
-import { deleteEditableBrand, updateEditableBrand } from "../../../../lib/brandRegistry";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
+}
+
+function retiredMessage() {
+  return "Brand management has been retired from xdragon-site. Use the command backoffice for brand changes.";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -16,13 +19,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "PATCH" || req.method === "PUT" || req.method === "POST") {
-      const brand = await updateEditableBrand(id, req.body || {});
-      return json(res, 200, { ok: true, brand });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     if (req.method === "DELETE") {
-      await deleteEditableBrand(id);
-      return json(res, 200, { ok: true });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     res.setHeader("Allow", "PATCH, PUT, POST, DELETE");
