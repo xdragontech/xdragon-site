@@ -4,6 +4,7 @@ import {
   CommandPublicApiError,
 } from "../../lib/commandPublicApi";
 import { getWebsiteAnalyticsSessionId } from "../../lib/websiteAnalytics";
+import { recordWebsiteRequestPerformance } from "../../lib/websitePerformance";
 
 type Data =
   | { ok: true; id?: string; notification?: "sent" | "deferred" }
@@ -20,6 +21,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
+  const startedAt = performance.now();
+  let statusCode: number | undefined;
+
   try {
     const result = await commandPublicContact({
       name: cleanString(req.body?.name, 200),
@@ -30,13 +34,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       websiteSessionId: getWebsiteAnalyticsSessionId(req),
     });
 
-    const status = result.ok && result.notification === "deferred" ? 202 : 200;
-    return res.status(status).json(result);
+    statusCode = result.ok && result.notification === "deferred" ? 202 : 200;
+    return res.status(statusCode).json(result);
   } catch (error) {
     if (error instanceof CommandPublicApiError) {
-      return res.status(error.status).json({ ok: false, error: error.message });
+      statusCode = error.status;
+      return res.status(statusCode).json({ ok: false, error: error.message });
     }
 
-    return res.status(500).json({ ok: false, error: "Server error" });
+    statusCode = 500;
+    return res.status(statusCode).json({ ok: false, error: "Server error" });
+  } finally {
+    await recordWebsiteRequestPerformance({
+      req,
+      routeKey: "CONTACT",
+      durationMs: performance.now() - startedAt,
+      statusCode,
+    });
   }
 }
