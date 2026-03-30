@@ -16,9 +16,9 @@ function commandBffCookieName() {
 }
 
 function getCookieEncryptionKey(): Buffer {
-  const secret = String(process.env.COMMAND_BFF_SESSION_SECRET || process.env.NEXTAUTH_SECRET || "").trim();
+  const secret = String(process.env.COMMAND_BFF_SESSION_SECRET || "").trim();
   if (!secret) {
-    throw new Error("COMMAND_BFF_SESSION_SECRET or NEXTAUTH_SECRET is required for command BFF sessions");
+    throw new Error("COMMAND_BFF_SESSION_SECRET is required for command BFF sessions");
   }
   return crypto.createHash("sha256").update(`command-bff:${secret}`).digest();
 }
