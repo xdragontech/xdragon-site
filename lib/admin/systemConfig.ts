@@ -1,8 +1,10 @@
 import { createHash } from "crypto";
+import { BackofficeRole, BackofficeUserStatus } from "@prisma/client";
 import { getBackofficeMfaIssuer, isBackofficeMfaEncryptionReady } from "../backofficeMfa";
 import { getProtectedBackofficeEmail } from "../backofficeBootstrap";
 import { authCookieDomain } from "../siteConfig";
 import { getRuntimeHostConfig } from "../runtimeHostConfig";
+import { prisma } from "../prisma";
 
 type EnvValueKind = "plain" | "secret" | "databaseUrl";
 
@@ -35,6 +37,20 @@ export type RuntimeStatusItem = {
   label: string;
   value: string;
   note?: string;
+};
+
+type ProtectedBackofficeDiagnostics = {
+  user: null | {
+    username: string;
+    role: BackofficeRole;
+    status: BackofficeUserStatus;
+    mfaMethod: string | null;
+    mfaEnabledAt: Date | null;
+    lastLoginAt: Date | null;
+    brandAccesses: Array<{ brandId: string }>;
+  };
+  configuredBrandCount: number;
+  error: string | null;
 };
 
 const ENV_GROUPS: Array<{
@@ -322,6 +338,83 @@ export async function collectRuntimeStatus(requestHost?: string | null): Promise
   const runtimeHost = await getRuntimeHostConfig(requestHost);
   const host = runtimeHost.requestHost || "unknown";
   const protectedBootstrapEmail = getProtectedBackofficeEmail();
+  let protectedAccountDiagnostics: ProtectedBackofficeDiagnostics = {
+    user: null,
+    configuredBrandCount: 0,
+    error: null,
+  };
+
+  try {
+    const [protectedUser, configuredBrandCount] = await Promise.all([
+      prisma.backofficeUser.findFirst({
+        where: { email: protectedBootstrapEmail },
+        select: {
+          username: true,
+          role: true,
+          status: true,
+          mfaMethod: true,
+          mfaEnabledAt: true,
+          lastLoginAt: true,
+          brandAccesses: {
+            select: {
+              brandId: true,
+            },
+          },
+        },
+      }),
+      prisma.brand.count(),
+    ]);
+
+    protectedAccountDiagnostics = {
+      user: protectedUser,
+      configuredBrandCount,
+      error: null,
+    };
+  } catch (error) {
+    protectedAccountDiagnostics = {
+      user: null,
+      configuredBrandCount: 0,
+      error: error instanceof Error ? error.message : "Unknown database error",
+    };
+  }
+
+  const protectedAccountStatus = (() => {
+    if (protectedAccountDiagnostics.error) return "Unavailable";
+    if (!protectedAccountDiagnostics.user) return "Missing";
+    if (protectedAccountDiagnostics.user.role !== BackofficeRole.SUPERADMIN) return "Misconfigured role";
+    if (protectedAccountDiagnostics.user.status !== BackofficeUserStatus.ACTIVE) return "Inactive";
+    return "Present";
+  })();
+
+  const protectedAccountStatusNote = (() => {
+    if (protectedAccountDiagnostics.error) {
+      return `Protected account lookup failed: ${protectedAccountDiagnostics.error}`;
+    }
+
+    if (!protectedAccountDiagnostics.user) {
+      return "Residual xdragon-site backoffice auth still expects this account to exist.";
+    }
+
+    const details = [
+      `Username ${protectedAccountDiagnostics.user.username}`,
+      `Role ${protectedAccountDiagnostics.user.role}`,
+      `Status ${protectedAccountDiagnostics.user.status}`,
+      `MFA ${
+        protectedAccountDiagnostics.user.mfaEnabledAt
+          ? "enabled"
+          : protectedAccountDiagnostics.user.mfaMethod
+            ? "pending"
+            : "not enabled"
+      }`,
+      `Explicit brand access ${protectedAccountDiagnostics.user.brandAccesses.length}/${protectedAccountDiagnostics.configuredBrandCount}`,
+    ];
+
+    if (protectedAccountDiagnostics.user.lastLoginAt) {
+      details.push(`Last login ${protectedAccountDiagnostics.user.lastLoginAt.toISOString()}`);
+    }
+
+    return details.join(". ");
+  })();
 
   return [
     {
@@ -379,6 +472,11 @@ export async function collectRuntimeStatus(requestHost?: string | null): Promise
       label: "Protected Backoffice Identity",
       value: protectedBootstrapEmail,
       note: "Residual xdragon-site backoffice auth still treats this configured email as the protected account identity.",
+    },
+    {
+      label: "Protected Backoffice Status",
+      value: protectedAccountStatus,
+      note: protectedAccountStatusNote,
     },
   ];
 }
