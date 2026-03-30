@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { BrandStatus } from "@prisma/client";
-import { resolveRuntimeBrandForHost } from "./brandRegistry";
 import { buildOrigin, getApiRequestHost, getApiRequestProtocol, normalizeHost } from "./requestHost";
+import { getRuntimeHostConfig } from "./runtimeHostConfig";
 
 export type BrandEnvironment = "production" | "preview";
 
@@ -54,7 +54,8 @@ export function canAccessBrand(scope: BackofficeBrandScope, brandKey: string | n
 }
 
 export async function resolvePublicBrandContextForHost(host: string): Promise<PublicBrandContext | null> {
-  const runtime = await resolveRuntimeBrandForHost(host);
+  const config = await getRuntimeHostConfig(host);
+  const runtime = config.runtime;
   if (!runtime) return null;
 
   return {

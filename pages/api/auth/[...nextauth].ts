@@ -3,8 +3,8 @@ import crypto from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { getRuntimeAllowedHosts } from "../../../lib/brandRegistry";
 import { authCookieDomain } from "../../../lib/siteConfig";
+import { getRuntimeHostConfig } from "../../../lib/runtimeHostConfig";
 import {
   BACKOFFICE_AUTH_SCOPE,
   BACKOFFICE_CREDENTIALS_PROVIDER_ID,
@@ -238,10 +238,8 @@ export const authOptions: NextAuthOptions = {
         const target = new URL(url);
         const host = target.hostname.toLowerCase();
         const baseHost = new URL(baseUrl).hostname.toLowerCase();
-
-        const allowedHosts = await getRuntimeAllowedHosts([baseHost]);
-
-        if (allowedHosts.has(host)) return url;
+        const runtimeHost = await getRuntimeHostConfig(baseHost);
+        if (runtimeHost.allowedHosts.includes(host)) return url;
       } catch {
         // fall through
       }

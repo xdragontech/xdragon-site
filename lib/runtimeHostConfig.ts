@@ -1,28 +1,36 @@
-import { getRuntimeAllowedHosts, resolveRuntimeBrandForHost } from "./brandRegistry";
+import {
+  commandPublicGetRuntimeHostConfig,
+  type CommandPublicRuntimeHostConfig,
+} from "./commandPublicApi";
 import { normalizeHost } from "./requestHost";
 
-export type RuntimeHostConfig = {
-  requestHost: string;
-  brandKey: string | null;
-  canonicalPublicHost: string | null;
-  canonicalAdminHost: string | null;
-  allowedHosts: string[];
-  resolvedFromBrandRegistry: boolean;
-};
+export type RuntimeHostConfig = CommandPublicRuntimeHostConfig;
+
+function buildFallbackRuntimeHostConfig(requestHost: string): RuntimeHostConfig {
+  return {
+    requestHost,
+    brandKey: null,
+    runtime: null,
+    canonicalPublicHost: requestHost || null,
+    canonicalAdminHost: requestHost || null,
+    allowedHosts: requestHost ? [requestHost] : [],
+    resolvedFromBrandRegistry: false,
+  };
+}
 
 export async function getRuntimeHostConfig(requestHost?: string | null): Promise<RuntimeHostConfig> {
   const normalizedHost = normalizeHost(requestHost);
-  const runtime = normalizedHost ? await resolveRuntimeBrandForHost(normalizedHost) : null;
-  const allowedHosts = Array.from(await getRuntimeAllowedHosts(normalizedHost ? [normalizedHost] : [])).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  if (!normalizedHost) {
+    return buildFallbackRuntimeHostConfig("");
+  }
 
-  return {
-    requestHost: normalizedHost,
-    brandKey: runtime?.brandKey || null,
-    canonicalPublicHost: runtime?.canonicalPublicHost || normalizedHost || null,
-    canonicalAdminHost: runtime?.canonicalAdminHost || normalizedHost || null,
-    allowedHosts,
-    resolvedFromBrandRegistry: Boolean(runtime),
-  };
+  try {
+    return await commandPublicGetRuntimeHostConfig({ host: normalizedHost });
+  } catch (error) {
+    console.error("[runtime-host] failed to load command runtime host config", {
+      requestHost: normalizedHost,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return buildFallbackRuntimeHostConfig(normalizedHost);
+  }
 }

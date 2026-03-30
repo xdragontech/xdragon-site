@@ -8,7 +8,7 @@ This is specifically about the **website deployment**, not every historical loca
 **Current Deployment Model**
 - `xdragon-site` owns:
   - public website UI
-  - host/brand runtime detection
+  - browser-facing host/runtime awareness and redirect enforcement
   - BFF/session handling
   - server-to-server calls to `command/public-api`
 - `command` owns:
@@ -16,6 +16,7 @@ This is specifically about the **website deployment**, not every historical loca
   - public chat
   - public contact handling
   - provider integrations behind those services
+  - database-backed brand/host runtime resolution
 
 That means provider keys for chat, contact, email sending, and old public rate limiting no longer belong on the website deployment.
 

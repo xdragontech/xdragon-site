@@ -61,13 +61,14 @@ These are not split failures. They belong to `xdragon-site` as the public fronte
   - [/Users/grantr/Projects/xdragon-site/components/resources/ResourcesLayout.tsx](/Users/grantr/Projects/xdragon-site/components/resources/ResourcesLayout.tsx)
 - BFF cookie/session envelope
   - [/Users/grantr/Projects/xdragon-site/lib/commandBffSession.ts](/Users/grantr/Projects/xdragon-site/lib/commandBffSession.ts)
-- website-side host/brand resolution needed before any server-to-server call happens
+- website-side host/runtime awareness and redirect decisions
   - [/Users/grantr/Projects/xdragon-site/middleware.ts](/Users/grantr/Projects/xdragon-site/middleware.ts)
   - [/Users/grantr/Projects/xdragon-site/pages/api/internal/brand-runtime.ts](/Users/grantr/Projects/xdragon-site/pages/api/internal/brand-runtime.ts)
 
 Important design note:
 - `command` should not own public-site middleware decisions or browser session presentation.
 - `xdragon-site` still needs its own host/runtime awareness because it is the actual frontend entrypoint.
+- the runtime host registry itself should remain command-owned. `xdragon-site` should consume that contract, not maintain a parallel live resolver.
 
 **Fallback Retirement Status**
 The public fallback-retirement wave removes the remaining duplicated public business logic from `xdragon-site`:
