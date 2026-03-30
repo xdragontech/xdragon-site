@@ -1,4 +1,5 @@
 import type { IncomingMessage } from "http";
+import type { BrandStatus } from "@prisma/client";
 import { buildOrigin, getApiRequestHost, getApiRequestProtocol } from "./requestHost";
 import { getCfCountryIso2, getClientIp, getHeader, getUserAgent } from "./requestIdentity";
 
@@ -116,6 +117,30 @@ export type CommandPublicAnalyticsConsentNotice = {
   declineLabel: string;
   publishedAt: string;
   updatedAt: string;
+};
+
+export type CommandPublicRuntimeBrandResolution = {
+  source: "database";
+  brandId?: string;
+  brandKey: string;
+  brandName: string;
+  status: BrandStatus | "ACTIVE";
+  environment: "production" | "preview";
+  matchedHost: string;
+  canonicalPublicHost: string;
+  canonicalAdminHost: string;
+  apexHost: string;
+  isAdminHost: boolean;
+};
+
+export type CommandPublicRuntimeHostConfig = {
+  requestHost: string;
+  brandKey: string | null;
+  runtime: CommandPublicRuntimeBrandResolution | null;
+  canonicalPublicHost: string | null;
+  canonicalAdminHost: string | null;
+  allowedHosts: string[];
+  resolvedFromBrandRegistry: boolean;
 };
 
 export type CommandPublicAnalyticsEvent = {
@@ -660,6 +685,24 @@ export async function commandPublicGetAnalyticsConsentNotice(params?: {
       request: params?.request,
     }
   );
+}
+
+export async function commandPublicGetRuntimeHostConfig(params: {
+  host: string;
+  request?: CommandPublicRequestSource;
+}) {
+  const payload = await requestCommandPublicApi<{
+    ok: true;
+    config: CommandPublicRuntimeHostConfig;
+  }>("/api/v1/runtime/host", {
+    query: {
+      host: params.host,
+    },
+    request: params.request,
+    trackPerformance: false,
+  });
+
+  return payload.config;
 }
 
 export async function commandPublicCollectAnalytics(params: {
