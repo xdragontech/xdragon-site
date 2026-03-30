@@ -43,7 +43,6 @@ These are still part of the live website runtime:
 - `COMMAND_PUBLIC_INTEGRATION_KEY`
 - `COMMAND_BFF_SESSION_SECRET`
 - `XD_POSTGRES`
-- website brand/host envs still used by the frontend runtime and brand bootstrap tooling
 
 **Do Not Remove Yet Without A Separate Cleanup**
 These are not part of the public cutover, but they still support backoffice/auth code that remains in this repo:
@@ -57,9 +56,9 @@ These are not part of the public cutover, but they still support backoffice/auth
 Removing those now would be a different change. The public site does not need them for the `command` cutover path, but the repo still contains backoffice runtime surfaces that reference them.
 
 **Important Nuance**
-This repo still contains some local operator/bootstrap scripts and docs that mention email bootstrap envs. That does **not** mean those envs still belong on the live `xdragon-site` Vercel project.
+This repo still contains some transitional admin diagnostics and historical docs that mention brand/bootstrap envs. That does **not** mean those envs still belong on the live `xdragon-site` Vercel project.
 
-If those local scripts are still needed, they should be treated as transitional operator tooling until that ownership is fully retired or moved to `command`.
+Brand registry, brand email bootstrap, and bootstrap-superadmin tooling are now retired from `xdragon-site` and owned by `command`.
 
 **Recommendation**
 1. Remove the safe-removal env vars from the `xdragon-site` Vercel project.
