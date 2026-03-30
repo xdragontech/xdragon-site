@@ -7,6 +7,7 @@ import {
 } from "../../../../lib/commandPublicApi";
 import { setCommandBffSessionCookie } from "../../../../lib/commandBffSession";
 import { getWebsiteAnalyticsSessionId } from "../../../../lib/websiteAnalytics";
+import { recordWebsiteRequestPerformance } from "../../../../lib/websitePerformance";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
@@ -21,6 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(503).json({ ok: false, error: "Command public API is not configured" });
   }
 
+  const startedAt = performance.now();
+  let statusCode: number | undefined;
+
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const result = await commandPublicLogin({
@@ -32,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     setCommandBffSessionCookie(res, result.session);
 
-    return res.status(200).json({
+    statusCode = 200;
+    return res.status(statusCode).json({
       ok: true,
       account: result.account,
     });
@@ -44,10 +49,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? String(req.body?.email || "").trim().toLowerCase().split("@")[1] || null
           : null,
       });
-      return res.status(error.status).json({ ok: false, error: error.message });
+      statusCode = error.status;
+      return res.status(statusCode).json({ ok: false, error: error.message });
     }
 
     console.error("[bff-auth-login] unexpected error", error);
-    return res.status(500).json({ ok: false, error: "Server error" });
+    statusCode = 500;
+    return res.status(statusCode).json({ ok: false, error: "Server error" });
+  } finally {
+    await recordWebsiteRequestPerformance({
+      req,
+      routeKey: "LOGIN",
+      durationMs: performance.now() - startedAt,
+      statusCode,
+    });
   }
 }

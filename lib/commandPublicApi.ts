@@ -120,7 +120,13 @@ export type CommandPublicAnalyticsConsentNotice = {
 
 export type CommandPublicAnalyticsEvent = {
   eventId: string;
-  eventType: "SESSION_START" | "PAGE_VIEW" | "ENGAGEMENT_PING" | "SESSION_END" | "WEB_VITAL";
+  eventType:
+    | "SESSION_START"
+    | "PAGE_VIEW"
+    | "ENGAGEMENT_PING"
+    | "SESSION_END"
+    | "WEB_VITAL"
+    | "PERFORMANCE_METRIC";
   occurredAt: string;
   path?: string | null;
   url?: string | null;
@@ -221,6 +227,17 @@ const FORWARDED_CLIENT_COUNTRY_HEADER = "X-Command-Client-Country-Iso2";
 const FORWARDED_CLIENT_USER_AGENT_HEADER = "X-Command-Client-User-Agent";
 const FORWARDED_CLIENT_REFERER_HEADER = "X-Command-Client-Referer";
 const WEBSITE_SESSION_HEADER = "X-Command-Website-Session";
+
+const TRACKED_PUBLIC_API_PERFORMANCE_ROUTES: Record<
+  string,
+  { routeKey: "LOGIN" | "SIGNUP" | "VERIFY_EMAIL" | "CONTACT" | "CHAT"; routeLabel: string }
+> = {
+  "/api/v1/auth/login": { routeKey: "LOGIN", routeLabel: "Login" },
+  "/api/v1/auth/register": { routeKey: "SIGNUP", routeLabel: "Signup" },
+  "/api/v1/auth/verify-email": { routeKey: "VERIFY_EMAIL", routeLabel: "Email Verification" },
+  "/api/v1/contact": { routeKey: "CONTACT", routeLabel: "Contact" },
+  "/api/v1/chat": { routeKey: "CHAT", routeLabel: "Chat" },
+};
 
 function normalizeBaseUrl(value: unknown) {
   const raw = String(value || "").trim();
@@ -333,6 +350,7 @@ async function requestCommandPublicApi<T>(
     method?: "GET" | "POST" | "PATCH";
     sessionToken?: string | null;
     websiteSessionId?: string | null;
+    trackPerformance?: boolean;
     body?: Record<string, unknown>;
     query?: Record<string, string | number | null | undefined>;
     request?: CommandPublicRequestSource;
@@ -367,6 +385,7 @@ async function requestCommandPublicApi<T>(
   }
 
   const method = options?.method || "GET";
+  const startedAt = performance.now();
   let response: Response;
   try {
     response = await fetch(url.toString(), {
@@ -390,6 +409,18 @@ async function requestCommandPublicApi<T>(
   }
 
   const { payload, text } = await readResponseBodySafe(response);
+  const requestDurationMs = Number((performance.now() - startedAt).toFixed(4));
+
+  if (options?.trackPerformance !== false) {
+    void recordCommandPublicApiPerformanceMetric({
+      pathname,
+      request: options?.request,
+      websiteSessionId: options?.websiteSessionId || null,
+      durationMs: requestDurationMs,
+      statusCode: response.status,
+    });
+  }
+
   if (!response.ok) {
     const upstreamError =
       payload && typeof payload === "object" && typeof (payload as any).error === "string"
@@ -640,8 +671,49 @@ export async function commandPublicCollectAnalytics(params: {
     method: "POST",
     request: params.request,
     websiteSessionId: params.websiteSessionId,
+    trackPerformance: false,
     body: {
       events: params.events,
     },
   });
+}
+
+async function recordCommandPublicApiPerformanceMetric(params: {
+  pathname: string;
+  request?: CommandPublicRequestSource;
+  websiteSessionId: string | null;
+  durationMs: number;
+  statusCode: number;
+}) {
+  const route = TRACKED_PUBLIC_API_PERFORMANCE_ROUTES[params.pathname];
+  if (!route || !params.request || !params.websiteSessionId) return;
+
+  try {
+    await commandPublicCollectAnalytics({
+      request: params.request,
+      websiteSessionId: params.websiteSessionId,
+      events: [
+        {
+          eventId: `perf_${route.routeKey.toLowerCase()}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          eventType: "PERFORMANCE_METRIC",
+          occurredAt: new Date().toISOString(),
+          metricName: "REQUEST_MS",
+          metricValue: params.durationMs,
+          url: getHeader(params.request, "referer")?.trim() || null,
+          raw: {
+            source: "PUBLIC_API",
+            routeKey: route.routeKey,
+            routeLabel: route.routeLabel,
+            statusCode: params.statusCode,
+          },
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("[command-public-api] failed to record performance metric", {
+      pathname: params.pathname,
+      statusCode: params.statusCode,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
