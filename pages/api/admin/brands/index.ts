@@ -1,9 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
-import { createEditableBrand, listEditableBrands } from "../../../../lib/brandRegistry";
+import { listEditableBrands } from "../../../../lib/brandRegistry";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
+}
+
+function retiredMessage() {
+  return "Brand management has been retired from xdragon-site. Use the command backoffice for brand changes.";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,9 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
-      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
-      const brand = await createEditableBrand(req.body || {});
-      return json(res, 200, { ok: true, brand });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     res.setHeader("Allow", "GET, POST");

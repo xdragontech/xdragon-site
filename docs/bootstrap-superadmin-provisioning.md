@@ -1,5 +1,10 @@
 # Bootstrap Superadmin Provisioning
 
+**Status**
+Retired from `xdragon-site`.
+
+Bootstrap superadmin provisioning and recovery are now owned by `command`, not this repo.
+
 **Purpose**
 Define the protected bootstrap superadmin contract for the current X Dragon installation, including provisioning, password source, recovery, and future reuse constraints.
 
@@ -50,9 +55,8 @@ Define the protected bootstrap superadmin contract for the current X Dragon inst
 - recovery must not depend on the normal staff-management UI alone
 
 **Current Tooling**
-- explicit ensure and recovery commands now exist for Preview and Production targets
-- `Settings / Configs` exposes bootstrap env presence and live protected-account status without exposing secrets
-- detailed operator commands live in [`docs/bootstrap-superadmin-workflow.md`](./bootstrap-superadmin-workflow.md)
+- use the equivalent `bootstrap-superadmin:*` commands from the `command` repo
+- `xdragon-site` no longer owns the bootstrap tooling contract
 
 **Operational Expectations**
 - the protected bootstrap account is for initial setup, emergency recovery, and maintenance
