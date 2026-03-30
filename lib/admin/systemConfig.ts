@@ -1,13 +1,8 @@
 import { createHash } from "crypto";
-import { BackofficeRole, BackofficeUserStatus } from "@prisma/client";
 import { getBackofficeMfaIssuer, isBackofficeMfaEncryptionReady } from "../backofficeMfa";
-import {
-  getBackofficeBootstrapPasswordEnvKey,
-  getProtectedBackofficeEmail,
-} from "../backofficeBootstrap";
+import { getProtectedBackofficeEmail } from "../backofficeBootstrap";
 import { authCookieDomain } from "../siteConfig";
 import { getRuntimeHostConfig } from "../runtimeHostConfig";
-import { prisma } from "../prisma";
 
 type EnvValueKind = "plain" | "secret" | "databaseUrl";
 
@@ -40,20 +35,6 @@ export type RuntimeStatusItem = {
   label: string;
   value: string;
   note?: string;
-};
-
-type BootstrapDiagnostics = {
-  user: null | {
-    username: string;
-    role: BackofficeRole;
-    status: BackofficeUserStatus;
-    mfaMethod: string | null;
-    mfaEnabledAt: Date | null;
-    lastLoginAt: Date | null;
-    brandAccesses: Array<{ brandId: string }>;
-  };
-  configuredBrandCount: number;
-  error: string | null;
 };
 
 const ENV_GROUPS: Array<{
@@ -154,12 +135,6 @@ const ENV_GROUPS: Array<{
         description: "Encryption key required before authenticator-app secrets and recovery codes can be stored safely.",
         kind: "secret",
       },
-      {
-        key: getBackofficeBootstrapPasswordEnvKey(),
-        label: "Bootstrap Superadmin Password",
-        description: "Password source used only by explicit bootstrap ensure/recovery tooling for the protected bootstrap account.",
-        kind: "secret",
-      },
     ],
   },
   {
@@ -182,7 +157,7 @@ const ENV_GROUPS: Array<{
       {
         key: "COMMAND_BFF_SESSION_SECRET",
         label: "Command BFF Session Secret",
-        description: "Dedicated secret for encrypting the website-side BFF session envelope. Preferred over falling back to NEXTAUTH_SECRET.",
+        description: "Dedicated secret required for encrypting the website-side BFF session envelope.",
         kind: "secret",
       },
     ],
@@ -346,86 +321,7 @@ export function collectSystemEnvGroups(): SystemEnvGroup[] {
 export async function collectRuntimeStatus(requestHost?: string | null): Promise<RuntimeStatusItem[]> {
   const runtimeHost = await getRuntimeHostConfig(requestHost);
   const host = runtimeHost.requestHost || "unknown";
-  const bootstrapPasswordKey = getBackofficeBootstrapPasswordEnvKey();
-  const bootstrapPasswordPresent = Boolean(getEnvValue(bootstrapPasswordKey));
   const protectedBootstrapEmail = getProtectedBackofficeEmail();
-  let bootstrapDiagnostics: BootstrapDiagnostics = {
-    user: null,
-    configuredBrandCount: 0,
-    error: null,
-  };
-
-  try {
-    const [bootstrapUser, configuredBrandCount] = await Promise.all([
-      prisma.backofficeUser.findFirst({
-        where: { email: protectedBootstrapEmail },
-        select: {
-          username: true,
-          role: true,
-          status: true,
-          mfaMethod: true,
-          mfaEnabledAt: true,
-          lastLoginAt: true,
-          brandAccesses: {
-            select: {
-              brandId: true,
-            },
-          },
-        },
-      }),
-      prisma.brand.count(),
-    ]);
-
-    bootstrapDiagnostics = {
-      user: bootstrapUser,
-      configuredBrandCount,
-      error: null,
-    };
-  } catch (error) {
-    bootstrapDiagnostics = {
-      user: null,
-      configuredBrandCount: 0,
-      error: error instanceof Error ? error.message : "Unknown database error",
-    };
-  }
-
-  const bootstrapStatusValue = (() => {
-    if (bootstrapDiagnostics.error) return "Unavailable";
-    if (!bootstrapDiagnostics.user) return "Missing";
-    if (bootstrapDiagnostics.user.role !== BackofficeRole.SUPERADMIN) return "Misconfigured role";
-    if (bootstrapDiagnostics.user.status !== BackofficeUserStatus.ACTIVE) return "Inactive";
-    return "Present";
-  })();
-
-  const bootstrapStatusNote = (() => {
-    if (bootstrapDiagnostics.error) {
-      return `Bootstrap account lookup failed: ${bootstrapDiagnostics.error}`;
-    }
-
-    if (!bootstrapDiagnostics.user) {
-      return "Run the explicit bootstrap superadmin ensure command if this account is missing.";
-    }
-
-    const details = [
-      `Username ${bootstrapDiagnostics.user.username}`,
-      `Role ${bootstrapDiagnostics.user.role}`,
-      `Status ${bootstrapDiagnostics.user.status}`,
-      `MFA ${
-        bootstrapDiagnostics.user.mfaEnabledAt
-          ? "enabled"
-          : bootstrapDiagnostics.user.mfaMethod
-            ? "pending"
-            : "not enabled"
-      }`,
-      `Explicit brand access ${bootstrapDiagnostics.user.brandAccesses.length}/${bootstrapDiagnostics.configuredBrandCount}`,
-    ];
-
-    if (bootstrapDiagnostics.user.lastLoginAt) {
-      details.push(`Last login ${bootstrapDiagnostics.user.lastLoginAt.toISOString()}`);
-    }
-
-    return details.join(". ");
-  })();
 
   return [
     {
@@ -480,19 +376,9 @@ export async function collectRuntimeStatus(requestHost?: string | null): Promise
       note: "A dedicated encryption key is required before authenticator secrets and recovery codes can be activated.",
     },
     {
-      label: "Bootstrap Superadmin Identity",
+      label: "Protected Backoffice Identity",
       value: protectedBootstrapEmail,
-      note: "Protected bootstrap backoffice identity for this installation.",
-    },
-    {
-      label: "Bootstrap Password Source",
-      value: bootstrapPasswordPresent ? `${bootstrapPasswordKey} present` : `${bootstrapPasswordKey} missing`,
-      note: "Used only by explicit bootstrap ensure/recovery tooling. Deploy startup does not consume it.",
-    },
-    {
-      label: "Bootstrap Superadmin Status",
-      value: bootstrapStatusValue,
-      note: bootstrapStatusNote,
+      note: "Residual xdragon-site backoffice auth still treats this configured email as the protected account identity.",
     },
   ];
 }

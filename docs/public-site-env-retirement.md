@@ -35,6 +35,7 @@ These no longer belong to the live website runtime:
 - `RESEND_TO_EMAIL`
 - `CONTACT_TO_EMAIL`
 - `CONTACT_TO`
+- `BACKOFFICE_BOOTSTRAP_PASSWORD`
 
 **Keep On The `xdragon-site` Vercel Project**
 These are still part of the live website runtime:
@@ -51,14 +52,15 @@ These are not part of the public cutover, but they still support backoffice/auth
 - `NEXTAUTH_SECRET`
 - `BACKOFFICE_MFA_ENCRYPTION_KEY`
 - `BACKOFFICE_MFA_ISSUER`
-- `BACKOFFICE_BOOTSTRAP_PASSWORD`
 
 Removing those now would be a different change. The public site does not need them for the `command` cutover path, but the repo still contains backoffice runtime surfaces that reference them.
 
 **Important Nuance**
 This repo still contains some transitional admin diagnostics and historical docs that mention brand/bootstrap envs. That does **not** mean those envs still belong on the live `xdragon-site` Vercel project.
 
-Brand registry, brand email bootstrap, and bootstrap-superadmin tooling are now retired from `xdragon-site` and owned by `command`.
+Brand registry, brand email bootstrap, bootstrap-superadmin tooling, and legacy identity bridge tooling are now retired from `xdragon-site` and owned by `command`.
+
+`COMMAND_BFF_SESSION_SECRET` is now a dedicated required secret for the website BFF. It should not rely on `NEXTAUTH_SECRET` as a fallback.
 
 **Recommendation**
 1. Remove the safe-removal env vars from the `xdragon-site` Vercel project.
