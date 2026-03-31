@@ -35,10 +35,6 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
     <aside className="lg:col-span-2">
       <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
         <nav className="space-y-2">
-          <Link href="/admin/dashboard" className={itemClass("dashboard")}>
-            Dashboard
-          </Link>
-
           <div className="space-y-2">
             <Link href="/admin/accounts" className={itemClass("accounts")}>
               Accounts
@@ -48,9 +44,6 @@ export default function AdminSidebar({ active }: AdminSidebarProps) {
               <div className="space-y-2 pl-3">
                 <Link href="/admin/accounts/staff" className={subItemClass("/admin/accounts/staff", ["/admin/accounts"])}>
                   Staff Accts
-                </Link>
-                <Link href="/admin/accounts/clients" className={subItemClass("/admin/accounts/clients")}>
-                  Client Accts
                 </Link>
                 <span className={disabledSubBase} aria-disabled="true">
                   Partner Accts

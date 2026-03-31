@@ -1,16 +1,12 @@
-import { ExternalUserStatus } from "@prisma/client";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
-import {
-  deleteManagedExternalUser,
-  getManagedExternalUser,
-  markManagedExternalUserVerified,
-  setManagedExternalUserStatus,
-  updateManagedExternalUser,
-} from "../../../../lib/externalAdminUsers";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
+}
+
+function retiredMessage() {
+  return "Client account management has been retired from xdragon-site. Use the command backoffice for client account changes.";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -22,40 +18,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "GET") {
-      const user = await getManagedExternalUser(id);
-      if (!user) return json(res, 404, { ok: false, error: "Client account not found" });
-      if (auth.principal.role !== "SUPERADMIN" && !auth.principal.allowedBrandIds.includes(user.brandId)) {
-        return json(res, 403, { ok: false, error: "Forbidden" });
-      }
-      return json(res, 200, { ok: true, user });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     if (req.method === "DELETE") {
       if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
-      await deleteManagedExternalUser(id);
-      return json(res, 200, { ok: true });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     if (req.method === "PATCH" || req.method === "POST") {
       if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
-      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-      const action = String(body.action || "").toLowerCase();
-
-      if (action === "block" || action === "unblock") {
-        const user = await setManagedExternalUserStatus(
-          id,
-          action === "block" ? ExternalUserStatus.BLOCKED : ExternalUserStatus.ACTIVE
-        );
-        return json(res, 200, { ok: true, user });
-      }
-
-      if (action === "verify") {
-        const user = await markManagedExternalUserVerified(id);
-        return json(res, 200, { ok: true, user });
-      }
-
-      const user = await updateManagedExternalUser(id, body);
-      return json(res, 200, { ok: true, user });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     res.setHeader("Allow", "GET, PATCH, POST, DELETE");

@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireAdminApi } from "../../../../lib/auth";
-import {
-  createManagedExternalUser,
-  listManagedExternalUsers,
-} from "../../../../lib/externalAdminUsers";
 
 function json(res: NextApiResponse, status: number, payload: any) {
   return res.status(status).json(payload);
+}
+
+function retiredMessage() {
+  return "Client account management has been retired from xdragon-site. Use the command backoffice for client account changes.";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -15,18 +15,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "GET") {
-      const users = await listManagedExternalUsers();
-      const visibleUsers =
-        auth.principal.role === "SUPERADMIN"
-          ? users
-          : users.filter((user) => auth.principal.allowedBrandIds.includes(user.brandId));
-      return json(res, 200, { ok: true, users: visibleUsers });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     if (req.method === "POST") {
-      if (auth.principal.role !== "SUPERADMIN") return json(res, 403, { ok: false, error: "Forbidden" });
-      const user = await createManagedExternalUser(req.body || {});
-      return json(res, 200, { ok: true, user });
+      return json(res, 410, { ok: false, error: retiredMessage() });
     }
 
     res.setHeader("Allow", "GET, POST");
