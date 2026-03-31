@@ -53,7 +53,7 @@ export default function AdminCommandSignIn({ allowedHosts, recommendedAdminHost 
   const router = useRouter();
 
   const callbackUrl = useMemo(() => {
-    if (typeof window === "undefined") return "/admin/dashboard";
+    if (typeof window === "undefined") return "/admin/library";
     return normalizeCallbackUrl(router.query.callbackUrl as any, window.location.origin, allowedHosts);
   }, [allowedHosts, router.query.callbackUrl]);
 
