@@ -4,9 +4,9 @@ import { useRouter } from "next/router";
 
 /**
  * Deprecated route: /admin/users
- * This app now uses /admin/dashboard as the dashboard page.
- * Keep this file temporarily to avoid breaking old bookmarks/links.
- * You can delete this file once you're confident nothing relies on /admin/users.
+ * The old dashboard surface has been retired from xdragon-site.
+ * Keep this file temporarily to funnel old bookmarks through the
+ * dashboard retirement route instead of hard failing.
  */
 export default function AdminUsersRedirect() {
   const router = useRouter();

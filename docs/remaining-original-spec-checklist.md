@@ -56,6 +56,9 @@ Exit criteria:
 - reporting/metrics no longer depend on transitional compatibility logic
 - release QA, staging/prod DB steps, and recovery procedures are explicit
 
+Progress already made:
+- `xdragon-site` brand management, dashboard metrics, and client account admin surfaces are retired in favor of `command`
+
 ## Not Core Original-Spec Items
 These are valid backlog items, but they are not ahead of the checklist above:
 - partner accounts
