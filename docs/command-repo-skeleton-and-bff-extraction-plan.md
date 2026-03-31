@@ -235,7 +235,6 @@ The public site should introduce a narrow local BFF that mirrors the `command` p
 - [`lib/backofficeMfaChallenge.ts`](../lib/backofficeMfaChallenge.ts)
 - [`lib/backofficeMfaService.ts`](../lib/backofficeMfaService.ts)
 - [`lib/backofficeAdminUsers.ts`](../lib/backofficeAdminUsers.ts)
-- [`lib/externalAdminUsers.ts`](../lib/externalAdminUsers.ts)
 - [`lib/brandContext.ts`](../lib/brandContext.ts)
 - [`lib/brandRegistry.ts`](../lib/brandRegistry.ts)
 - [`lib/runtimeHostConfig.ts`](../lib/runtimeHostConfig.ts)
@@ -307,6 +306,10 @@ Exit criteria:
 - `xdragon-site` no longer owns external identity truth
 - `xdragon-site` no longer directly serves legacy public auth/resource APIs
 - compatibility paths removed or explicitly deprecated
+
+Progress:
+- remaining legacy dashboard and client-account admin surfaces in `xdragon-site` are retired in favor of `command`
+- the transitional `ExternalUser.legacyUserId` bridge is removed once those surfaces are gone
 
 Tasks:
 - remove direct use of current public auth APIs
