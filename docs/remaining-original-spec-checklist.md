@@ -59,6 +59,8 @@ Exit criteria:
 Progress already made:
 - `xdragon-site` brand management, dashboard metrics, and client account admin surfaces are retired in favor of `command`
 - the transitional `ExternalUser.legacyUserId` bridge to legacy `User` rows is removed after those retirements
+- the remaining `xdragon-site` analytics and login-geo backfill admin surface is retired in favor of `command`
+- the shared legacy auth domain (`User`, `Account`, `Session`, verification/reset tokens, and `LoginEvent`) is removed from the active schema
 
 ## Not Core Original-Spec Items
 These are valid backlog items, but they are not ahead of the checklist above:
