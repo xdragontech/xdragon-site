@@ -58,6 +58,7 @@ Exit criteria:
 
 Progress already made:
 - `xdragon-site` brand management, dashboard metrics, and client account admin surfaces are retired in favor of `command`
+- the transitional `ExternalUser.legacyUserId` bridge to legacy `User` rows is removed after those retirements
 
 ## Not Core Original-Spec Items
 These are valid backlog items, but they are not ahead of the checklist above:
