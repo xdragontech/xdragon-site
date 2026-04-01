@@ -3,9 +3,12 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import BrandHead from "../../components/BrandHead";
 import PublicSiteHeader from "../../components/PublicSiteHeader";
+import PublicScheduleFeedList from "../../components/publicSchedule/PublicScheduleFeedList";
 import {
+  commandPublicGetScheduleFeed,
   commandPublicListScheduleCalendar,
   commandPublicListScheduleList,
+  type CommandPublicScheduleFeedResponse,
   type CommandPublicScheduleItem,
   type CommandPublicScheduleParticipantType,
   type CommandPublicScheduleResourceType,
@@ -23,6 +26,8 @@ const PublicScheduleCalendar = dynamic(
 type PageProps = {
   initialCalendar: CommandPublicScheduleResponse;
   initialList: CommandPublicScheduleResponse;
+  initialFeed: CommandPublicScheduleFeedResponse | null;
+  initialFeedError: string | null;
   initialFilters: {
     from: string;
     to: string;
@@ -91,6 +96,8 @@ function eventColors(item: CommandPublicScheduleItem) {
 export default function PublicSchedulePage({
   initialCalendar,
   initialList,
+  initialFeed,
+  initialFeedError,
   initialFilters,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const [apiFilters, setApiFilters] = useState(initialFilters);
@@ -374,18 +381,29 @@ export default function PublicSchedulePage({
 
           {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-          <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
-            <PublicScheduleCalendar
-              events={calendarEvents}
-              loading={loading}
-              onRangeChange={(range) => {
-                if (range.from === apiFilters.from && range.to === apiFilters.to) return;
-                const nextFilters = { ...draftFilters, from: range.from, to: range.to };
-                setDraftFilters(nextFilters);
-                void loadSchedule(nextFilters);
-              }}
-              onEventOpen={(id) => setSelectedId(id)}
-            />
+          <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.9fr)] xl:items-start">
+            <div className="grid gap-3">
+              <PublicScheduleFeedList title="Friday Stage List" items={initialFeed?.items || []} />
+              {initialFeedError ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  {initialFeedError}
+                </div>
+              ) : null}
+            </div>
+
+            <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+              <PublicScheduleCalendar
+                events={calendarEvents}
+                loading={loading}
+                onRangeChange={(range) => {
+                  if (range.from === apiFilters.from && range.to === apiFilters.to) return;
+                  const nextFilters = { ...draftFilters, from: range.from, to: range.to };
+                  setDraftFilters(nextFilters);
+                  void loadSchedule(nextFilters);
+                }}
+                onEventOpen={(id) => setSelectedId(id)}
+              />
+            </section>
           </section>
 
           <section className="grid gap-6 xl:grid-cols-3">
@@ -523,6 +541,7 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
     resourceType: typeof ctx.query.resourceType === "string" ? ctx.query.resourceType : "",
   };
 
+  const schedulePageFeedId = String(process.env.SCHEDULE_PAGE_FEED_ID || "").trim();
   const [initialCalendar, initialList] = await Promise.all([
     commandPublicListScheduleCalendar({
       from: initialFilters.from,
@@ -542,10 +561,28 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
     }),
   ]);
 
+  let initialFeed: CommandPublicScheduleFeedResponse | null = null;
+  let initialFeedError: string | null = null;
+
+  if (schedulePageFeedId) {
+    try {
+      initialFeed = await commandPublicGetScheduleFeed({
+        feedId: schedulePageFeedId,
+        request: ctx.req,
+      });
+    } catch (error: any) {
+      initialFeedError = error?.message || "Failed to load schedule feed";
+    }
+  } else {
+    initialFeedError = "Schedule feed is not configured.";
+  }
+
   return {
     props: {
       initialCalendar,
       initialList,
+      initialFeed,
+      initialFeedError,
       initialFilters,
     },
   };
