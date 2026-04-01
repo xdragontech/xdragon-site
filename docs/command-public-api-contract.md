@@ -18,6 +18,7 @@ Implementation/extraction companion:
 - password reset
 - brand-scoped prompt feed
 - brand-scoped guide feed
+- brand-scoped published schedule feeds, including generated feed-ID projections for alternate public layouts
 
 This pass is intentionally narrow. It does not try to freeze every future service into v1.
 
@@ -82,12 +83,18 @@ Deferred from this contract:
 - list guides
 - fetch guide detail by slug
 
+**Scheduling**
+- published schedule calendar feed
+- published schedule listing feed
+- generated feed-ID schedule projections consumed through the website BFF
+
 **Recommended v1 Conventions**
 - path prefix: `/v1`
 - JSON responses only
 - OpenAPI-first versioning
 - opaque session token, not a browser-managed direct auth contract
 - generic password-forgot response to avoid account enumeration
+- fetch generated schedule feeds through the website BFF; do not expose the integration key or call `command` directly from browser JavaScript
 
 **Why This Contract Is The Right First Cut**
 - it covers the public-site features that already exist today
