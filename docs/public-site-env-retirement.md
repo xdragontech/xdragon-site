@@ -43,6 +43,7 @@ These are still part of the live website runtime:
 - `COMMAND_PUBLIC_API_BASE_URL`
 - `COMMAND_PUBLIC_INTEGRATION_KEY`
 - `COMMAND_BFF_SESSION_SECRET`
+- `SCHEDULE_PAGE_FEED_ID`
 - `XD_POSTGRES`
 
 **Do Not Remove Yet Without A Separate Cleanup**

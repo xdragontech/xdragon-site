@@ -107,6 +107,20 @@ export type CommandPublicScheduleResponse = {
   items: CommandPublicScheduleItem[];
 };
 
+export type CommandPublicScheduleFeedItem = {
+  occurrenceDate: string;
+  resourceName: string;
+  participantName: string;
+  timeslot: string;
+  locationId: string;
+};
+
+export type CommandPublicScheduleFeedResponse = {
+  ok: true;
+  feedId: string;
+  items: CommandPublicScheduleFeedItem[];
+};
+
 export type CommandPublicAnalyticsConsentNotice = {
   id: string;
   version: number;
@@ -674,6 +688,19 @@ export async function commandPublicListScheduleList(params?: CommandPublicSchedu
       limit: params?.limit,
     },
   });
+}
+
+export async function commandPublicGetScheduleFeed(params: {
+  feedId: string;
+  request?: CommandPublicRequestSource;
+}) {
+  return requestCommandPublicApi<CommandPublicScheduleFeedResponse>(
+    `/api/v1/schedule/feeds/${encodeURIComponent(params.feedId)}`,
+    {
+      request: params.request,
+      trackPerformance: false,
+    }
+  );
 }
 
 export async function commandPublicGetAnalyticsConsentNotice(params?: {
