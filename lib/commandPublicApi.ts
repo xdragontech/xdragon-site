@@ -15,6 +15,115 @@ export type CommandPublicAccount = {
   lastLoginAt: string | null;
 };
 
+export type CommandPartnerPortalScope = "partners" | "sponsors";
+export type CommandPartnerKind = "PARTICIPANT" | "SPONSOR";
+export type CommandPartnerUserStatus = "ACTIVE" | "BLOCKED";
+export type CommandPartnerParticipantType = "ENTERTAINMENT" | "FOOD_VENDOR" | "MARKET_VENDOR";
+export type CommandPartnerEntertainmentType = "LIVE_BAND" | "DJ" | "COMEDY" | "MAGIC";
+export type CommandPartnerFoodSetupType = "TRUCK" | "TRAILER" | "CART" | "STAND";
+export type CommandPartnerMarketType =
+  | "APPAREL"
+  | "JEWELRY"
+  | "DECOR"
+  | "SKINCARE"
+  | "FOOD"
+  | "SERVICE"
+  | "OTHER";
+export type CommandPartnerSponsorType = "DIRECT" | "IN_KIND" | "MEDIA";
+export type CommandPartnerApplicationStatus =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "IN_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "WITHDRAWN";
+
+export type CommandPartnerPortalAccount = {
+  id: string;
+  partnerProfileId: string;
+  brandId: string;
+  brandKey: string;
+  brandName: string;
+  email: string;
+  kind: CommandPartnerKind;
+  status: CommandPartnerUserStatus;
+  emailVerifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+  displayName: string;
+  slug: string;
+};
+
+export type CommandPartnerPortalEventOption = {
+  id: string;
+  slug: string;
+  name: string;
+  seasonStartsOn: string;
+  seasonEndsOn: string;
+};
+
+export type CommandPartnerPortalApplication = {
+  id: string;
+  status: CommandPartnerApplicationStatus;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  withdrawnAt: string | null;
+  event: CommandPartnerPortalEventOption;
+};
+
+export type CommandParticipantPortalProfile = {
+  kind: "PARTICIPANT";
+  account: CommandPartnerPortalAccount;
+  contactName: string;
+  contactPhone: string;
+  displayName: string;
+  slug: string;
+  summary: string | null;
+  description: string | null;
+  mainWebsiteUrl: string | null;
+  socialLinks: Record<string, string> | null;
+  profileCompletedAt: string | null;
+  participantType: CommandPartnerParticipantType;
+  entertainmentType: CommandPartnerEntertainmentType | null;
+  entertainmentStyle: string | null;
+  foodStyle: string | null;
+  foodSetupType: CommandPartnerFoodSetupType | null;
+  marketType: CommandPartnerMarketType | null;
+  specialRequirements: string | null;
+};
+
+export type CommandSponsorPortalProfile = {
+  kind: "SPONSOR";
+  account: CommandPartnerPortalAccount;
+  contactName: string;
+  contactPhone: string;
+  displayName: string;
+  slug: string;
+  description: string | null;
+  mainWebsiteUrl: string | null;
+  socialLinks: Record<string, string> | null;
+  profileCompletedAt: string | null;
+  productServiceType: string;
+  audienceProfile: string | null;
+  marketingGoals: string | null;
+  onsitePlacement: string | null;
+  signageInformation: string | null;
+  staffed: boolean | null;
+  sponsorType: CommandPartnerSponsorType | null;
+  requests: string | null;
+};
+
+export type CommandPartnerPortalProfile = CommandParticipantPortalProfile | CommandSponsorPortalProfile;
+
+export type CommandPartnerPortalApplicationsPayload = {
+  ok: true;
+  account: CommandPartnerPortalAccount;
+  applications: CommandPartnerPortalApplication[];
+  availableEvents: CommandPartnerPortalEventOption[];
+};
+
 export type CommandPublicSessionState = {
   session: {
     token: string;
@@ -563,6 +672,166 @@ export async function commandPublicLogout(sessionToken: string) {
     method: "POST",
     sessionToken,
   });
+}
+
+function commandPartnerScopeBase(scope: CommandPartnerPortalScope) {
+  return scope === "sponsors" ? "/api/v1/sponsors" : "/api/v1/partners";
+}
+
+export async function commandPartnerRegister(
+  scope: CommandPartnerPortalScope,
+  params: {
+    body: Record<string, unknown>;
+    request?: CommandPublicRequestSource;
+    websiteSessionId?: string | null;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; verificationRequired: true }>(
+    `${commandPartnerScopeBase(scope)}/auth/register`,
+    {
+      method: "POST",
+      request: params.request,
+      websiteSessionId: params.websiteSessionId,
+      trackPerformance: false,
+      body: params.body,
+    }
+  );
+}
+
+export async function commandPartnerVerifyEmail(
+  scope: CommandPartnerPortalScope,
+  params: {
+    token: string;
+    request?: CommandPublicRequestSource;
+    websiteSessionId?: string | null;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; verified: true }>(
+    `${commandPartnerScopeBase(scope)}/auth/verify-email`,
+    {
+      method: "POST",
+      request: params.request,
+      websiteSessionId: params.websiteSessionId,
+      trackPerformance: false,
+      body: { token: params.token },
+    }
+  );
+}
+
+export async function commandPartnerLogin(
+  scope: CommandPartnerPortalScope,
+  params: {
+    email: string;
+    password: string;
+    request?: CommandPublicRequestSource;
+    websiteSessionId?: string | null;
+  }
+) {
+  return requestCommandPublicApi<{
+    ok: true;
+    session: {
+      token: string;
+      expiresAt: string;
+    };
+    account: CommandPartnerPortalAccount;
+  }>(`${commandPartnerScopeBase(scope)}/auth/login`, {
+    method: "POST",
+    request: params.request,
+    websiteSessionId: params.websiteSessionId,
+    trackPerformance: false,
+    body: {
+      email: params.email,
+      password: params.password,
+    },
+  });
+}
+
+export async function commandPartnerGetSession(
+  scope: CommandPartnerPortalScope,
+  sessionToken: string
+) {
+  return requestCommandPublicApi<{ ok: true; account: CommandPartnerPortalAccount }>(
+    `${commandPartnerScopeBase(scope)}/auth/session`,
+    {
+      sessionToken,
+      trackPerformance: false,
+    }
+  );
+}
+
+export async function commandPartnerLogout(
+  scope: CommandPartnerPortalScope,
+  sessionToken: string
+) {
+  return requestCommandPublicApi<void>(`${commandPartnerScopeBase(scope)}/auth/logout`, {
+    method: "POST",
+    sessionToken,
+    trackPerformance: false,
+  });
+}
+
+export async function commandPartnerGetProfile(
+  scope: CommandPartnerPortalScope,
+  sessionToken: string
+) {
+  return requestCommandPublicApi<{ ok: true; profile: CommandPartnerPortalProfile }>(
+    `${commandPartnerScopeBase(scope)}/profile`,
+    {
+      sessionToken,
+      trackPerformance: false,
+    }
+  );
+}
+
+export async function commandPartnerUpdateProfile(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    body: Record<string, unknown>;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; profile: CommandPartnerPortalProfile }>(
+    `${commandPartnerScopeBase(scope)}/profile`,
+    {
+      method: "PATCH",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: params.body,
+    }
+  );
+}
+
+export async function commandPartnerListApplications(
+  scope: CommandPartnerPortalScope,
+  sessionToken: string
+) {
+  return requestCommandPublicApi<CommandPartnerPortalApplicationsPayload>(
+    `${commandPartnerScopeBase(scope)}/applications`,
+    {
+      sessionToken,
+      trackPerformance: false,
+    }
+  );
+}
+
+export async function commandPartnerSubmitApplication(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    scheduleEventSeriesId: string;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; application: CommandPartnerPortalApplication }>(
+    `${commandPartnerScopeBase(scope)}/applications`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        scheduleEventSeriesId: params.scheduleEventSeriesId,
+      },
+    }
+  );
 }
 
 export async function commandPublicListPrompts(sessionToken: string, params?: { q?: string; category?: string; limit?: number }) {
