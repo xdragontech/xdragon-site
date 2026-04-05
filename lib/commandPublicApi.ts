@@ -51,6 +51,7 @@ export type CommandPartnerPortalAccount = {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
+  passwordChangeRequired: boolean;
   displayName: string;
   slug: string;
 };
@@ -755,6 +756,26 @@ export async function commandPartnerGetSession(
     {
       sessionToken,
       trackPerformance: false,
+    }
+  );
+}
+
+export async function commandPartnerChangePassword(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    password: string;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; account: CommandPartnerPortalAccount }>(
+    `${commandPartnerScopeBase(scope)}/auth/change-password`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        password: params.password,
+      },
     }
   );
 }

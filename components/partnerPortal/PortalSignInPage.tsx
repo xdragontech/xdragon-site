@@ -52,6 +52,11 @@ export default function PortalSignInPage(props: { scope: CommandPartnerPortalSco
         throw new Error(payload?.error || "Sign-in failed. Please try again.");
       }
 
+      if (payload.account?.passwordChangeRequired) {
+        window.location.assign(`/${props.scope}/password?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+        return;
+      }
+
       window.location.assign(callbackUrl);
     } catch (nextError: any) {
       setError(nextError?.message || "Sign-in failed. Please try again.");

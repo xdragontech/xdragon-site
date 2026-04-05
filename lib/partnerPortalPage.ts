@@ -8,7 +8,8 @@ import {
 
 export async function requirePartnerPortalPageSession(
   ctx: GetServerSidePropsContext,
-  scope: CommandPartnerPortalScope
+  scope: CommandPartnerPortalScope,
+  options?: { allowPasswordChangePage?: boolean }
 ): Promise<
   | {
       redirect: {
@@ -35,6 +36,22 @@ export async function requirePartnerPortalPageSession(
 
   try {
     const session = await commandPartnerGetSession(scope, token);
+    if (session.account.passwordChangeRequired && !options?.allowPasswordChangePage) {
+      return {
+        redirect: {
+          destination: `/${scope}/password?callbackUrl=${encodeURIComponent(ctx.resolvedUrl || `/${scope}/profile`)}`,
+          permanent: false,
+        },
+      } as const;
+    }
+    if (!session.account.passwordChangeRequired && options?.allowPasswordChangePage) {
+      return {
+        redirect: {
+          destination: `/${scope}/profile`,
+          permanent: false,
+        },
+      } as const;
+    }
     return {
       account: session.account,
     };
