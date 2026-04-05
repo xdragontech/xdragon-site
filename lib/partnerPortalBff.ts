@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import {
+  commandPartnerChangePassword,
   commandPartnerGetProfile,
   commandPartnerGetSession,
   commandPartnerListApplications,
@@ -173,6 +174,46 @@ export async function handlePartnerPortalSession(
     }
 
     console.error(`[${scope}-session] unexpected error`, error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handlePartnerPortalChangePassword(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  scope: CommandPartnerPortalScope
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const result = await commandPartnerChangePassword(scope, {
+      sessionToken,
+      password: String(req.body?.password || ""),
+    });
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError(`${scope}-change-password`, error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error(`[${scope}-change-password] unexpected error`, error);
     return json(res, 500, { ok: false, error: "Server error" });
   }
 }
