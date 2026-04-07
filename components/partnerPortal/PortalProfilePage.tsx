@@ -8,6 +8,7 @@ import type {
 } from "../../lib/commandPublicApi";
 import PortalShell from "./PortalShell";
 import PortalParticipantRequirementsCard from "./PortalParticipantRequirementsCard";
+import PortalPhoneField, { buildPortalPhoneInputState, serializePortalPhoneInputState } from "./PortalPhoneField";
 import PortalProfileImageCard from "./PortalProfileImageCard";
 import PortalNav from "./PortalNav";
 import { PORTAL_CONFIG, SOCIAL_LINK_FIELDS } from "./portalConfig";
@@ -30,6 +31,7 @@ export default function PortalProfilePage(props: {
   const [notice, setNotice] = useState("");
 
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>(() => baseSocialLinks(null));
+  const [contactPhoneState, setContactPhoneState] = useState(() => buildPortalPhoneInputState(""));
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +52,7 @@ export default function PortalProfilePage(props: {
         if (cancelled) return;
         setProfile(payload.profile as CommandPartnerPortalProfile);
         setSocialLinks(baseSocialLinks(payload.profile as CommandPartnerPortalProfile));
+        setContactPhoneState(buildPortalPhoneInputState((payload.profile as CommandPartnerPortalProfile).contactPhone));
       } catch (nextError: any) {
         if (cancelled) return;
         setError(nextError?.message || "Failed to load profile.");
@@ -82,12 +85,18 @@ export default function PortalProfilePage(props: {
     setSaving(true);
     setError("");
     setNotice("");
+    const serializedPhone = serializePortalPhoneInputState(contactPhoneState);
+    if (!serializedPhone) {
+      setSaving(false);
+      setError("Contact phone is required.");
+      return;
+    }
 
     const form = new FormData(event.currentTarget);
     const body: Record<string, unknown> = {
       displayName: String(form.get("displayName") || ""),
       contactName: String(form.get("contactName") || ""),
-      contactPhone: String(form.get("contactPhone") || ""),
+      contactPhone: serializedPhone,
       description: String(form.get("description") || ""),
       mainWebsiteUrl: String(form.get("mainWebsiteUrl") || ""),
       socialLinks,
@@ -127,6 +136,7 @@ export default function PortalProfilePage(props: {
       }
       setProfile(payload.profile as CommandPartnerPortalProfile);
       setSocialLinks(baseSocialLinks(payload.profile as CommandPartnerPortalProfile));
+      setContactPhoneState(buildPortalPhoneInputState((payload.profile as CommandPartnerPortalProfile).contactPhone));
       setNotice("Profile saved.");
     } catch (nextError: any) {
       setError(nextError?.message || "Failed to save profile.");
@@ -193,14 +203,7 @@ export default function PortalProfilePage(props: {
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium">Contact phone</label>
-                  <input
-                    name="contactPhone"
-                    defaultValue={profile.contactPhone}
-                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
+                <PortalPhoneField label="Contact phone" state={contactPhoneState} onChange={setContactPhoneState} />
                 <div>
                   <label className="text-sm font-medium">Main website URL</label>
                   <input

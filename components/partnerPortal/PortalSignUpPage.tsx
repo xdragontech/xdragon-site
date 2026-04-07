@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import PortalShell from "./PortalShell";
+import PortalPhoneField, { buildPortalPhoneInputState, serializePortalPhoneInputState } from "./PortalPhoneField";
 import { PORTAL_CONFIG } from "./portalConfig";
 import type { CommandPartnerPortalScope, CommandPartnerParticipantType } from "../../lib/commandPublicApi";
 
@@ -16,7 +17,7 @@ export default function PortalSignUpPage(props: { scope: CommandPartnerPortalSco
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [contactName, setContactName] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
+  const [contactPhoneState, setContactPhoneState] = useState(() => buildPortalPhoneInputState(""));
   const [summary, setSummary] = useState("");
   const [participantType, setParticipantType] = useState<CommandPartnerParticipantType>("ENTERTAINMENT");
   const [productServiceType, setProductServiceType] = useState("");
@@ -27,8 +28,9 @@ export default function PortalSignUpPage(props: { scope: CommandPartnerPortalSco
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const serializedPhone = serializePortalPhoneInputState(contactPhoneState);
 
-    if (!email.trim() || !password.trim() || !displayName.trim() || !contactName.trim() || !contactPhone.trim()) {
+    if (!email.trim() || !password.trim() || !displayName.trim() || !contactName.trim() || !serializedPhone) {
       setError("Please complete the required fields.");
       return;
     }
@@ -52,7 +54,7 @@ export default function PortalSignUpPage(props: { scope: CommandPartnerPortalSco
               password,
               displayName: displayName.trim(),
               contactName: contactName.trim(),
-              contactPhone: contactPhone.trim(),
+              contactPhone: serializedPhone,
               summary: summary.trim() || null,
               participantType,
             }
@@ -61,7 +63,7 @@ export default function PortalSignUpPage(props: { scope: CommandPartnerPortalSco
               password,
               displayName: displayName.trim(),
               contactName: contactName.trim(),
-              contactPhone: contactPhone.trim(),
+              contactPhone: serializedPhone,
               productServiceType: productServiceType.trim(),
             };
 
@@ -121,15 +123,7 @@ export default function PortalSignUpPage(props: { scope: CommandPartnerPortalSco
               placeholder="Primary contact"
             />
           </div>
-          <div>
-            <label className="text-sm font-medium">Contact phone</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-              value={contactPhone}
-              onChange={(event) => setContactPhone(event.target.value)}
-              placeholder="604-555-1234"
-            />
-          </div>
+          <PortalPhoneField label="Contact phone" state={contactPhoneState} onChange={setContactPhoneState} />
           {props.scope === "partners" ? (
             <>
               <div>
