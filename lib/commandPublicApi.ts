@@ -37,6 +37,24 @@ export type CommandPartnerApplicationStatus =
   | "APPROVED"
   | "REJECTED"
   | "WITHDRAWN";
+export type CommandPartnerAssetKind = "PROFILE_IMAGE" | "DOCUMENT";
+export type CommandPartnerAssetStorageBucket = "PUBLIC_MEDIA" | "PRIVATE_DOCUMENTS";
+export type CommandParticipantRequirementType =
+  | "BUSINESS_LICENSE"
+  | "HEALTH_PERMIT"
+  | "BUSINESS_INSURANCE"
+  | "FIRE_PERMIT";
+export type CommandParticipantRequirementReviewerState =
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "EXPIRED";
+export type CommandPartnerPortalRequirementState =
+  | "MISSING"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "EXPIRED";
 
 export type CommandPartnerPortalAccount = {
   id: string;
@@ -72,6 +90,57 @@ export type CommandPartnerPortalApplication = {
   rejectedAt: string | null;
   withdrawnAt: string | null;
   event: CommandPartnerPortalEventOption;
+};
+
+export type CommandPartnerAssetSummary = {
+  id: string;
+  kind: CommandPartnerAssetKind;
+  storageBucket: CommandPartnerAssetStorageBucket;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  imageWidth: number | null;
+  imageHeight: number | null;
+  publicUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommandPartnerAssetAccess = {
+  assetId: string;
+  fileName: string;
+  mimeType: string;
+  storageBucket: CommandPartnerAssetStorageBucket;
+  url: string;
+  expiresAt: string | null;
+};
+
+export type CommandPartnerAssetUploadSession = {
+  assetKind: CommandPartnerAssetKind;
+  storageBucket: CommandPartnerAssetStorageBucket;
+  objectKey: string;
+  uploadMethod: "PUT";
+  uploadUrl: string;
+  uploadHeaders: Record<string, string>;
+  expiresAt: string;
+  anticipatedPublicUrl: string | null;
+};
+
+export type CommandPartnerPortalRequirement = {
+  requirementType: CommandParticipantRequirementType;
+  state: CommandPartnerPortalRequirementState;
+  reviewerState: CommandParticipantRequirementReviewerState | null;
+  reviewerNotes: string | null;
+  expiresAt: string | null;
+  lastReviewedAt: string | null;
+  asset: CommandPartnerAssetSummary | null;
+};
+
+export type CommandPartnerPortalRequirementsPayload = {
+  ok: true;
+  account: CommandPartnerPortalAccount;
+  participantType: CommandPartnerParticipantType;
+  requirements: CommandPartnerPortalRequirement[];
 };
 
 export type CommandParticipantPortalProfile = {
@@ -850,6 +919,148 @@ export async function commandPartnerSubmitApplication(
       trackPerformance: false,
       body: {
         scheduleEventSeriesId: params.scheduleEventSeriesId,
+      },
+    }
+  );
+}
+
+export async function commandPartnerGetProfileImage(
+  scope: CommandPartnerPortalScope,
+  sessionToken: string
+) {
+  return requestCommandPublicApi<{ ok: true; asset: CommandPartnerAssetSummary | null }>(
+    `${commandPartnerScopeBase(scope)}/profile/image`,
+    {
+      sessionToken,
+      trackPerformance: false,
+    }
+  );
+}
+
+export async function commandPartnerCreateProfileImageUploadSession(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; upload: CommandPartnerAssetUploadSession }>(
+    `${commandPartnerScopeBase(scope)}/profile/image/upload-session`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        fileName: params.fileName,
+        mimeType: params.mimeType,
+        sizeBytes: params.sizeBytes,
+      },
+    }
+  );
+}
+
+export async function commandPartnerFinalizeProfileImage(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    objectKey: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    checksumSha256?: string | null;
+    imageWidth?: number | null;
+    imageHeight?: number | null;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; asset: CommandPartnerAssetSummary }>(
+    `${commandPartnerScopeBase(scope)}/profile/image/finalize`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        objectKey: params.objectKey,
+        fileName: params.fileName,
+        mimeType: params.mimeType,
+        sizeBytes: params.sizeBytes,
+        checksumSha256: params.checksumSha256 || undefined,
+        imageWidth: params.imageWidth ?? undefined,
+        imageHeight: params.imageHeight ?? undefined,
+      },
+    }
+  );
+}
+
+export async function commandPartnerGetAssetAccess(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    assetId: string;
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; access: CommandPartnerAssetAccess }>(
+    `${commandPartnerScopeBase(scope)}/assets/${encodeURIComponent(params.assetId)}/access`,
+    {
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+    }
+  );
+}
+
+export async function commandParticipantGetRequirements(sessionToken: string) {
+  return requestCommandPublicApi<CommandPartnerPortalRequirementsPayload>("/api/v1/partners/requirements", {
+    sessionToken,
+    trackPerformance: false,
+  });
+}
+
+export async function commandParticipantCreateRequirementUploadSession(params: {
+  sessionToken: string;
+  requirementType: CommandParticipantRequirementType;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}) {
+  return requestCommandPublicApi<{ ok: true; upload: CommandPartnerAssetUploadSession }>(
+    `/api/v1/partners/requirements/${encodeURIComponent(params.requirementType)}/upload-session`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        fileName: params.fileName,
+        mimeType: params.mimeType,
+        sizeBytes: params.sizeBytes,
+      },
+    }
+  );
+}
+
+export async function commandParticipantFinalizeRequirement(params: {
+  sessionToken: string;
+  requirementType: CommandParticipantRequirementType;
+  objectKey: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256?: string | null;
+  expiresAt: string;
+}) {
+  return requestCommandPublicApi<{ ok: true; requirement: CommandPartnerPortalRequirement }>(
+    `/api/v1/partners/requirements/${encodeURIComponent(params.requirementType)}/finalize`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        objectKey: params.objectKey,
+        fileName: params.fileName,
+        mimeType: params.mimeType,
+        sizeBytes: params.sizeBytes,
+        checksumSha256: params.checksumSha256 || undefined,
+        expiresAt: params.expiresAt,
       },
     }
   );

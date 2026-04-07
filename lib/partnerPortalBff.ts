@@ -1,6 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import {
+  commandParticipantCreateRequirementUploadSession,
+  commandParticipantFinalizeRequirement,
+  commandParticipantGetRequirements,
+  commandPartnerCreateProfileImageUploadSession,
   commandPartnerChangePassword,
+  commandPartnerFinalizeProfileImage,
+  commandPartnerGetAssetAccess,
+  commandPartnerGetProfileImage,
   commandPartnerGetProfile,
   commandPartnerGetSession,
   commandPartnerListApplications,
@@ -13,6 +20,7 @@ import {
   isUnauthorizedCommandError,
   CommandPublicApiError,
   logCommandPublicApiError,
+  type CommandParticipantRequirementType,
   type CommandPartnerPortalScope,
 } from "./commandPublicApi";
 import {
@@ -331,6 +339,297 @@ export async function handlePartnerPortalApplications(
     }
 
     console.error(`[${scope}-applications] unexpected error`, error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handlePartnerPortalProfileImage(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  scope: CommandPartnerPortalScope
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const result = await commandPartnerGetProfileImage(scope, sessionToken);
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError(`${scope}-profile-image`, error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error(`[${scope}-profile-image] unexpected error`, error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handlePartnerPortalProfileImageUploadSession(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  scope: CommandPartnerPortalScope
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const result = await commandPartnerCreateProfileImageUploadSession(scope, {
+      sessionToken,
+      fileName: String(req.body?.fileName || ""),
+      mimeType: String(req.body?.mimeType || ""),
+      sizeBytes: Number(req.body?.sizeBytes || 0),
+    });
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError(`${scope}-profile-image-upload-session`, error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error(`[${scope}-profile-image-upload-session] unexpected error`, error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handlePartnerPortalProfileImageFinalize(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  scope: CommandPartnerPortalScope
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const result = await commandPartnerFinalizeProfileImage(scope, {
+      sessionToken,
+      objectKey: String(req.body?.objectKey || ""),
+      fileName: String(req.body?.fileName || ""),
+      mimeType: String(req.body?.mimeType || ""),
+      sizeBytes: Number(req.body?.sizeBytes || 0),
+      checksumSha256: typeof req.body?.checksumSha256 === "string" ? req.body.checksumSha256 : null,
+      imageWidth: typeof req.body?.imageWidth === "number" ? req.body.imageWidth : null,
+      imageHeight: typeof req.body?.imageHeight === "number" ? req.body.imageHeight : null,
+    });
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError(`${scope}-profile-image-finalize`, error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error(`[${scope}-profile-image-finalize] unexpected error`, error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handlePartnerPortalAssetAccess(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  scope: CommandPartnerPortalScope
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const assetId = Array.isArray(req.query.assetId) ? req.query.assetId[0] : req.query.assetId;
+    const result = await commandPartnerGetAssetAccess(scope, {
+      sessionToken,
+      assetId: String(assetId || ""),
+    });
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError(`${scope}-asset-access`, error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error(`[${scope}-asset-access] unexpected error`, error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handleParticipantPortalRequirements(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const result = await commandParticipantGetRequirements(sessionToken);
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError("partners-requirements", error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error("[partners-requirements] unexpected error", error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handleParticipantPortalRequirementUploadSession(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const requirementType = Array.isArray(req.query.requirementType) ? req.query.requirementType[0] : req.query.requirementType;
+    const result = await commandParticipantCreateRequirementUploadSession({
+      sessionToken,
+      requirementType: String(requirementType || "") as CommandParticipantRequirementType,
+      fileName: String(req.body?.fileName || ""),
+      mimeType: String(req.body?.mimeType || ""),
+      sizeBytes: Number(req.body?.sizeBytes || 0),
+    });
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError("partners-requirement-upload-session", error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error("[partners-requirement-upload-session] unexpected error", error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+export async function handleParticipantPortalRequirementFinalize(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  applyNoStoreHeaders(res);
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    const requirementType = Array.isArray(req.query.requirementType) ? req.query.requirementType[0] : req.query.requirementType;
+    const result = await commandParticipantFinalizeRequirement({
+      sessionToken,
+      requirementType: String(requirementType || "") as CommandParticipantRequirementType,
+      objectKey: String(req.body?.objectKey || ""),
+      fileName: String(req.body?.fileName || ""),
+      mimeType: String(req.body?.mimeType || ""),
+      sizeBytes: Number(req.body?.sizeBytes || 0),
+      checksumSha256: typeof req.body?.checksumSha256 === "string" ? req.body.checksumSha256 : null,
+      expiresAt: String(req.body?.expiresAt || ""),
+    });
+    return json(res, 200, result);
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError("partners-requirement-finalize", error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error("[partners-requirement-finalize] unexpected error", error);
     return json(res, 500, { ok: false, error: "Server error" });
   }
 }
