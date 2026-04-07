@@ -1,6 +1,7 @@
 import BrandHead from "../../components/BrandHead";
 import PublicSiteHeader from "../../components/PublicSiteHeader";
 import PublicSiteShell from "../../components/app/PublicSiteShell";
+import Link from "next/link";
 
 const participantLinks = [
   {
@@ -65,7 +66,7 @@ function PortalLinkSection(props: {
       </div>
       <div className="mt-6 grid gap-4">
         {props.links.map((link) => (
-          <a
+          <Link
             key={link.href}
             href={link.href}
             className="rounded-2xl border border-neutral-200 bg-neutral-50 px-5 py-4 transition hover:border-neutral-300 hover:bg-white"
@@ -77,7 +78,7 @@ function PortalLinkSection(props: {
               </div>
               <span className="text-sm font-medium text-red-600">Open</span>
             </div>
-          </a>
+          </Link>
         ))}
       </div>
     </section>
@@ -102,24 +103,22 @@ export default function PartnersHubPage() {
               <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-neutral-950 sm:text-5xl">
                 Partner and sponsor portal links in one place.
               </h1>
-              <p className="max-w-3xl text-base leading-7 text-neutral-600">
-                This page exists so testing does not depend on remembering raw routes. Use it to open partner and sponsor
-                signup, sign-in, profile, and application surfaces directly.
-              </p>
             </div>
           </section>
 
-          <PortalLinkSection
-            title="Participant Partners"
-            subtitle="Entertainment, food, and market partners register here and then manage profile and application flows through the participant portal."
-            links={participantLinks}
-          />
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <PortalLinkSection
+              title="Participant Partners"
+              subtitle="Entertainment, food, and market partners register here and then manage profile and application flows through the participant portal."
+              links={participantLinks}
+            />
 
-          <PortalLinkSection
-            title="Sponsors"
-            subtitle="Sponsors use a separate portal with their own signup and sign-in path, plus profile and application pages."
-            links={sponsorLinks}
-          />
+            <PortalLinkSection
+              title="Sponsors"
+              subtitle="Sponsors use a separate portal with their own signup and sign-in path, plus profile and application pages."
+              links={sponsorLinks}
+            />
+          </div>
         </main>
       </div>
     </PublicSiteShell>
