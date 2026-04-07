@@ -7,6 +7,8 @@ import type {
   CommandSponsorPortalProfile,
 } from "../../lib/commandPublicApi";
 import PortalShell from "./PortalShell";
+import PortalParticipantRequirementsCard from "./PortalParticipantRequirementsCard";
+import PortalProfileImageCard from "./PortalProfileImageCard";
 import PortalNav from "./PortalNav";
 import { PORTAL_CONFIG, SOCIAL_LINK_FIELDS } from "./portalConfig";
 
@@ -156,240 +158,246 @@ export default function PortalProfilePage(props: {
         {notice ? <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">{notice}</div> : null}
 
         {profile ? (
-          <form className="grid gap-4" onSubmit={onSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <div className="mt-1 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
-                  {profile.account.email}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Portal type</label>
-                <div className="mt-1 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
-                  {readonlySummary}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">{props.scope === "partners" ? "Display name" : "Brand name"}</label>
-                <input
-                  name="displayName"
-                  defaultValue={profile.displayName}
-                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Contact name</label>
-                <input
-                  name="contactName"
-                  defaultValue={profile.contactName}
-                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Contact phone</label>
-                <input
-                  name="contactPhone"
-                  defaultValue={profile.contactPhone}
-                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Main website URL</label>
-                <input
-                  name="mainWebsiteUrl"
-                  defaultValue={profile.mainWebsiteUrl || ""}
-                  className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                />
-              </div>
-            </div>
+          <div className="grid gap-4">
+            <PortalProfileImageCard scope={props.scope} />
 
-            {participantProfile ? (
-              <>
-                <div>
-                  <label className="text-sm font-medium">Summary</label>
-                  <textarea
-                    name="summary"
-                    defaultValue={participantProfile.summary || ""}
-                    className="mt-1 min-h-[90px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {participantProfile.participantType === "ENTERTAINMENT" ? (
-                    <>
-                      <div>
-                        <label className="text-sm font-medium">Entertainment type</label>
-                        <select
-                          name="entertainmentType"
-                          defaultValue={participantProfile.entertainmentType || ""}
-                          className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                        >
-                          <option value="">Not set</option>
-                          <option value="LIVE_BAND">Live Band</option>
-                          <option value="DJ">DJ</option>
-                          <option value="COMEDY">Comedy</option>
-                          <option value="MAGIC">Magic</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Style</label>
-                        <input
-                          name="entertainmentStyle"
-                          defaultValue={participantProfile.entertainmentStyle || ""}
-                          className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                        />
-                      </div>
-                    </>
-                  ) : null}
-                  {participantProfile.participantType === "FOOD_VENDOR" ? (
-                    <>
-                      <div>
-                        <label className="text-sm font-medium">Food style</label>
-                        <input
-                          name="foodStyle"
-                          defaultValue={participantProfile.foodStyle || ""}
-                          className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Setup type</label>
-                        <select
-                          name="foodSetupType"
-                          defaultValue={participantProfile.foodSetupType || ""}
-                          className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                        >
-                          <option value="">Not set</option>
-                          <option value="TRUCK">Truck</option>
-                          <option value="TRAILER">Trailer</option>
-                          <option value="CART">Cart</option>
-                          <option value="STAND">Stand</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : null}
-                  {participantProfile.participantType === "MARKET_VENDOR" ? (
-                    <div>
-                      <label className="text-sm font-medium">Market type</label>
-                      <select
-                        name="marketType"
-                        defaultValue={participantProfile.marketType || ""}
-                        className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                      >
-                        <option value="">Not set</option>
-                        <option value="APPAREL">Apparel</option>
-                        <option value="JEWELRY">Jewelry</option>
-                        <option value="DECOR">Decor</option>
-                        <option value="SKINCARE">Skincare</option>
-                        <option value="FOOD">Food</option>
-                        <option value="SERVICE">Service</option>
-                        <option value="OTHER">Other</option>
-                      </select>
-                    </div>
-                  ) : null}
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Special requirements</label>
-                  <textarea
-                    name="specialRequirements"
-                    defaultValue={participantProfile.specialRequirements || ""}
-                    className="mt-1 min-h-[90px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
-              </>
-            ) : null}
+            {participantProfile ? <PortalParticipantRequirementsCard /> : null}
 
-            {sponsorProfile ? (
+            <form className="grid gap-4" onSubmit={onSubmit}>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium">Product or service type</label>
+                  <label className="text-sm font-medium">Email</label>
+                  <div className="mt-1 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                    {profile.account.email}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Portal type</label>
+                  <div className="mt-1 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                    {readonlySummary}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">{props.scope === "partners" ? "Display name" : "Brand name"}</label>
                   <input
-                    name="productServiceType"
-                    defaultValue={sponsorProfile.productServiceType}
+                    name="displayName"
+                    defaultValue={profile.displayName}
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Audience profile</label>
+                  <label className="text-sm font-medium">Contact name</label>
                   <input
-                    name="audienceProfile"
-                    defaultValue={sponsorProfile.audienceProfile || ""}
+                    name="contactName"
+                    defaultValue={profile.contactName}
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Marketing goals</label>
+                  <label className="text-sm font-medium">Contact phone</label>
                   <input
-                    name="marketingGoals"
-                    defaultValue={sponsorProfile.marketingGoals || ""}
+                    name="contactPhone"
+                    defaultValue={profile.contactPhone}
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Onsite placement</label>
+                  <label className="text-sm font-medium">Main website URL</label>
                   <input
-                    name="onsitePlacement"
-                    defaultValue={sponsorProfile.onsitePlacement || ""}
+                    name="mainWebsiteUrl"
+                    defaultValue={profile.mainWebsiteUrl || ""}
                     className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Signage information</label>
-                  <input
-                    name="signageInformation"
-                    defaultValue={sponsorProfile.signageInformation || ""}
-                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
-                <label className="mt-6 flex items-center gap-2 text-sm font-medium text-neutral-800">
-                  <input type="checkbox" name="staffed" defaultChecked={Boolean(sponsorProfile.staffed)} />
-                  Staffed onsite
-                </label>
-                <div className="md:col-span-2">
-                  <label className="text-sm font-medium">Requests</label>
-                  <textarea
-                    name="requests"
-                    defaultValue={sponsorProfile.requests || ""}
-                    className="mt-1 min-h-[90px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                   />
                 </div>
               </div>
-            ) : null}
 
-            <div>
-              <label className="text-sm font-medium">Description</label>
-              <textarea
-                name="description"
-                defaultValue={profile.description || ""}
-                className="mt-1 min-h-[120px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </div>
+              {participantProfile ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">Summary</label>
+                    <textarea
+                      name="summary"
+                      defaultValue={participantProfile.summary || ""}
+                      className="mt-1 min-h-[90px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {participantProfile.participantType === "ENTERTAINMENT" ? (
+                      <>
+                        <div>
+                          <label className="text-sm font-medium">Entertainment type</label>
+                          <select
+                            name="entertainmentType"
+                            defaultValue={participantProfile.entertainmentType || ""}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                          >
+                            <option value="">Not set</option>
+                            <option value="LIVE_BAND">Live Band</option>
+                            <option value="DJ">DJ</option>
+                            <option value="COMEDY">Comedy</option>
+                            <option value="MAGIC">Magic</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Style</label>
+                          <input
+                            name="entertainmentStyle"
+                            defaultValue={participantProfile.entertainmentStyle || ""}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                    {participantProfile.participantType === "FOOD_VENDOR" ? (
+                      <>
+                        <div>
+                          <label className="text-sm font-medium">Food style</label>
+                          <input
+                            name="foodStyle"
+                            defaultValue={participantProfile.foodStyle || ""}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Setup type</label>
+                          <select
+                            name="foodSetupType"
+                            defaultValue={participantProfile.foodSetupType || ""}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                          >
+                            <option value="">Not set</option>
+                            <option value="TRUCK">Truck</option>
+                            <option value="TRAILER">Trailer</option>
+                            <option value="CART">Cart</option>
+                            <option value="STAND">Stand</option>
+                          </select>
+                        </div>
+                      </>
+                    ) : null}
+                    {participantProfile.participantType === "MARKET_VENDOR" ? (
+                      <div>
+                        <label className="text-sm font-medium">Market type</label>
+                        <select
+                          name="marketType"
+                          defaultValue={participantProfile.marketType || ""}
+                          className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                        >
+                          <option value="">Not set</option>
+                          <option value="APPAREL">Apparel</option>
+                          <option value="JEWELRY">Jewelry</option>
+                          <option value="DECOR">Decor</option>
+                          <option value="SKINCARE">Skincare</option>
+                          <option value="FOOD">Food</option>
+                          <option value="SERVICE">Service</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Special requirements</label>
+                    <textarea
+                      name="specialRequirements"
+                      defaultValue={participantProfile.specialRequirements || ""}
+                      className="mt-1 min-h-[90px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                </>
+              ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {SOCIAL_LINK_FIELDS.map((field) => (
-                <div key={field}>
-                  <label className="text-sm font-medium capitalize">{field}</label>
-                  <input
-                    value={socialLinks[field] || ""}
-                    onChange={(event) =>
-                      setSocialLinks((current) => ({
-                        ...current,
-                        [field]: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
-                  />
+              {sponsorProfile ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium">Product or service type</label>
+                    <input
+                      name="productServiceType"
+                      defaultValue={sponsorProfile.productServiceType}
+                      className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Audience profile</label>
+                    <input
+                      name="audienceProfile"
+                      defaultValue={sponsorProfile.audienceProfile || ""}
+                      className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Marketing goals</label>
+                    <input
+                      name="marketingGoals"
+                      defaultValue={sponsorProfile.marketingGoals || ""}
+                      className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Onsite placement</label>
+                    <input
+                      name="onsitePlacement"
+                      defaultValue={sponsorProfile.onsitePlacement || ""}
+                      className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Signage information</label>
+                    <input
+                      name="signageInformation"
+                      defaultValue={sponsorProfile.signageInformation || ""}
+                      className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <label className="mt-6 flex items-center gap-2 text-sm font-medium text-neutral-800">
+                    <input type="checkbox" name="staffed" defaultChecked={Boolean(sponsorProfile.staffed)} />
+                    Staffed onsite
+                  </label>
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium">Requests</label>
+                    <textarea
+                      name="requests"
+                      defaultValue={sponsorProfile.requests || ""}
+                      className="mt-1 min-h-[90px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
+              ) : null}
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {saving ? "Saving..." : "Save profile"}
-            </button>
-          </form>
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <textarea
+                  name="description"
+                  defaultValue={profile.description || ""}
+                  className="mt-1 min-h-[120px] w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {SOCIAL_LINK_FIELDS.map((field) => (
+                  <div key={field}>
+                    <label className="text-sm font-medium capitalize">{field}</label>
+                    <input
+                      value={socialLinks[field] || ""}
+                      onChange={(event) =>
+                        setSocialLinks((current) => ({
+                          ...current,
+                          [field]: event.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save profile"}
+              </button>
+            </form>
+          </div>
         ) : null}
       </div>
     </PortalShell>
