@@ -20,6 +20,19 @@ export type CommandPartnerKind = "PARTICIPANT" | "SPONSOR";
 export type CommandPartnerUserStatus = "ACTIVE" | "BLOCKED";
 export type CommandPartnerParticipantType = "ENTERTAINMENT" | "FOOD_VENDOR" | "MARKET_VENDOR";
 export type CommandPartnerEntertainmentType = "LIVE_BAND" | "DJ" | "COMEDY" | "MAGIC";
+export type CommandPartnerEntertainmentActType = "SOLO_ARTIST" | "DUO" | "TRIO" | "FULL_BAND";
+export type CommandPartnerEntertainmentGenre =
+  | "ROCK"
+  | "RNB_SOUL"
+  | "COUNTRY"
+  | "POPULAR"
+  | "URBAN"
+  | "ELECTRONICA"
+  | "INDIE_ALTERNATIVE"
+  | "LATIN_SALSA"
+  | "FOLK"
+  | "JAZZ"
+  | "ACOUSTIC";
 export type CommandPartnerFoodSetupType = "TRUCK" | "TRAILER" | "CART" | "STAND";
 export type CommandPartnerMarketType =
   | "APPAREL"
@@ -39,6 +52,7 @@ export type CommandPartnerApplicationStatus =
   | "WITHDRAWN";
 export type CommandPartnerAssetKind = "PROFILE_IMAGE" | "DOCUMENT";
 export type CommandPartnerAssetStorageBucket = "PUBLIC_MEDIA" | "PRIVATE_DOCUMENTS";
+export type CommandPartnerApplicationNoteVisibility = "INTERNAL" | "EXTERNAL";
 export type CommandParticipantRequirementType =
   | "BUSINESS_LICENSE"
   | "HEALTH_PERMIT"
@@ -55,6 +69,27 @@ export type CommandPartnerPortalRequirementState =
   | "APPROVED"
   | "REJECTED"
   | "EXPIRED";
+
+export const COMMAND_PARTNER_ENTERTAINMENT_ACT_TYPE_OPTIONS = [
+  "SOLO_ARTIST",
+  "DUO",
+  "TRIO",
+  "FULL_BAND",
+] as const;
+
+export const COMMAND_PARTNER_ENTERTAINMENT_GENRE_OPTIONS = [
+  "ROCK",
+  "RNB_SOUL",
+  "COUNTRY",
+  "POPULAR",
+  "URBAN",
+  "ELECTRONICA",
+  "INDIE_ALTERNATIVE",
+  "LATIN_SALSA",
+  "FOLK",
+  "JAZZ",
+  "ACOUSTIC",
+] as const;
 
 export type CommandPartnerPortalAccount = {
   id: string;
@@ -80,16 +115,148 @@ export type CommandPartnerPortalEventOption = {
   name: string;
   seasonStartsOn: string;
   seasonEndsOn: string;
+  applicationFormOptions: CommandPartnerApplicationFormOptions;
 };
+
+export type CommandPartnerApplicationStageOption = {
+  id: string;
+  name: string;
+  slug: string;
+  locationId: string;
+};
+
+export type CommandPartnerApplicationOccurrenceDateOption = {
+  occurrenceId: string;
+  occursOn: string;
+  label: string;
+};
+
+export type CommandPartnerApplicationFormOptions = {
+  stageOptions: CommandPartnerApplicationStageOption[];
+  occurrenceDateOptions: CommandPartnerApplicationOccurrenceDateOption[];
+};
+
+export type CommandPartnerApplicationNote = {
+  id: string;
+  visibility: CommandPartnerApplicationNoteVisibility;
+  body: string;
+  authorBackofficeUserId: string | null;
+  authorPartnerUserId: string | null;
+  authorDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommandEntertainmentPartnerApplicationPayload = {
+  formType: "ENTERTAINMENT";
+  typeOfAct: CommandPartnerEntertainmentActType;
+  performerName: string;
+  mainContact: string;
+  email: string;
+  phone: string;
+  citiesOfResidence: string[];
+  shortBio: string;
+  genres: CommandPartnerEntertainmentGenre[];
+  preferredStageId: string;
+  preferredStageName: string;
+  songList: string;
+  typicalPerformanceFeeRange: string;
+  availableOccurrenceDates: string[];
+  canCommitToEarlyDropoffAndSoundcheck: boolean;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  livePerformanceVideoUrl: string | null;
+  streamingUrl: string | null;
+  websiteUrl: string | null;
+  otherChannelUrl: string | null;
+  willShareEvent: boolean;
+  fanbaseSummary: string;
+  agreementAccepted: boolean;
+};
+
+export type CommandMarketPartnerApplicationPayload = {
+  formType: "MARKET_VENDOR";
+  businessName: string;
+  mainContact: string;
+  email: string;
+  phone: string;
+  websiteUrl: string | null;
+  brandDescription: string;
+  productCategory: string;
+  productDescription: string;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  otherSocialUrl: string | null;
+  availableOccurrenceDates: string[];
+  sharesAtOtherEvents: boolean;
+  hasBusinessLicense: boolean;
+  hasLiabilityInsurance: boolean;
+  hasFireproofCanopy: boolean;
+  canCommitToLoadInTiming: boolean;
+  canCommitToLoadOutTiming: boolean;
+  preScreeningAgreementAccepted: boolean;
+  policiesAccepted: boolean;
+};
+
+export type CommandFoodPartnerApplicationPayload = {
+  formType: "FOOD_VENDOR";
+  businessName: string;
+  mainContact: string;
+  email: string;
+  phone: string;
+  websiteUrl: string | null;
+  brandDescription: string;
+  productCategory: string;
+  productDescription: string;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  otherSocialUrl: string | null;
+  availableOccurrenceDates: string[];
+  sharesAtOtherEvents: boolean;
+  hasBusinessLicense: boolean;
+  hasLiabilityInsurance: boolean;
+  hasFireproofCanopy: boolean;
+  canCommitToLoadInTiming: boolean;
+  canCommitToLoadOutTiming: boolean;
+  preScreeningAgreementAccepted: boolean;
+  policiesAccepted: boolean;
+  foodServiceStyle: string;
+  foodSetupType: CommandPartnerFoodSetupType;
+  acknowledgesBusinessLicenseRequired: boolean;
+  acknowledgesHealthPermitRequired: boolean;
+  acknowledgesBusinessInsuranceRequired: boolean;
+  acknowledgesFirePermitRequired: boolean;
+};
+
+export type CommandSponsorPartnerApplicationPayload = {
+  formType: "SPONSOR";
+  mainContact: string;
+  email: string;
+  phone: string;
+  companyOrOrganization: string;
+  websiteUrl: string | null;
+  organizationBackground: string;
+};
+
+export type CommandPartnerApplicationPayload =
+  | CommandEntertainmentPartnerApplicationPayload
+  | CommandFoodPartnerApplicationPayload
+  | CommandMarketPartnerApplicationPayload
+  | CommandSponsorPartnerApplicationPayload;
 
 export type CommandPartnerPortalApplication = {
   id: string;
+  applicationKind: CommandPartnerKind;
   status: CommandPartnerApplicationStatus;
+  applicationVersion: number;
+  applicationPayload: CommandPartnerApplicationPayload | null;
+  submittedProfileSnapshot: unknown;
   submittedAt: string | null;
   approvedAt: string | null;
   rejectedAt: string | null;
   withdrawnAt: string | null;
   event: CommandPartnerPortalEventOption;
+  externalNotes: CommandPartnerApplicationNote[];
 };
 
 export type CommandPartnerAssetSummary = {
@@ -157,6 +324,8 @@ export type CommandParticipantPortalProfile = {
   profileCompletedAt: string | null;
   participantType: CommandPartnerParticipantType;
   entertainmentType: CommandPartnerEntertainmentType | null;
+  entertainmentActType: string | null;
+  entertainmentGenres: string[];
   entertainmentStyle: string | null;
   foodStyle: string | null;
   foodSetupType: CommandPartnerFoodSetupType | null;
@@ -926,6 +1095,7 @@ export async function commandPartnerSubmitApplication(
   params: {
     sessionToken: string;
     scheduleEventSeriesId: string;
+    applicationPayload: CommandPartnerApplicationPayload;
   }
 ) {
   return requestCommandPublicApi<{ ok: true; application: CommandPartnerPortalApplication }>(
@@ -936,6 +1106,7 @@ export async function commandPartnerSubmitApplication(
       trackPerformance: false,
       body: {
         scheduleEventSeriesId: params.scheduleEventSeriesId,
+        applicationPayload: params.applicationPayload,
       },
     }
   );
