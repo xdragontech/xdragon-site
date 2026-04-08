@@ -10,8 +10,8 @@ export default function AdminHeader({ sectionLabel, loggedInAs }: AdminHeaderPro
   return (
     <>
       <Head>
-        <link rel="icon" href="/favicon.ico?v=3" sizes="any" />
-        <link rel="shortcut icon" href="/favicon.ico?v=3" />
+        <link rel="icon" href="/favicon.ico?v=4" sizes="any" />
+        <link rel="shortcut icon" href="/favicon.ico?v=4" />
         <link
           href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap"
           rel="stylesheet"
