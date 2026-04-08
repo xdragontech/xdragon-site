@@ -130,8 +130,8 @@ export default function AdminCommandSignIn({ allowedHosts, recommendedAdminHost 
     <>
       <Head>
         <title>X Dragon Command — Sign in</title>
-        <link rel="icon" href="/favicon.ico?v=3" sizes="any" />
-        <link rel="shortcut icon" href="/favicon.ico?v=3" />
+        <link rel="icon" href="/favicon.ico?v=4" sizes="any" />
+        <link rel="shortcut icon" href="/favicon.ico?v=4" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
