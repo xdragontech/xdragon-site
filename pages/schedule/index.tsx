@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import BrandHead from "../../components/BrandHead";
 import PublicSiteHeader from "../../components/PublicSiteHeader";
 import PublicScheduleFeedList from "../../components/publicSchedule/PublicScheduleFeedList";
+import PublicScheduleSponsorImageTicker from "../../components/publicSchedule/PublicScheduleSponsorImageTicker";
+import PublicScheduleSponsorNameTicker from "../../components/publicSchedule/PublicScheduleSponsorNameTicker";
 import {
   commandPublicGetScheduleFeed,
   commandPublicListScheduleCalendar,
@@ -28,6 +30,8 @@ type PageProps = {
   initialList: CommandPublicScheduleResponse;
   initialFeed: CommandPublicScheduleFeedResponse | null;
   initialFeedError: string | null;
+  initialSponsorFeed: CommandPublicScheduleFeedResponse | null;
+  initialSponsorFeedError: string | null;
   initialFilters: {
     from: string;
     to: string;
@@ -98,6 +102,8 @@ export default function PublicSchedulePage({
   initialList,
   initialFeed,
   initialFeedError,
+  initialSponsorFeed,
+  initialSponsorFeedError,
   initialFilters,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const [apiFilters, setApiFilters] = useState(initialFilters);
@@ -281,6 +287,13 @@ export default function PublicSchedulePage({
             </div>
           </div>
 
+          <PublicScheduleSponsorNameTicker title="Sponsor Feed1" feed={initialSponsorFeed} />
+          {initialSponsorFeedError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              {initialSponsorFeedError}
+            </div>
+          ) : null}
+
           <section className="grid gap-4 rounded-[2rem] border border-neutral-200 bg-white p-8 shadow-sm">
             <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
               <div className="grid gap-3 lg:grid-cols-5">
@@ -383,7 +396,8 @@ export default function PublicSchedulePage({
 
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.9fr)] xl:items-start">
             <div className="grid gap-3">
-              <PublicScheduleFeedList title="Friday Stage List" items={initialFeed?.items || []} />
+              <PublicScheduleFeedList title="Friday Stage List" feed={initialFeed} />
+              <PublicScheduleSponsorImageTicker feed={initialSponsorFeed} />
               {initialFeedError ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                   {initialFeedError}
@@ -542,6 +556,7 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
   };
 
   const schedulePageFeedId = String(process.env.SCHEDULE_PAGE_FEED_ID || "").trim();
+  const schedulePageSponsorFeedId = String(process.env.SCHEDULE_PAGE_SPONSOR_FEED_ID || "").trim();
   const [initialCalendar, initialList] = await Promise.all([
     commandPublicListScheduleCalendar({
       from: initialFilters.from,
@@ -563,6 +578,8 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
 
   let initialFeed: CommandPublicScheduleFeedResponse | null = null;
   let initialFeedError: string | null = null;
+  let initialSponsorFeed: CommandPublicScheduleFeedResponse | null = null;
+  let initialSponsorFeedError: string | null = null;
 
   if (schedulePageFeedId) {
     try {
@@ -577,12 +594,27 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
     initialFeedError = "Schedule feed is not configured.";
   }
 
+  if (schedulePageSponsorFeedId) {
+    try {
+      initialSponsorFeed = await commandPublicGetScheduleFeed({
+        feedId: schedulePageSponsorFeedId,
+        request: ctx.req,
+      });
+    } catch (error: any) {
+      initialSponsorFeedError = error?.message || "Failed to load sponsor feed";
+    }
+  } else {
+    initialSponsorFeedError = "Sponsor feed is not configured.";
+  }
+
   return {
     props: {
       initialCalendar,
       initialList,
       initialFeed,
       initialFeedError,
+      initialSponsorFeed,
+      initialSponsorFeedError,
       initialFilters,
     },
   };

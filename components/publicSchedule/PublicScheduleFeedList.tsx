@@ -1,11 +1,14 @@
-import type { CommandPublicScheduleFeedItem } from "../../lib/commandPublicApi";
+import type {
+  CommandPublicScheduleAssignmentFeedItem,
+  CommandPublicScheduleFeedResponse,
+} from "../../lib/commandPublicApi";
 
 type PublicScheduleFeedListProps = {
   title: string;
-  items: CommandPublicScheduleFeedItem[];
+  feed: CommandPublicScheduleFeedResponse | null;
 };
 
-function isInformationalFeedItem(item: CommandPublicScheduleFeedItem) {
+function isInformationalFeedItem(item: CommandPublicScheduleAssignmentFeedItem) {
   return (
     !item.occurrenceDate &&
     !item.resourceName &&
@@ -26,7 +29,38 @@ function formatOccurrenceDate(value: string) {
   }).format(date);
 }
 
-export default function PublicScheduleFeedList({ title, items }: PublicScheduleFeedListProps) {
+export default function PublicScheduleFeedList({ title, feed }: PublicScheduleFeedListProps) {
+  if (!feed) {
+    return (
+      <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Feed</div>
+            <h2 className="mt-2 text-xl font-semibold text-neutral-900">{title}</h2>
+          </div>
+          <div className="text-sm text-neutral-600">0 entries</div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-600">
+          No feed entries are available for this range.
+        </div>
+      </section>
+    );
+  }
+
+  if (feed.source !== "ASSIGNMENTS") {
+    return (
+      <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-6 shadow-sm">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Feed</div>
+        <h2 className="mt-2 text-xl font-semibold text-amber-950">{title}</h2>
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-white px-4 py-5 text-sm text-amber-800">
+          This display expects an assignment feed. The configured feed currently returns sponsor rows instead.
+        </div>
+      </section>
+    );
+  }
+
+  const items = feed.items as CommandPublicScheduleAssignmentFeedItem[];
   const informationalItem = items.length === 1 && isInformationalFeedItem(items[0]) ? items[0] : null;
 
   return (
