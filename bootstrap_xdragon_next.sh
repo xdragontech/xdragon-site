@@ -154,19 +154,9 @@ export default function Home() {
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        {/* Favicons / icons (place files in /public) */}
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
-        <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#000000" />
-        <link rel="icon" type="image/png" href="/favicon_symbol.png" />
-        <link
-          rel="icon"
-          type="image/png"
-          href="/favicon_symbol-dark.png"
-          media="(prefers-color-scheme: dark)"
-        />
+        {/* Canonical favicon only (place file in /public) */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="shortcut icon" href="/favicon.ico" />
         <meta name="theme-color" content="#000000" />
       </Head>
 
@@ -526,7 +516,7 @@ chmod +x setup_macos.sh
 # --- Copy assets into /public if you place them in ./assets ---
 # Put these files into: ~/Projects/xdragon-site/assets/
 #  - logo.png
-#  - favicon_symbol.png, favicon_symbol-dark.png, favicon-32x32.png, etc.
+#  - favicon.ico
 if [ -f "assets/logo.png" ]; then
   cp -f assets/logo.png public/logo.png
   echo "✅ Copied assets/logo.png -> public/logo.png"
@@ -534,7 +524,7 @@ else
   echo "⚠️  No assets/logo.png found yet. Add it later to show your logo."
 fi
 
-for f in favicon_symbol.png favicon_symbol-dark.png favicon-32x32.png android-chrome-192x192.png android-chrome-512x512.png apple-touch-icon.png safari-pinned-tab.svg; do
+for f in favicon.ico; do
   if [ -f "assets/$f" ]; then
     cp -f "assets/$f" "public/$f"
     echo "✅ Copied assets/$f -> public/$f"
@@ -548,4 +538,3 @@ echo "  cd ${PROJECT_DIR}"
 echo "  npm install"
 echo "  npm run dev"
 echo "Open: http://localhost:3000"
-
