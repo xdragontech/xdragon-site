@@ -68,7 +68,7 @@ export default function PublicScheduleSponsorNameTicker({
             This sponsor feed currently returns images only.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-[4px] bg-yellow-300">
+          <div className="overflow-hidden rounded-[4px] bg-black">
             <div className="flex min-w-max gap-10 px-6 py-3 sponsor-name-marquee">
               {tickerItems.map((item, index) => (
                 <a
