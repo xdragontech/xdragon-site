@@ -1,4 +1,5 @@
 import type { CommandPublicScheduleFeedResponse, CommandPublicScheduleSponsorFeedItem } from "../../lib/commandPublicApi";
+import { resolvePublicScheduleFeedSource } from "./feedRuntime";
 
 type PublicScheduleSponsorNameTickerProps = {
   title: string;
@@ -13,6 +14,8 @@ export default function PublicScheduleSponsorNameTicker({
   title,
   feed,
 }: PublicScheduleSponsorNameTickerProps) {
+  const feedSource = resolvePublicScheduleFeedSource(feed);
+
   if (!feed) {
     return (
       <section className="rounded-[2rem] border border-neutral-200 bg-white p-4 shadow-sm">
@@ -25,7 +28,7 @@ export default function PublicScheduleSponsorNameTicker({
     );
   }
 
-  if (feed.source !== "SPONSORS") {
+  if (feedSource !== "SPONSORS") {
     return (
       <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-4 shadow-sm">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Feed</div>

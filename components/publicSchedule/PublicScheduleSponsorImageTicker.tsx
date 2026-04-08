@@ -1,4 +1,8 @@
 import type { CommandPublicScheduleFeedResponse, CommandPublicScheduleSponsorFeedItem } from "../../lib/commandPublicApi";
+import {
+  resolvePublicScheduleFeedIncludesProfileImages,
+  resolvePublicScheduleFeedSource,
+} from "./feedRuntime";
 
 type PublicScheduleSponsorImageTickerProps = {
   title?: string;
@@ -21,6 +25,9 @@ export default function PublicScheduleSponsorImageTicker({
   title,
   feed,
 }: PublicScheduleSponsorImageTickerProps) {
+  const feedSource = resolvePublicScheduleFeedSource(feed);
+  const includeProfileImages = resolvePublicScheduleFeedIncludesProfileImages(feed);
+
   if (!feed) {
     return (
       <section className="rounded-[2rem] border border-neutral-200 bg-white p-4 shadow-sm">
@@ -32,7 +39,7 @@ export default function PublicScheduleSponsorImageTicker({
     );
   }
 
-  if (feed.source !== "SPONSORS") {
+  if (feedSource !== "SPONSORS") {
     return (
       <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-4 shadow-sm">
         {title ? <div className="text-sm font-semibold text-amber-950">{title}</div> : null}
@@ -43,7 +50,7 @@ export default function PublicScheduleSponsorImageTicker({
     );
   }
 
-  if (!feed.includeProfileImages) {
+  if (!includeProfileImages) {
     return (
       <section className="rounded-[2rem] border border-neutral-200 bg-white p-4 shadow-sm">
         {title ? <div className="text-sm font-semibold text-neutral-900">{title}</div> : null}
