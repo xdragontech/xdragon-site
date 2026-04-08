@@ -2,6 +2,7 @@ import type {
   CommandPublicScheduleAssignmentFeedItem,
   CommandPublicScheduleFeedResponse,
 } from "../../lib/commandPublicApi";
+import { resolvePublicScheduleFeedSource } from "./feedRuntime";
 
 type PublicScheduleFeedListProps = {
   title: string;
@@ -30,6 +31,8 @@ function formatOccurrenceDate(value: string) {
 }
 
 export default function PublicScheduleFeedList({ title, feed }: PublicScheduleFeedListProps) {
+  const feedSource = resolvePublicScheduleFeedSource(feed);
+
   if (!feed) {
     return (
       <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
@@ -48,7 +51,7 @@ export default function PublicScheduleFeedList({ title, feed }: PublicScheduleFe
     );
   }
 
-  if (feed.source !== "ASSIGNMENTS") {
+  if (feedSource !== "ASSIGNMENTS") {
     return (
       <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-6 shadow-sm">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Feed</div>
