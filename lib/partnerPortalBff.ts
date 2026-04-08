@@ -320,6 +320,7 @@ export async function handlePartnerPortalApplications(
       const result = await commandPartnerSubmitApplication(scope, {
         sessionToken,
         scheduleEventSeriesId: String(req.body?.scheduleEventSeriesId || ""),
+        applicationPayload: req.body?.applicationPayload,
       });
       return json(res, 201, result);
     }
