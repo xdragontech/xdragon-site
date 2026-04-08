@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import BrandHead from "../BrandHead";
+import BrandMetaHead from "../BrandMetaHead";
 import { ToastProvider } from "../ui/toast";
 import { getAppArea } from "../../lib/appArea";
 import BackofficeShell from "./BackofficeShell";
@@ -19,6 +20,7 @@ export default function AppShell({ pathname, children }: AppShellProps) {
         <BackofficeShell>{children}</BackofficeShell>
       ) : (
         <>
+          <BrandMetaHead />
           <BrandHead />
           <PublicSiteShell>{children}</PublicSiteShell>
         </>
