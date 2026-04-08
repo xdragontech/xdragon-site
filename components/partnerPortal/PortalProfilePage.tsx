@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  CommandPartnerEntertainmentGenre,
   CommandPartnerPortalAccount,
   CommandPartnerPortalProfile,
   CommandPartnerPortalScope,
   CommandParticipantPortalProfile,
   CommandSponsorPortalProfile,
+} from "../../lib/commandPublicApi";
+import {
+  COMMAND_PARTNER_ENTERTAINMENT_ACT_TYPE_OPTIONS,
+  COMMAND_PARTNER_ENTERTAINMENT_GENRE_OPTIONS,
 } from "../../lib/commandPublicApi";
 import PortalShell from "./PortalShell";
 import PortalParticipantRequirementsCard from "./PortalParticipantRequirementsCard";
@@ -105,6 +110,8 @@ export default function PortalProfilePage(props: {
     if (profile.kind === "PARTICIPANT") {
       body.summary = String(form.get("summary") || "");
       body.entertainmentType = String(form.get("entertainmentType") || "") || null;
+      body.entertainmentActType = String(form.get("entertainmentActType") || "") || null;
+      body.entertainmentGenres = COMMAND_PARTNER_ENTERTAINMENT_GENRE_OPTIONS.filter((genre) => form.getAll("entertainmentGenres").includes(genre)) as CommandPartnerEntertainmentGenre[];
       body.entertainmentStyle = String(form.get("entertainmentStyle") || "");
       body.foodStyle = String(form.get("foodStyle") || "");
       body.foodSetupType = String(form.get("foodSetupType") || "") || null;
@@ -248,6 +255,37 @@ export default function PortalProfilePage(props: {
                             defaultValue={participantProfile.entertainmentStyle || ""}
                             className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
                           />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Type of act</label>
+                          <select
+                            name="entertainmentActType"
+                            defaultValue={participantProfile.entertainmentActType || ""}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+                          >
+                            <option value="">Not set</option>
+                            {COMMAND_PARTNER_ENTERTAINMENT_ACT_TYPE_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option.replaceAll("_", " ")}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-medium">Genres</label>
+                          <div className="mt-2 grid gap-2 md:grid-cols-3">
+                            {COMMAND_PARTNER_ENTERTAINMENT_GENRE_OPTIONS.map((genre) => (
+                              <label key={genre} className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
+                                <input
+                                  type="checkbox"
+                                  name="entertainmentGenres"
+                                  value={genre}
+                                  defaultChecked={participantProfile.entertainmentGenres.includes(genre)}
+                                />
+                                {genre.replaceAll("_", " ")}
+                              </label>
+                            ))}
+                          </div>
                         </div>
                       </>
                     ) : null}
