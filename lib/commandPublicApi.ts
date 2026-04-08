@@ -286,7 +286,8 @@ export type CommandPublicScheduleResponse = {
   items: CommandPublicScheduleItem[];
 };
 
-export type CommandPublicScheduleFeedItem = {
+export type CommandPublicScheduleAssignmentFeedItem = {
+  source: "ASSIGNMENTS";
   occurrenceDate: string;
   resourceName: string;
   participantName: string;
@@ -294,9 +295,25 @@ export type CommandPublicScheduleFeedItem = {
   locationId: string;
 };
 
+export type CommandPublicScheduleSponsorFeedItem = {
+  source: "SPONSORS";
+  sponsorName: string;
+  sponsorWebsite: string | null;
+  sponsorDescription: string | null;
+  profileImageUrl: string | null;
+  hasProfileImage: boolean;
+};
+
+export type CommandPublicScheduleFeedItem =
+  | CommandPublicScheduleAssignmentFeedItem
+  | CommandPublicScheduleSponsorFeedItem;
+
 export type CommandPublicScheduleFeedResponse = {
   ok: true;
   feedId: string;
+  source: "ASSIGNMENTS" | "SPONSORS";
+  includeProfileImages: boolean;
+  onlyProfileImages: boolean;
   items: CommandPublicScheduleFeedItem[];
 };
 
