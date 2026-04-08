@@ -43,10 +43,8 @@ export default function PublicScheduleSponsorNameTicker({
   const items = feed.items as CommandPublicScheduleSponsorFeedItem[];
   const informationalItem =
     items.length === 1 && isInformationalSponsorItem(items[0]) ? items[0] : null;
-  const sponsorNames = items
-    .map((item) => item.sponsorName.trim())
-    .filter(Boolean);
-  const tickerItems = sponsorNames.length > 0 ? [...sponsorNames, ...sponsorNames] : [];
+  const sponsorItems = items.filter((item) => item.sponsorName.trim());
+  const tickerItems = sponsorItems.length > 0 ? [...sponsorItems, ...sponsorItems] : [];
 
   return (
     <section className="rounded-[2rem] border border-neutral-200 bg-white p-4 shadow-sm">
@@ -56,7 +54,7 @@ export default function PublicScheduleSponsorNameTicker({
           <h2 className="mt-2 text-xl font-semibold text-neutral-900">{title}</h2>
         </div>
         <div className="text-sm text-neutral-600">
-          {informationalItem ? "Status" : `${sponsorNames.length} sponsors`}
+          {informationalItem ? "Status" : `${sponsorItems.length} sponsors`}
         </div>
       </div>
 
@@ -65,20 +63,27 @@ export default function PublicScheduleSponsorNameTicker({
           <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm font-semibold text-neutral-700">
             {informationalItem.sponsorName}
           </div>
-        ) : sponsorNames.length === 0 ? (
+        ) : sponsorItems.length === 0 ? (
           <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-600">
             This sponsor feed currently returns images only.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border-2 border-black bg-yellow-300">
+          <div className="overflow-hidden rounded-[4px] bg-yellow-300">
             <div className="flex min-w-max gap-10 px-6 py-3 sponsor-name-marquee">
-              {tickerItems.map((name, index) => (
-                <span
-                  key={`${name}-${index}`}
-                  className="whitespace-nowrap text-sm font-semibold uppercase tracking-[0.18em] text-neutral-800"
+              {tickerItems.map((item, index) => (
+                <a
+                  key={`${item.sponsorName || "sponsor"}-${index}`}
+                  href={item.sponsorWebsite || undefined}
+                  target={item.sponsorWebsite ? "_blank" : undefined}
+                  rel={item.sponsorWebsite ? "noreferrer" : undefined}
+                  title={item.sponsorWebsite ? `${item.sponsorName} · ${item.sponsorWebsite}` : item.sponsorName}
+                  className="whitespace-nowrap text-sm font-bold uppercase tracking-[0.18em] text-white no-underline hover:opacity-85"
+                  onClick={(event) => {
+                    if (!item.sponsorWebsite) event.preventDefault();
+                  }}
                 >
-                  {name}
-                </span>
+                  {item.sponsorName}
+                </a>
               ))}
             </div>
           </div>

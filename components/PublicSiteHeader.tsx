@@ -6,11 +6,11 @@ type PublicSiteHeaderProps = {
 
 const navItems = [
   { label: "Home", href: "#home" },
-  { label: "Schedule", href: "/schedule" },
   { label: "Services", href: "#services" },
   { label: "How We Work", href: "#process" },
   { label: "Case Study", href: "#case-study" },
   { label: "About", href: "#about" },
+  { label: "Schedule", href: "/schedule" },
   { label: "Partners", href: "/partners" },
   { label: "Contact", href: "#contact" },
 ] as const;

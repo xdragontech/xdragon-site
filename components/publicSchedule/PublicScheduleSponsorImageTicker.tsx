@@ -21,6 +21,16 @@ function WarningTriangle() {
   );
 }
 
+function sponsorHoverTitle(item: CommandPublicScheduleSponsorFeedItem) {
+  if (item.sponsorWebsite && item.profileImageUrl) {
+    return `${item.sponsorName} · ${item.sponsorWebsite}`;
+  }
+  if (item.sponsorWebsite) {
+    return `${item.sponsorName} · ${item.sponsorWebsite} · No Profile Image`;
+  }
+  return item.profileImageUrl ? item.sponsorName : "No Profile Image";
+}
+
 export default function PublicScheduleSponsorImageTicker({
   title,
   feed,
@@ -83,9 +93,16 @@ export default function PublicScheduleSponsorImageTicker({
           <div className="relative h-[24rem] overflow-hidden rounded-2xl border border-neutral-200 bg-white">
             <div className="grid gap-4 p-4 sponsor-image-marquee">
               {tickerItems.map((item, index) => (
-                <div
+                <a
                   key={`${item.sponsorName || "sponsor"}-${index}`}
-                  className="flex h-32 items-center justify-center rounded-2xl border border-neutral-200 bg-white p-4"
+                  href={item.sponsorWebsite || undefined}
+                  target={item.sponsorWebsite ? "_blank" : undefined}
+                  rel={item.sponsorWebsite ? "noreferrer" : undefined}
+                  title={sponsorHoverTitle(item)}
+                  className="flex h-32 items-center justify-center rounded-2xl border border-neutral-200 bg-white p-4 no-underline"
+                  onClick={(event) => {
+                    if (!item.sponsorWebsite) event.preventDefault();
+                  }}
                 >
                   {item.profileImageUrl ? (
                     <img
@@ -96,7 +113,6 @@ export default function PublicScheduleSponsorImageTicker({
                   ) : (
                     <div
                       className="relative flex h-full w-full items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-100 px-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500 opacity-70"
-                      title="No Profile Image"
                     >
                       <span className="max-w-[11rem] truncate">{item.sponsorName || "No Image"}</span>
                       <span className="absolute right-2 top-2">
@@ -104,7 +120,7 @@ export default function PublicScheduleSponsorImageTicker({
                       </span>
                     </div>
                   )}
-                </div>
+                </a>
               ))}
             </div>
           </div>
