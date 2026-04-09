@@ -20,6 +20,11 @@ This is specifically about the **website deployment**, not every historical loca
 
 That means provider keys for chat, contact, email sending, and old public rate limiting no longer belong on the website deployment.
 
+Important:
+- `command admin-web` and `command public-api` now both need the provider secret env referenced by `BrandEmailConfig.providerSecretRef`
+- for the current X Dragon install, that means `RESEND_API_KEY` belongs on both `command` deployments
+- it does **not** belong on `xdragon-site`
+
 **Safe To Remove From The `xdragon-site` Vercel Project**
 These no longer belong to the live website runtime:
 
@@ -44,6 +49,7 @@ These are still part of the live website runtime:
 - `COMMAND_PUBLIC_INTEGRATION_KEY`
 - `COMMAND_BFF_SESSION_SECRET`
 - `SCHEDULE_PAGE_FEED_ID`
+- `SCHEDULE_PAGE_SPONSOR_FEED_ID`
 - `XD_POSTGRES`
 
 **Do Not Remove Yet Without A Separate Cleanup**
