@@ -53,6 +53,7 @@ These are not part of the public cutover, but they still support backoffice/auth
 - `NEXTAUTH_SECRET`
 - `BACKOFFICE_MFA_ENCRYPTION_KEY`
 - `BACKOFFICE_MFA_ISSUER`
+- `COMMAND_BOOTSTRAP_SUPERADMIN_EMAIL`
 
 Removing those now would be a different change. The public site does not need them for the `command` cutover path, but the repo still contains backoffice runtime surfaces that reference them.
 
