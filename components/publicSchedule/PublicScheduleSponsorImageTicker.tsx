@@ -3,6 +3,7 @@ import {
   resolvePublicScheduleFeedIncludesProfileImages,
   resolvePublicScheduleFeedSource,
 } from "./feedRuntime";
+import PublicProfileInteractionAnchor from "./PublicProfileInteractionAnchor";
 
 type PublicScheduleSponsorImageTickerProps = {
   title?: string;
@@ -93,16 +94,23 @@ export default function PublicScheduleSponsorImageTicker({
           <div className="relative h-[24rem] overflow-hidden rounded-2xl border border-neutral-200 bg-white">
             <div className="grid gap-4 p-4 sponsor-image-marquee">
               {tickerItems.map((item, index) => (
-                <a
+                <PublicProfileInteractionAnchor
                   key={`${item.sponsorName || "sponsor"}-${index}`}
-                  href={item.sponsorWebsite || undefined}
+                  href={item.sponsorWebsite}
                   target={item.sponsorWebsite ? "_blank" : undefined}
                   rel={item.sponsorWebsite ? "noreferrer" : undefined}
                   title={sponsorHoverTitle(item)}
                   className="flex h-32 items-center justify-center rounded-2xl border border-neutral-200 bg-white p-4 no-underline"
-                  onClick={(event) => {
-                    if (!item.sponsorWebsite) event.preventDefault();
-                  }}
+                  enableImpression={index < items.length && Boolean(item.partnerProfileId)}
+                  feedId={feed.feedId}
+                  feedSource="SPONSORS"
+                  partnerProfileId={item.partnerProfileId}
+                  partnerKind={item.partnerKind}
+                  eventSeriesId={item.eventSeriesId}
+                  surfaceKey="SCHEDULE_SPONSOR_IMAGE_TICKER"
+                  clickEventType="PROFILE_WEBSITE_CLICK"
+                  clickTargetType="WEBSITE"
+                  clickTargetUrl={item.sponsorWebsite}
                 >
                   {item.profileImageUrl ? (
                     <img
@@ -120,7 +128,7 @@ export default function PublicScheduleSponsorImageTicker({
                       </span>
                     </div>
                   )}
-                </a>
+                </PublicProfileInteractionAnchor>
               ))}
             </div>
           </div>

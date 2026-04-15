@@ -1,5 +1,6 @@
 import type { CommandPublicScheduleFeedResponse, CommandPublicScheduleSponsorFeedItem } from "../../lib/commandPublicApi";
 import { resolvePublicScheduleFeedSource } from "./feedRuntime";
+import PublicProfileInteractionAnchor from "./PublicProfileInteractionAnchor";
 
 type PublicScheduleSponsorNameTickerProps = {
   title: string;
@@ -71,19 +72,26 @@ export default function PublicScheduleSponsorNameTicker({
           <div className="overflow-hidden rounded-[4px] bg-black">
             <div className="flex min-w-max gap-10 px-6 py-3 sponsor-name-marquee">
               {tickerItems.map((item, index) => (
-                <a
+                <PublicProfileInteractionAnchor
                   key={`${item.sponsorName || "sponsor"}-${index}`}
-                  href={item.sponsorWebsite || undefined}
+                  href={item.sponsorWebsite}
                   target={item.sponsorWebsite ? "_blank" : undefined}
                   rel={item.sponsorWebsite ? "noreferrer" : undefined}
                   title={item.sponsorWebsite ? `${item.sponsorName} · ${item.sponsorWebsite}` : item.sponsorName}
                   className="whitespace-nowrap text-sm font-bold uppercase tracking-[0.18em] text-white no-underline hover:opacity-85"
-                  onClick={(event) => {
-                    if (!item.sponsorWebsite) event.preventDefault();
-                  }}
+                  enableImpression={index < sponsorItems.length && Boolean(item.partnerProfileId)}
+                  feedId={feed.feedId}
+                  feedSource="SPONSORS"
+                  partnerProfileId={item.partnerProfileId}
+                  partnerKind={item.partnerKind}
+                  eventSeriesId={item.eventSeriesId}
+                  surfaceKey="SCHEDULE_SPONSOR_NAME_TICKER"
+                  clickEventType="PROFILE_WEBSITE_CLICK"
+                  clickTargetType="WEBSITE"
+                  clickTargetUrl={item.sponsorWebsite}
                 >
                   {item.sponsorName}
-                </a>
+                </PublicProfileInteractionAnchor>
               ))}
             </div>
           </div>
