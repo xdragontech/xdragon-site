@@ -510,6 +510,28 @@ export type CommandPublicScheduleFeedResponse = {
   items: CommandPublicScheduleFeedItem[];
 };
 
+export type CommandPublicAnalyticsProfileInteractionFeedSource =
+  | "ASSIGNMENTS"
+  | "SPONSORS"
+  | "PARTNER_PROFILES";
+export type CommandPublicAnalyticsProfileInteractionTargetType =
+  | "PROFILE"
+  | "PROFILE_IMAGE"
+  | "WEBSITE"
+  | "SOCIAL_LINK";
+export type CommandPublicAnalyticsProfileInteractionRaw = {
+  schema: "profile_interaction.v1";
+  feedId: string;
+  feedSource: CommandPublicAnalyticsProfileInteractionFeedSource;
+  partnerProfileId: string;
+  partnerKind: CommandPartnerKind;
+  eventSeriesId: string;
+  targetType: CommandPublicAnalyticsProfileInteractionTargetType;
+  targetUrl: string | null;
+  surfaceKey: string;
+  socialPlatform: string | null;
+};
+
 export type CommandPublicAnalyticsConsentNotice = {
   id: string;
   version: number;
@@ -554,7 +576,11 @@ export type CommandPublicAnalyticsEvent = {
     | "ENGAGEMENT_PING"
     | "SESSION_END"
     | "WEB_VITAL"
-    | "PERFORMANCE_METRIC";
+    | "PERFORMANCE_METRIC"
+    | "PROFILE_IMPRESSION"
+    | "PROFILE_IMAGE_OPEN"
+    | "PROFILE_WEBSITE_CLICK"
+    | "PROFILE_SOCIAL_LINK_CLICK";
   occurredAt: string;
   path?: string | null;
   url?: string | null;
@@ -571,7 +597,7 @@ export type CommandPublicAnalyticsEvent = {
   fbclid?: string | null;
   msclkid?: string | null;
   ttclid?: string | null;
-  raw?: unknown;
+  raw?: CommandPublicAnalyticsProfileInteractionRaw | Record<string, unknown> | null;
 };
 
 export type CommandPublicAnalyticsCollectResult = {
