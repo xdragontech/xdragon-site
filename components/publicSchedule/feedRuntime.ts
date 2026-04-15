@@ -3,7 +3,7 @@ import type {
   CommandPublicScheduleFeedResponse,
 } from "../../lib/commandPublicApi";
 
-export type RuntimePublicScheduleFeedSource = "ASSIGNMENTS" | "SPONSORS";
+export type RuntimePublicScheduleFeedSource = "ASSIGNMENTS" | "SPONSORS" | "PARTNER_PROFILES";
 
 function hasOwnProperty<T extends object>(value: T, key: PropertyKey) {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -16,11 +16,23 @@ function inferSourceFromItem(item: CommandPublicScheduleFeedItem | null | undefi
     return item.source;
   }
 
+  if (item.source === "PARTNER_PROFILES") {
+    return item.source;
+  }
+
   if (hasOwnProperty(item, "participantName") || hasOwnProperty(item, "occurrenceDate")) {
     return "ASSIGNMENTS";
   }
 
-  if (hasOwnProperty(item, "sponsorName") || hasOwnProperty(item, "profileImageUrl") || hasOwnProperty(item, "hasProfileImage")) {
+  if (hasOwnProperty(item, "participantType")) {
+    return "PARTNER_PROFILES";
+  }
+
+  if (hasOwnProperty(item, "sponsorName")) {
+    return "SPONSORS";
+  }
+
+  if (hasOwnProperty(item, "profileImageUrl") || hasOwnProperty(item, "hasProfileImage")) {
     return "SPONSORS";
   }
 
@@ -32,7 +44,7 @@ export function resolvePublicScheduleFeedSource(
 ): RuntimePublicScheduleFeedSource | null {
   if (!feed) return null;
 
-  if (feed.source === "ASSIGNMENTS" || feed.source === "SPONSORS") {
+  if (feed.source === "ASSIGNMENTS" || feed.source === "SPONSORS" || feed.source === "PARTNER_PROFILES") {
     return feed.source;
   }
 

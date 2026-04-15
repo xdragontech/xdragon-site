@@ -466,6 +466,14 @@ export type CommandPublicScheduleAssignmentFeedItem = {
 
 export type CommandPublicScheduleSponsorFeedItem = {
   source: "SPONSORS";
+  partnerKind: CommandPartnerKind;
+  partnerProfileId: string;
+  displayName: string;
+  description: string | null;
+  websiteUrl: string | null;
+  socialLinks: Record<string, string> | null;
+  eventSeriesId: string;
+  eventSeriesName: string;
   sponsorName: string;
   sponsorWebsite: string | null;
   sponsorDescription: string | null;
@@ -473,14 +481,30 @@ export type CommandPublicScheduleSponsorFeedItem = {
   hasProfileImage: boolean;
 };
 
+export type CommandPublicSchedulePartnerProfileFeedItem = {
+  source: "PARTNER_PROFILES";
+  partnerKind: "PARTICIPANT";
+  partnerProfileId: string;
+  displayName: string;
+  description: string | null;
+  websiteUrl: string | null;
+  socialLinks: Record<string, string> | null;
+  profileImageUrl: string | null;
+  hasProfileImage: boolean;
+  eventSeriesId: string;
+  eventSeriesName: string;
+  participantType: CommandPartnerParticipantType;
+};
+
 export type CommandPublicScheduleFeedItem =
   | CommandPublicScheduleAssignmentFeedItem
-  | CommandPublicScheduleSponsorFeedItem;
+  | CommandPublicScheduleSponsorFeedItem
+  | CommandPublicSchedulePartnerProfileFeedItem;
 
 export type CommandPublicScheduleFeedResponse = {
   ok: true;
   feedId: string;
-  source: "ASSIGNMENTS" | "SPONSORS";
+  source: "ASSIGNMENTS" | "SPONSORS" | "PARTNER_PROFILES";
   includeProfileImages: boolean;
   onlyProfileImages: boolean;
   items: CommandPublicScheduleFeedItem[];
