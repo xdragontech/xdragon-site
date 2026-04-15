@@ -1,7 +1,10 @@
 import { createHash } from "crypto";
 import { BackofficeRole, BackofficeUserStatus } from "@prisma/client";
 import { getBackofficeMfaIssuer, isBackofficeMfaEncryptionReady } from "../backofficeMfa";
-import { getProtectedBackofficeEmail } from "../backofficeBootstrap";
+import {
+  getConfiguredProtectedBackofficeEmail,
+  getProtectedBackofficeEmailEnvKey,
+} from "../backofficeBootstrap";
 import { authCookieDomain } from "../siteConfig";
 import { getRuntimeHostConfig } from "../runtimeHostConfig";
 import { prisma } from "../prisma";
@@ -150,6 +153,13 @@ const ENV_GROUPS: Array<{
         label: "Backoffice MFA Encryption Key",
         description: "Encryption key required before authenticator-app secrets and recovery codes can be stored safely.",
         kind: "secret",
+      },
+      {
+        key: "COMMAND_BOOTSTRAP_SUPERADMIN_EMAIL",
+        label: "Protected Backoffice Identity",
+        description:
+          "Compatibility-only bootstrap identity env for residual xdragon-site backoffice surfaces. Command remains the source of truth.",
+        kind: "plain",
       },
     ],
   },
@@ -337,7 +347,7 @@ export function collectSystemEnvGroups(): SystemEnvGroup[] {
 export async function collectRuntimeStatus(requestHost?: string | null): Promise<RuntimeStatusItem[]> {
   const runtimeHost = await getRuntimeHostConfig(requestHost);
   const host = runtimeHost.requestHost || "unknown";
-  const protectedBootstrapEmail = getProtectedBackofficeEmail();
+  const protectedBootstrapEmail = getConfiguredProtectedBackofficeEmail();
   let protectedAccountDiagnostics: ProtectedBackofficeDiagnostics = {
     user: null,
     configuredBrandCount: 0,
@@ -387,12 +397,16 @@ export async function collectRuntimeStatus(requestHost?: string | null): Promise
   })();
 
   const protectedAccountStatusNote = (() => {
+    if (!protectedBootstrapEmail) {
+      return `${getProtectedBackofficeEmailEnvKey()} is not configured. Residual xdragon-site backoffice compatibility surfaces are intentionally unsupported without it.`;
+    }
+
     if (protectedAccountDiagnostics.error) {
       return `Protected account lookup failed: ${protectedAccountDiagnostics.error}`;
     }
 
     if (!protectedAccountDiagnostics.user) {
-      return "Residual xdragon-site backoffice auth still expects this account to exist.";
+      return "Residual xdragon-site backoffice auth still expects this configured account to exist.";
     }
 
     const details = [
@@ -470,8 +484,8 @@ export async function collectRuntimeStatus(requestHost?: string | null): Promise
     },
     {
       label: "Protected Backoffice Identity",
-      value: protectedBootstrapEmail,
-      note: "Residual xdragon-site backoffice auth still treats this configured email as the protected account identity.",
+      value: protectedBootstrapEmail || "Not configured",
+      note: `${getProtectedBackofficeEmailEnvKey()} is the compatibility-only env key for residual xdragon-site backoffice auth. Command remains the source of truth.`,
     },
     {
       label: "Protected Backoffice Status",
