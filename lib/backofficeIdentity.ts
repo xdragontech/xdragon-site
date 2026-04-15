@@ -7,7 +7,7 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { deriveBackofficeMfaState, type BackofficeMfaState } from "./backofficeMfa";
-import { getProtectedBackofficeEmail } from "./backofficeBootstrap";
+import { getConfiguredProtectedBackofficeEmail } from "./backofficeBootstrap";
 import { prisma } from "./prisma";
 import { BACKOFFICE_AUTH_SCOPE, getAuthScope } from "./authScopes";
 
@@ -142,7 +142,8 @@ function toBackofficeAuthUser(state: BackofficeIdentityState): BackofficeAuthUse
 
 export function isProtectedBackofficeIdentity(email: string | null | undefined, _username: string | null | undefined): boolean {
   const normalizedEmail = normalizeEmail(email);
-  return Boolean(normalizedEmail && normalizedEmail === getProtectedBackofficeEmail());
+  const configuredEmail = getConfiguredProtectedBackofficeEmail();
+  return Boolean(normalizedEmail && configuredEmail && normalizedEmail === configuredEmail);
 }
 
 async function fetchBackofficeUserByIdentifier(identifier: string): Promise<BackofficeUserWithAccess | null> {
@@ -188,6 +189,13 @@ async function fetchBackofficeUserById(id: string): Promise<BackofficeUserWithAc
 export async function authorizeBackofficeCredentials(
   credentials: Record<string, unknown> | undefined
 ): Promise<BackofficeAuthUser | null> {
+  if (!getConfiguredProtectedBackofficeEmail()) {
+    console.warn(
+      "[backoffice-auth] disabled in xdragon-site because COMMAND_BOOTSTRAP_SUPERADMIN_EMAIL is not configured"
+    );
+    return null;
+  }
+
   const identifierRaw = String(credentials?.email || credentials?.username || "").trim();
   const identifier = normalizeUsername(identifierRaw);
   const password = String(credentials?.password || "");
@@ -213,6 +221,10 @@ export async function authorizeBackofficeCredentials(
   return toBackofficeAuthUser(state);
 }
 export async function refreshBackofficeIdentity(sessionLike: { sub?: string | null; email?: string | null }): Promise<BackofficeAuthUser | null> {
+  if (!getConfiguredProtectedBackofficeEmail()) {
+    return null;
+  }
+
   const tokenId = String(sessionLike.sub || "");
 
   if (!tokenId) return null;
