@@ -17,6 +17,8 @@ import {
   commandPartnerSubmitApplication,
   commandPartnerUpdateProfile,
   commandPartnerVerifyEmail,
+  commandPartnerGetAvailability,
+  commandPartnerSetAvailability,
   isUnauthorizedCommandError,
   CommandPublicApiError,
   logCommandPublicApiError,
@@ -631,6 +633,61 @@ export async function handleParticipantPortalRequirementFinalize(
     }
 
     console.error("[partners-requirement-finalize] unexpected error", error);
+    return json(res, 500, { ok: false, error: "Server error" });
+  }
+}
+
+// HUMAN-REVIEW: Wave 12 — partner availability calendar BFF handler
+export async function handlePartnerPortalAvailability(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  scope: CommandPartnerPortalScope
+) {
+  applyNoStoreHeaders(res);
+
+  const sessionToken = getCommandPartnerBffSessionToken(req);
+  if (!sessionToken) {
+    return unauthorized(res);
+  }
+
+  try {
+    if (req.method === "GET") {
+      const eventSeriesId = String(req.query.eventSeriesId || "").trim();
+      if (!eventSeriesId) {
+        return json(res, 400, { ok: false, error: "eventSeriesId query parameter is required" });
+      }
+      const result = await commandPartnerGetAvailability(scope, {
+        sessionToken,
+        eventSeriesId,
+      });
+      return json(res, 200, result);
+    }
+
+    if (req.method === "POST") {
+      const result = await commandPartnerSetAvailability(scope, {
+        sessionToken,
+        eventSeriesId: String(req.body?.eventSeriesId || ""),
+        dates: Array.isArray(req.body?.dates) ? req.body.dates : [],
+        action: String(req.body?.action || "") as "set" | "remove",
+      });
+      return json(res, 200, result);
+    }
+
+    res.setHeader("Allow", "GET, POST");
+    return json(res, 405, { ok: false, error: "Method not allowed" });
+  } catch (error) {
+    if (isUnauthorizedCommandError(error)) {
+      return unauthorized(res);
+    }
+    if (error instanceof CommandPublicApiError) {
+      logCommandPublicApiError(`${scope}-availability`, error, {
+        requestHost: req.headers.host || null,
+        hasSessionCookie: true,
+      });
+      return json(res, error.status, { ok: false, error: error.message });
+    }
+
+    console.error(`[${scope}-availability] unexpected error`, error);
     return json(res, 500, { ok: false, error: "Server error" });
   }
 }
