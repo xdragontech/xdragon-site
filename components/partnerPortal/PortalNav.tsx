@@ -3,7 +3,8 @@ import type { CommandPartnerPortalScope } from "../../lib/commandPublicApi";
 
 export default function PortalNav(props: {
   scope: CommandPartnerPortalScope;
-  active: "profile" | "applications";
+  // HUMAN-REVIEW: Wave 12 — added "calendar" tab
+  active: "profile" | "applications" | "calendar";
   displayName: string;
   onSignOut: () => Promise<void> | void;
   busy?: boolean;
@@ -30,6 +31,15 @@ export default function PortalNav(props: {
           }`}
         >
           Applications
+        </Link>
+        {/* HUMAN-REVIEW: Wave 12 — calendar tab for availability management */}
+        <Link
+          href={`/${props.scope}/calendar`}
+          className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+            props.active === "calendar" ? "bg-black text-white" : "border border-neutral-300 text-neutral-800"
+          }`}
+        >
+          Calendar
         </Link>
         <button
           type="button"

@@ -980,6 +980,20 @@ export async function commandPublicLogout(sessionToken: string) {
   });
 }
 
+// HUMAN-REVIEW: Wave 12 — partner availability calendar types
+export type CommandPartnerAvailabilityEntry = {
+  date: string;
+  available: boolean;
+  assigned: boolean;
+};
+
+export type CommandPartnerAvailabilityPayload = {
+  ok: true;
+  eventSeriesId: string;
+  eventSeriesName: string;
+  entries: CommandPartnerAvailabilityEntry[];
+};
+
 function commandPartnerScopeBase(scope: CommandPartnerPortalScope) {
   return scope === "sponsors" ? "/api/v1/sponsors" : "/api/v1/partners";
 }
@@ -1299,6 +1313,47 @@ export async function commandParticipantFinalizeRequirement(params: {
         sizeBytes: params.sizeBytes,
         checksumSha256: params.checksumSha256 || undefined,
         expiresAt: params.expiresAt,
+      },
+    }
+  );
+}
+
+// HUMAN-REVIEW: Wave 12 — partner availability calendar API wrappers
+export async function commandPartnerGetAvailability(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    eventSeriesId: string;
+  }
+) {
+  return requestCommandPublicApi<CommandPartnerAvailabilityPayload>(
+    `${commandPartnerScopeBase(scope)}/availability?eventSeriesId=${encodeURIComponent(params.eventSeriesId)}`,
+    {
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+    }
+  );
+}
+
+export async function commandPartnerSetAvailability(
+  scope: CommandPartnerPortalScope,
+  params: {
+    sessionToken: string;
+    eventSeriesId: string;
+    dates: string[];
+    action: "set" | "remove";
+  }
+) {
+  return requestCommandPublicApi<{ ok: true; added?: number; removed?: number }>(
+    `${commandPartnerScopeBase(scope)}/availability`,
+    {
+      method: "POST",
+      sessionToken: params.sessionToken,
+      trackPerformance: false,
+      body: {
+        eventSeriesId: params.eventSeriesId,
+        dates: params.dates,
+        action: params.action,
       },
     }
   );
