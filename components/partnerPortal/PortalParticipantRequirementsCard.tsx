@@ -340,17 +340,17 @@ export default function PortalParticipantRequirementsCard() {
                 </div>
               ) : null}
 
-              {/* HUMAN-REVIEW: Wave 12 — document thumbnail preview */}
+              {/* HUMAN-REVIEW: Wave 12 — compact document thumbnail, left-aligned under name */}
               {requirement.asset?.id && assetAccessCache[requirement.asset.id] ? (
                 <div
-                  className="mt-3 cursor-pointer overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
+                  className="mt-2 w-fit cursor-pointer overflow-hidden rounded-lg"
                   onClick={() => setLightboxAccess(assetAccessCache[requirement.asset!.id])}
                 >
                   <DocumentPreview
                     url={assetAccessCache[requirement.asset.id].url}
                     mimeType={assetAccessCache[requirement.asset.id].mimeType}
                     fileName={assetAccessCache[requirement.asset.id].fileName}
-                    height="120px"
+                    height="48px"
                     onClick={() => setLightboxAccess(assetAccessCache[requirement.asset!.id])}
                   />
                 </div>
