@@ -28,6 +28,7 @@ const PublicScheduleCalendar = dynamic(
 type PageProps = {
   initialCalendar: CommandPublicScheduleResponse;
   initialList: CommandPublicScheduleResponse;
+  initialCalendarError: string | null;
   initialFeed: CommandPublicScheduleFeedResponse | null;
   initialFeedError: string | null;
   initialSponsorFeed: CommandPublicScheduleFeedResponse | null;
@@ -100,6 +101,7 @@ function eventColors(item: CommandPublicScheduleItem) {
 export default function PublicSchedulePage({
   initialCalendar,
   initialList,
+  initialCalendarError,
   initialFeed,
   initialFeedError,
   initialSponsorFeed,
@@ -275,6 +277,11 @@ export default function PublicSchedulePage({
         <PublicSiteHeader />
 
         <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
+          {initialCalendarError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              The live schedule is temporarily unavailable. Please check back shortly.
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-base font-semibold uppercase tracking-[0.2em] text-red-600">Live Schedule</div>
             <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-medium text-neutral-500">
@@ -557,24 +564,48 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
 
   const schedulePageFeedId = String(process.env.SCHEDULE_PAGE_FEED_ID || "").trim();
   const schedulePageSponsorFeedId = String(process.env.SCHEDULE_PAGE_SPONSOR_FEED_ID || "").trim();
-  const [initialCalendar, initialList] = await Promise.all([
-    commandPublicListScheduleCalendar({
-      from: initialFilters.from,
-      to: initialFilters.to,
-      eventSeries: initialFilters.eventSeries,
-      participantType: initialFilters.participantType as CommandPublicScheduleParticipantType | "",
-      resourceType: initialFilters.resourceType as CommandPublicScheduleResourceType | "",
-      limit: 300,
-    }),
-    commandPublicListScheduleList({
-      from: initialFilters.from,
-      to: initialFilters.to,
-      eventSeries: initialFilters.eventSeries,
-      participantType: initialFilters.participantType as CommandPublicScheduleParticipantType | "",
-      resourceType: initialFilters.resourceType as CommandPublicScheduleResourceType | "",
-      limit: 150,
-    }),
-  ]);
+
+  // Hotfix: wrap the primary calendar + list fetches so a backend outage (e.g.
+  // integration-key rotation, upstream 500) degrades gracefully instead of
+  // crashing the whole page. Returns an empty range + items and carries an
+  // error message the view uses to render a banner.
+  const emptyRange = { from: initialFilters.from, to: initialFilters.to };
+  const emptyScheduleResponse: CommandPublicScheduleResponse = {
+    ok: true,
+    range: emptyRange,
+    items: [],
+  };
+  let initialCalendar: CommandPublicScheduleResponse = emptyScheduleResponse;
+  let initialList: CommandPublicScheduleResponse = emptyScheduleResponse;
+  let initialCalendarError: string | null = null;
+  try {
+    const [calendarResult, listResult] = await Promise.all([
+      commandPublicListScheduleCalendar({
+        from: initialFilters.from,
+        to: initialFilters.to,
+        eventSeries: initialFilters.eventSeries,
+        participantType: initialFilters.participantType as CommandPublicScheduleParticipantType | "",
+        resourceType: initialFilters.resourceType as CommandPublicScheduleResourceType | "",
+        limit: 300,
+      }),
+      commandPublicListScheduleList({
+        from: initialFilters.from,
+        to: initialFilters.to,
+        eventSeries: initialFilters.eventSeries,
+        participantType: initialFilters.participantType as CommandPublicScheduleParticipantType | "",
+        resourceType: initialFilters.resourceType as CommandPublicScheduleResourceType | "",
+        limit: 150,
+      }),
+    ]);
+    initialCalendar = calendarResult;
+    initialList = listResult;
+  } catch (error: any) {
+    initialCalendarError = error?.message || "Schedule is temporarily unavailable.";
+    console.error("[schedule-page] failed to load initial schedule data", {
+      error: error instanceof Error ? error.message : String(error),
+      status: typeof error?.status === "number" ? error.status : null,
+    });
+  }
 
   let initialFeed: CommandPublicScheduleFeedResponse | null = null;
   let initialFeedError: string | null = null;
@@ -611,6 +642,7 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
     props: {
       initialCalendar,
       initialList,
+      initialCalendarError,
       initialFeed,
       initialFeedError,
       initialSponsorFeed,
