@@ -66,6 +66,20 @@ export async function requirePartnerPortalPageSession(
       } as const;
     }
 
-    throw error;
+    // Hotfix: non-auth upstream failure (unconfigured key, upstream 5xx,
+    // network error) would otherwise surface Next's 500 page. Redirect to the
+    // scope's signin with ?unavailable=1 so the banner renders a friendly
+    // "temporarily unavailable" message and the user can retry. Session cookie
+    // is preserved — when upstream recovers they won't need to sign in again.
+    console.error("[partnerPortalPage] upstream unavailable, degrading to signin", {
+      scope,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      redirect: {
+        destination: `/${scope}/signin?unavailable=1&callbackUrl=${encodeURIComponent(ctx.resolvedUrl || `/${scope}/profile`)}`,
+        permanent: false,
+      },
+    } as const;
   }
 }

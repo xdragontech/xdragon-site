@@ -27,6 +27,16 @@ export default function PortalSignInPage(props: { scope: CommandPartnerPortalSco
     }
   }, [router.query.error]);
 
+  // Hotfix: when a portal page can't reach the command public API, the
+  // requirePartnerPortalPageSession helper redirects here with ?unavailable=1
+  // rather than throwing Next's 500. Show a banner so users don't think
+  // they signed out on their own.
+  const unavailable = useMemo(() => {
+    const value = router.query.unavailable;
+    const raw = Array.isArray(value) ? value[0] : value;
+    return raw === "1";
+  }, [router.query.unavailable]);
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
@@ -68,6 +78,11 @@ export default function PortalSignInPage(props: { scope: CommandPartnerPortalSco
   return (
     <PortalShell title={config.signinHeading} subtitle={config.signinDescription}>
       <form className="grid gap-4" onSubmit={onSubmit}>
+        {unavailable ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            The portal is temporarily unavailable. Your session is still active — please try signing in again in a minute.
+          </div>
+        ) : null}
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
         <div>
           <label className="text-sm font-medium">Email</label>
