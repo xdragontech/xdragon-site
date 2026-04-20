@@ -2,6 +2,13 @@ import type { IncomingMessage } from "http";
 import type { BrandStatus } from "@prisma/client";
 import { buildOrigin, getApiRequestHost, getApiRequestProtocol } from "./requestHost";
 import { getCfCountryIso2, getClientIp, getHeader, getUserAgent } from "./requestIdentity";
+import pkg from "../package.json";
+
+// Identifies this BFF to the command public API. Must be non-empty and not
+// look like a generic scripting client (undici/node-fetch/etc.) so that
+// edge protections like Cloudflare Bot Fight Mode on the upstream zone
+// don't flag the server-to-server call as bot traffic.
+const OUTBOUND_USER_AGENT = `xdragon-site/${pkg.version} (+https://www.xdragon.tech)`;
 
 export type CommandPublicAccount = {
   id: string;
@@ -822,6 +829,7 @@ async function requestCommandPublicApi<T>(
   }
 
   const headers: Record<string, string> = {
+    "User-Agent": OUTBOUND_USER_AGENT,
     "X-Command-Integration-Key": config.integrationKey,
     ...buildForwardedClientHeaders(options?.request),
   };
