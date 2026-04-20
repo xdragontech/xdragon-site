@@ -619,7 +619,15 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
         request: ctx.req,
       });
     } catch (error: any) {
-      initialFeedError = error?.message || "Failed to load schedule feed";
+      // Hotfix: never surface the raw upstream error message to the page
+      // (we saw "Command public API request failed (403)" leak through).
+      // Log the detail and show a generic friendly line instead.
+      console.error("[schedule-page] failed to load schedule feed", {
+        feedId: schedulePageFeedId,
+        error: error instanceof Error ? error.message : String(error),
+        status: typeof error?.status === "number" ? error.status : null,
+      });
+      initialFeedError = "Schedule feed is temporarily unavailable.";
     }
   } else {
     initialFeedError = "Schedule feed is not configured.";
@@ -632,7 +640,12 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (ctx) => 
         request: ctx.req,
       });
     } catch (error: any) {
-      initialSponsorFeedError = error?.message || "Failed to load sponsor feed";
+      console.error("[schedule-page] failed to load sponsor feed", {
+        feedId: schedulePageSponsorFeedId,
+        error: error instanceof Error ? error.message : String(error),
+        status: typeof error?.status === "number" ? error.status : null,
+      });
+      initialSponsorFeedError = "Sponsor feed is temporarily unavailable.";
     }
   } else {
     initialSponsorFeedError = "Sponsor feed is not configured.";
